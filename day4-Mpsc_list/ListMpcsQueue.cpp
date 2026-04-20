@@ -34,33 +34,42 @@ public:
 
 	~ListMpscQueue()
 	{
-
+		// 清理所有节点
+		while(head.load() != nullptr)
+		{
+			Node* head_node = head.load();
+			head.store(head->next.load());
+			delete head_node;
+		}
 	}
 
 	// 多线程安全
+	// 创建虚拟节点，让push只要负责tail相关节点即可。
 	void push(const T& value)
 	{
 		Node* new_node = new Node(value);
 		Node* old_tail = tail.exchange(new_node, std::memory_order_acq_rel);
-		old_tail->next.store(tail, std::memory_order_release);
+		old_tail->next.store(new_node, std::memory_order_release);
 	}
 
 	// 单线程执行版本
+	// 创建虚拟节点，让pop只要负责head节点即可
 	bool pop(T& value)
 	{
-		Node* old_head_node = head.load(std::memory_order_acquire);
-		Node* head_next = old_head_node->next.load(std::memory_order_acquire);
-		if(nullptr == head_next)
+		Node* old_head = head.load(std::memory_order_acquire);
+		Node* new_head = old_head->next.load(std::memory_order_acquire);
+		if(new_head == nullptr)
 		{
 			return false;
 		}
 
-		value = head_next->data;
-		head.store(head_next, std::memory_order_release);
-		delete old_head_node;
+		value = new_head->data;
+		head.store(new_head, memory_order_release);
+		delete old_head;
 		return true;
 	}
 };
+
 
 
 int main()
@@ -105,7 +114,6 @@ int main()
 	std::cout << "Sum:" << nSum << std::endl;
 	return 0;
 }
-
 
 
 
