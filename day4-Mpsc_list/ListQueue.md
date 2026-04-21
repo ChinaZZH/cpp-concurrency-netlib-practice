@@ -1,1 +1,18 @@
 
+markdown
+
+Day4： 通过链表实现 无锁队列的学习和实现
+核心收获
+-- 1. 增加一个虚拟节点，通过增加虚拟节点的方式避免了在pop和push里面判断队列是否为空的判断。
+
+-- 2. 因为避免了pop和push是否判断为空的情况，所以push只需要使用tail不需要使用head.同理pop只需要使用head不需要使用tail.避免了不同函数对共享数据的竞争。
+
+-- 3. exchange函数设置新值并且返回旧值，也是 读-改-写的模式，内存序可以设置为 std:memory_order_release 也可以 std:memory_order_acq_rel.
+
+-- 4. 析构清理所有节点，同时构造的时候要创建虚拟节点同时指向头结点和尾结点。
+
+代码
+-- ListMpcsQueue.cpp
+
+测试
+-- 一切正常。
