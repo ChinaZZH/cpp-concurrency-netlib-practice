@@ -21,7 +21,7 @@ public:
 			m_works.emplace_back([this]() {
 				while(true)
 				{
-					std::function<int()> task;
+					std::function<void()> task;
 					{
 						std::unique_lock<std::mutex> lk(m_mtx);
 						m_cv.wait(lk, [&]() { return m_bStop || !m_tasks.empty(); });
@@ -36,8 +36,7 @@ public:
 
 					if(task)
 					{
-						int val = task();
-						std::cout << val << std::endl;
+						task();
 					}
 				}
 			});
@@ -62,25 +61,45 @@ public:
 		}
 	}
 
-	void AddTask(const std::function<int()>& task)
+	template<typename F, typename... Args>
+	auto AddTask(F&& f, Args&&... args) 
+		-> std::future<std::invoke_result_t<F, Args...>>
 	{
 		// 已经结束不加task
 		if(m_bStop)
 		{
-			return;
+			throw std::runtime_error("enqueue on stopped ThreadPool");
 		}
+
+		using return_type = std::invoke_result_t<F, Args...>;
+		/*
+		auto task = std::make_shared<std::packaged_task<return_type()>>(
+			std::bind(std::forward<F>(f), std::forward<Args>(args)...)
+		);
+		*/
+
+		// 将用户函数f和参数args绑定成一个无参的可调用函数
+		auto bound_func = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+
+		// 用绑定后的函数构造一个packaged_task ，他返回return_type
+		std::packaged_task<return_type()> task_obj(bound_func);
+
+		auto task = std::make_shared<std::packaged_task<return_type()>>(std::move(task_obj));
+
+		std::future<return_type> res = task->get_future();
 
 		{
 			std::unique_lock<std::mutex> lk(m_mtx);
-			m_tasks.emplace(task);
+			m_tasks.emplace([task]() { (*task)(); });
 		}
 
 		m_cv.notify_one();
+		return res;
 	}
 
 private:
 	std::vector<std::thread> m_works;
-	std::queue<std::function<int()>> m_tasks;
+	std::queue<std::function<void()>> m_tasks;
 	bool m_bStop = false;
 
 	std::mutex m_mtx;
@@ -88,30 +107,23 @@ private:
 };
 
 
-int add(int a, int b)
-{
+int add(int a, int b) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	return a + b;
 }
 
-
-int main()
-{
+int main() {
 	ThreadPool pool(4);
 
-	// 提交多个任务，获取future
-	pool.AddTask([]() { return 11; });
-	pool.AddTask([]() { return 22; });
-	pool.AddTask([]() { return 33; });
+	// 提交多个任务，获取 future
+	auto f1 = pool.AddTask(add, 10, 20);
+	auto f2 = pool.AddTask([](int x, int y) { return x * y; }, 5, 6);
+	auto f3 = pool.AddTask([]() { return 42; });
 
-	
-	pool.AddTask([]() { return 44; });
-	pool.AddTask([]() { return 55; });
-	pool.AddTask([]() { return 66; });
-
-	pool.AddTask([]() { return 77; });
-	pool.AddTask([]() { return 88; });
-	pool.AddTask([]() { return 99; });
+	// 获取结果
+	std::cout << f1.get() << std::endl;
+	std::cout << f2.get() << std::endl;
+	std::cout << f3.get() << std::endl;
 
 	return 0;
 }
