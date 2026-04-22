@@ -1,7 +1,7 @@
 markdown
 
 ## Day6： 基础的线程池 (BaseThreadPool)
-##核心收获
+## 核心收获
 -- 1.关于AddTask的讨论，通过使用 std::bind 将用户函数和可变参数args绑定会变成一个无参数的可调用函数。 auto bound_func = std::bind(std::forward<F>(f), std::forward<Args>(args)...)。
 
 -- 2.关于AddTask的讨论，通过std::invoke_result_t<F, Args...> 让编译器自动生成函数返回参数的类型。using return_type = std::invoke_result_t<F, Args...>。
@@ -16,8 +16,8 @@ markdown
 
 -- 7. 其余内容观看线程池代码。
 
-##代码
+## 代码
 -- ThreadPool.cpp
 
-##测试
+## 测试
 -- 一切正常。
