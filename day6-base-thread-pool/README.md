@@ -14,6 +14,8 @@ markdown
 
 -- 6. 关于AddTask的讨论，packaged_task 只能移动不能构造。
 
+-- 7. 关于AddTask的讨论，通过任务包std::packaged_task将执行过程和执行结果打包，返回std::future<T> 简化了编码流程。
+
 -- 7. 其余内容观看线程池代码。
 
 ## 代码
