@@ -28,7 +28,9 @@ CPU：48核 12 线程（典型开发机）
 |Baseline (串行)      |  1, 885, 255        |  1.00x            |    单生产者单消费者，串行执行                  |	
 |MutexThreadPool      |     536, 060        |  0.28x            |    并行，无锁，高并发优势显著                  |	
 |LockfreeThreadPool   |  1, 924, 653        |  1.02x            |    并行，但有锁竞争                           |
-                 	          	
+                 
+![本地图](C:\Users\56593\Desktop\111.png)
+
 高亮：LockfreeThreadPool QPS 最高 (1, 924, 653 tasks/sec)，比 Baseline 快 2%。
 
 
