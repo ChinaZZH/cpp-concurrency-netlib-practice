@@ -30,7 +30,7 @@ public:
 						{
 							task();
 						}
-						else if(m_bStop)
+						else if(m_bStop.load(std::memory_order_acquire))
 						{
 							return;
 						}
@@ -47,7 +47,7 @@ public:
 
 	~ThreadPool()
 	{
-		m_bStop = true;
+		m_bStop.store(true, std::memory_order_release);
 		for(auto& th : m_works)
 		{
 			if(th.joinable())
@@ -62,7 +62,7 @@ public:
 		-> std::future<std::invoke_result_t<F, Args...>>
 	{
 		// 已经结束不加task
-		if(m_bStop)
+		if(m_bStop.load(std::memory_order_acquire))
 		{
 			throw std::runtime_error("enqueue on stopped ThreadPool");
 		}
@@ -91,7 +91,7 @@ public:
 
 private:
 	std::vector<std::thread> m_works;
-	bool m_bStop = false;
+	std::atomic<bool> m_bStop = false;
 
 	MPMC_Queue<std::function<void()>> m_queue;
 };
