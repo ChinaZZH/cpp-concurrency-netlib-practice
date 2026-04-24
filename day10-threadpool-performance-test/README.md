@@ -1,7 +1,7 @@
-<img width="1176" height="109" alt="111" src="https://github.com/user-attachments/assets/7a5bae5b-52be-4f2b-8b74-424da3d8290c" />
+
 markdown
 
-## Day10： 性能测试	对比三种实现：std::mutex 队列、无锁队列、互斥锁线程池。
+## Day10： 性能测试报告	对比三种实现：std::mutex 队列、无锁队列、互斥锁线程池。
 ## 核心收获
 --  1. 没有一种实现是绝对最优的，需要根据任务特性选择。
 
