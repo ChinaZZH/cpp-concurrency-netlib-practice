@@ -1,3 +1,4 @@
+<img width="1176" height="109" alt="111" src="https://github.com/user-attachments/assets/7a5bae5b-52be-4f2b-8b74-424da3d8290c" />
 markdown
 
 ## Day10： 性能测试	对比三种实现：std::mutex 队列、无锁队列、互斥锁线程池。
@@ -29,7 +30,8 @@ CPU：48核 12 线程（典型开发机）
 |MutexThreadPool      |     536, 060        |  0.28x            |    并行，无锁，高并发优势显著                  |	
 |LockfreeThreadPool   |  1, 924, 653        |  1.02x            |    并行，但有锁竞争                           |
                  
-![本地图](C:\Users\56593\Desktop\111.png)
+<img width="1176" height="109" alt="111" src="https://github.com/user-attachments/assets/7be62bb6-9f0d-4881-8d62-1b6e88b9729a" />
+
 
 高亮：LockfreeThreadPool QPS 最高 (1, 924, 653 tasks/sec)，比 Baseline 快 2%。
 
