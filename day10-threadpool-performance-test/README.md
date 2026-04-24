@@ -43,6 +43,9 @@ CPU：48核 12 线程（典型开发机）
 |MutexThreadPool      |     1,195, 628        |  4.21x            |    并行，无锁，高并发优势显著                  |	
 |LockfreeThreadPool   |  1, 413, 499        |  4.98x           |    并行，但有锁竞争                           |
 
+<img width="1194" height="151" alt="222" src="https://github.com/user-attachments/assets/41562135-8379-45e2-9e04-b5aa7e0f07e3" />
+
+
 高亮：LockfreeThreadPool QPS 最高 (1, 413, 499 tasks/sec)，比 Baseline 快 398%, 比MutexThreadPool快78%。
 
 
@@ -52,6 +55,8 @@ CPU：48核 12 线程（典型开发机）
 |Baseline (串行)      |   2, 302, 935        |  1.00x            |    单生产者单消费者，串行执行                  |	
 |MutexThreadPool      |     457, 735        |  0.19x            |    并行，无锁，高并发优势显著                  |	
 |LockfreeThreadPool   |  1, 807, 718        |  0.78x           |    并行，但有锁竞争                           |
+
+<img width="1204" height="99" alt="333" src="https://github.com/user-attachments/assets/60c76bf1-e906-437c-8645-cba87ff1ed70" />
 
 高亮：Baseline QPS 最高 (1, 807, 718 tasks/sec)，比 Baseline 快 398%, 比MutexThreadPool快78%。
 
