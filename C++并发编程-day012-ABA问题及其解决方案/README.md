@@ -31,12 +31,12 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 
 1. 最佳应用场景：无锁栈、对象池、固定大小循环队列
 
-无锁栈（Lock-Free Stack）：栈的 head 指针频繁被 push / pop 修改，且节点可能被复用（如对象池）。它不需要额外的内存回收机制（节点删除仍需手动），只解决 ABA 判断问题。
+  无锁栈（Lock-Free Stack）：栈的 head 指针频繁被 push / pop 修改，且节点可能被复用（如对象池）。它不需要额外的内存回收机制（节点删除仍需手动），只解决 ABA 判断问题。
                            在栈、队列等单指针修改的场景中实现简单，性能极高。
 
-内存池管理：固定大小的内存块反复分配释放，地址易重现。
+  内存池管理：固定大小的内存块反复分配释放，地址易重现。
 
-要求极低延迟、不依赖外部回收机制。
+  要求极低延迟、不依赖外部回收机制。
 
 2. 不适合的场景： 节点生命周期不可控、需自动回收内存
 
@@ -47,37 +47,37 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 5. 实现方式: 使用 std::atomic<std::pair<Node*, uint64_t>> 或平台相关的双字 CAS（如 __int128）。仅当指针和版本号都匹配时，CAS 才成功。
 
 6.示例(简化)
-struct TaggedPtr {
-    Node* ptr;
-    uint64_t tag;
-};
-std::atomic<TaggedPtr> head;
-
-void push(Node* node) {
-    TaggedPtr old = head.load();
-    TaggedPtr new_node = {node, old.tag + 1};
-    node->next = old.ptr;
-    while (!head.compare_exchange_weak(old, new_node)) {
-        node->next = old.ptr;
-        new_node = {node, old.tag + 1};
-    }
-}
+  struct TaggedPtr {
+      Node* ptr;
+      uint64_t tag;
+  };
+  std::atomic<TaggedPtr> head;
+  
+  void push(Node* node) {
+      TaggedPtr old = head.load();
+      TaggedPtr new_node = {node, old.tag + 1};
+      node->next = old.ptr;
+      while (!head.compare_exchange_weak(old, new_node)) {
+          node->next = old.ptr;
+          new_node = {node, old.tag + 1};
+      }
+  }
 
 7.优缺点
-✅ 原理简单，能彻底解决 ABA（只要 tag 不溢出）。
+  ✅ 原理简单，能彻底解决 ABA（只要 tag 不溢出）。
 
-❌ 需要双字 CAS（部分平台不支持），且 tag 有溢出风险（64 位基本安全）。
+  ❌ 需要双字 CAS（部分平台不支持），且 tag 有溢出风险（64 位基本安全）。
 
 
 ## 解决方案二: 风险指针（Hazard Pointer）
 
 1. 最佳应用场景：通用无锁队列（MPSC/MPMC）、通用无锁数据结构库。
 
-无锁队列（尤其是 MPMC、MPSC）：生产者和消费者同时操作，节点动态创建和销毁。
+  无锁队列（尤其是 MPMC、MPSC）：生产者和消费者同时操作，节点动态创建和销毁。
 
-通用无锁数据结构库（如 libcds），需要完全避免悬空指针。
+  通用无锁数据结构库（如 libcds），需要完全避免悬空指针。
 
-多线程环境，节点生命周期不可控（无法预测何时能安全删除）。
+  多线程环境，节点生命周期不可控（无法预测何时能安全删除）。
 
 2. 不适合的场景： 实现复杂度高、对延迟要求极高
 
