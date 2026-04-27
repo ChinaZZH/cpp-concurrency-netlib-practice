@@ -10,20 +10,20 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 2.线程T1被操作系统挂起(或发生时间片切换)。如下面的一张截图：
 
 
-<img width="840" height="289" alt="111" src="https://github.com/user-attachments/assets/2440cc32-d2cd-41b9-93f6-22f7cc8946eb" />
+        <img width="840" height="289" alt="111" src="https://github.com/user-attachments/assets/2440cc32-d2cd-41b9-93f6-22f7cc8946eb" />
 
 
 3.线程T2将共享变量从A修改成B，然后又修改回A(中间可能释放了原有A的内存地址，并重新分配得到了相同地址。)。如下面的两张截图:
 
 
-<img width="915" height="405" alt="222" src="https://github.com/user-attachments/assets/111bed59-7317-47ab-a4c8-702e60ad2b15" />
+        <img width="915" height="405" alt="222" src="https://github.com/user-attachments/assets/111bed59-7317-47ab-a4c8-702e60ad2b15" />
 
 
-<img width="884" height="400" alt="333" src="https://github.com/user-attachments/assets/31938c69-9fa2-48ef-bb9a-1ff392ee8d1f" />
+        <img width="884" height="400" alt="333" src="https://github.com/user-attachments/assets/31938c69-9fa2-48ef-bb9a-1ff392ee8d1f" />
 
 4. 线程T1恢复执行，发现共享变量仍然是A，于是CAS操作成功。但此时A代表的实际数据已经发生了改变(甚至已经被删除)，导致数据结构损坏。如下面的一张截图:
 
-<img width="910" height="485" alt="444" src="https://github.com/user-attachments/assets/f975188f-4ad2-4ec5-b206-acccaeb01c30" />
+        <img width="910" height="485" alt="444" src="https://github.com/user-attachments/assets/f975188f-4ad2-4ec5-b206-acccaeb01c30" />
 
 危害: 数据丢失，内存错误。
 
