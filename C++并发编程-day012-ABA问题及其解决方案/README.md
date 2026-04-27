@@ -63,7 +63,8 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
           }
       }
 
-7.优缺点
+7.优缺点：
+
       ✅ 原理简单，能彻底解决 ABA（只要 tag 不溢出）。
 
       ❌ 需要双字 CAS（部分平台不支持），且 tag 有溢出风险（64 位基本安全）。
@@ -73,11 +74,11 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 
 1. 最佳应用场景：通用无锁队列（MPSC/MPMC）、通用无锁数据结构库。
 
-  无锁队列（尤其是 MPMC、MPSC）：生产者和消费者同时操作，节点动态创建和销毁。
+      无锁队列（尤其是 MPMC、MPSC）：生产者和消费者同时操作，节点动态创建和销毁。
 
-  通用无锁数据结构库（如 libcds），需要完全避免悬空指针。
+      通用无锁数据结构库（如 libcds），需要完全避免悬空指针。
 
-  多线程环境，节点生命周期不可控（无法预测何时能安全删除）。
+      多线程环境，节点生命周期不可控（无法预测何时能安全删除）。
 
 2. 不适合的场景： 实现复杂度高、对延迟要求极高
 
@@ -88,35 +89,37 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
    尤其适合队列这种需要频繁删除和插入的结构，能彻底解决 ABA 和内存安全问题。
 
 5. 游戏服务端例子
-   战斗服务器的指令队列：多个生产者（玩家输入）写入，一个消费者（逻辑线程）读取。队列节点动态分配，消费者删除时需确保没有生产者还在引用该节点（风险指针可做到）。
-  场景对象的更新队列：类似。
+    战斗服务器的指令队列：多个生产者（玩家输入）写入，一个消费者（逻辑线程）读取。队列节点动态分配，消费者删除时需确保没有生产者还在引用该节点（风险指针可做到）。
+   场景对象的更新队列：类似。
 
 6. 原理
-每个线程在访问共享节点前，将节点地址存入自己的 风险指针 中，表示“我正在使用该节点”。准备删除节点时，检查所有线程的风险指针，如果没有任何风险指针指向该节点，则安全删除；否则延迟到以后删除。
+    每个线程在访问共享节点前，将节点地址存入自己的 风险指针 中，表示“我正在使用该节点”。
+   准备删除节点时，检查所有线程的风险指针，如果没有任何风险指针指向该节点，则安全删除；否则延迟到以后删除。
 
 6. 工作流程（以 pop 为例）
-thread_local Node* hazard = nullptr;
+    thread_local Node* hazard = nullptr;
 
-Node* pop() {
-    while (true) {
-        Node* old_head = head.load();
-        if (!old_head) return nullptr;
-        hazard = old_head;                     // 标记风险
-        if (head.load() != old_head) continue; // 二次确认
-        Node* next = old_head->next;
-        if (head.compare_exchange_strong(old_head, next)) {
-            hazard = nullptr;                  // 清除风险
-            retire(old_head);                  // 延迟回收
-            return old_head;
+    Node* pop() {
+        while (true) {
+            Node* old_head = head.load();
+            if (!old_head) return nullptr;
+            hazard = old_head;                     // 标记风险
+            if (head.load() != old_head) continue; // 二次确认
+            Node* next = old_head->next;
+            if (head.compare_exchange_strong(old_head, next)) {
+                hazard = nullptr;                  // 清除风险
+                retire(old_head);                  // 延迟回收
+                return old_head;
+            }
+            hazard = nullptr;
         }
-        hazard = nullptr;
     }
-}
 
 7.优缺点
-✅ 真正安全，不会出现悬空指针。
 
-❌ 实现复杂（需维护全局风险指针列表和回收队列），有一定性能开销。
+    ✅ 真正安全，不会出现悬空指针。
+
+    ❌ 实现复杂（需维护全局风险指针列表和回收队列），有一定性能开销。
 
 ## 解决方案三: 引用计数（Reference Counting）
 
