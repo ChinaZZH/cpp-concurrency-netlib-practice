@@ -1,6 +1,10 @@
 markdown
 
-## Day9： 基于无锁mpmc队列的实现， 并且在线程中进行应用 (MpmcQueue + ThreadPool)
+## Day12： ABA问题及其解决发难
+
+## 一.什么是ABA问题？
+
+
 ## 核心收获
 -- 1. 关于线程池ThreadPool的讨论， 在原先的ThreadPool移除条件变量和互斥锁，将之前实现的基于无锁的mpmc队列应用到线程中去，同时将stop这个也是共享变量修改为std::atomic<bool>。
 
