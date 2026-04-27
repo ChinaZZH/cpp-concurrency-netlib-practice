@@ -125,11 +125,11 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 
 1. 最佳应用场景： 单向无锁结构（栈/队列）、已使用 shared_ptr 的项目
 
-无锁栈、队列（单向链表结构）：节点只有前向指针，不会产生循环引用。
+    无锁栈、队列（单向链表结构）：节点只有前向指针，不会产生循环引用。
 
-已有 std::shared_ptr 使用习惯，且能接受原子操作开销。
+    已有 std::shared_ptr 使用习惯，且能接受原子操作开销。
 
-可配合 std::atomic<std::shared_ptr<T>>（C++20 前性能较差，但 C++20 有所改进）。
+    可配合 std::atomic<std::shared_ptr<T>>（C++20 前性能较差，但 C++20 有所改进）。
 
 2. 不适合的场景： 双向链表、环形结构（循环引用）
 
@@ -137,33 +137,36 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 
 4. 为什么适合？
 
-引用计数天然防止节点在使用时被销毁，计数器为 0 时自动回收，从而避免 ABA。它不需要像风险指针那样维护全局列表，代码相对简单。但在双向链表或带环结构中会因循环引用导致内存泄漏，因此只推荐用于单向结构。
+   引用计数天然防止节点在使用时被销毁，计数器为 0 时自动回收，从而避免 ABA。
 
-5. 游戏服务端例子
+   它不需要像风险指针那样维护全局列表，代码相对简单。但在双向链表或带环结构中会因循环引用导致内存泄漏，因此只推荐用于单向结构。
 
-技能系统的 Effect 链：每个 Effect 通过 next 指针连接，Effect 可能在多个线程中被引用（如技能释放线程、伤害计算线程）。使用引用计数可安全删除，避免 ABA。
+6. 游戏服务端例子
+   
+    技能系统的 Effect 链：每个 Effect 通过 next 指针连接，Effect 可能在多个线程中被引用（如技能释放线程、伤害计算线程）。
 
-资源缓存中的共享对象（如纹理、模型），使用引用计数自动管理生命周期。
+    使用引用计数可安全删除，避免 ABA。资源缓存中的共享对象（如纹理、模型），使用引用计数自动管理生命周期。
 
 6.原理：每个节点记录当前被引用的次数。访问节点前增加计数，访问结束后减少。当计数为 0 时才能删除。这样可以保证正在被访问的节点不会被回收，从而避免 ABA。
 
 7.示例（结合 std::shared_ptr）
-struct Node {
-    int data;
-    std::shared_ptr<Node> next;
-    Node(int val) : data(val) {}
-};
-std::atomic<std::shared_ptr<Node>> head;
-
-void push(int val) {
-    auto node = std::make_shared<Node>(val);
-    auto old = head.load();
-    do {
-        node->next = old;
-    } while (!head.compare_exchange_weak(old, node));
-}
+    struct Node {
+        int data;
+        std::shared_ptr<Node> next;
+        Node(int val) : data(val) {}
+    };
+    std::atomic<std::shared_ptr<Node>> head;
+    
+    void push(int val) {
+        auto node = std::make_shared<Node>(val);
+        auto old = head.load();
+        do {
+            node->next = old;
+        } while (!head.compare_exchange_weak(old, node));
+    }
 
 8.优缺点
-✅ 避免 ABA，自动内存管理（借助 shared_ptr）。
 
-❌ 循环引用可能导致内存泄漏（在单向链表中不存在）；shared_ptr 本身有一定开销。
+    ✅ 避免 ABA，自动内存管理（借助 shared_ptr）。
+
+    ❌ 循环引用可能导致内存泄漏（在单向链表中不存在）；shared_ptr 本身有一定开销。
