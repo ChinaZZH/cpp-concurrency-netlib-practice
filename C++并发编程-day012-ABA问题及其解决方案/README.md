@@ -43,6 +43,7 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 5. 实现方式: 使用 std::atomic<std::pair<Node*, uint64_t>> 或平台相关的双字 CAS（如 __int128）。仅当指针和版本号都匹配时，CAS 才成功。
 
 6.示例(简化)
+      ```cpp
       struct TaggedPtr {
           Node* ptr;
           uint64_t tag;
@@ -93,6 +94,8 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
    准备删除节点时，检查所有线程的风险指针，如果没有任何风险指针指向该节点，则安全删除；否则延迟到以后删除。
 
 6. 工作流程（以 pop 为例）
+
+    ```cpp
     thread_local Node* hazard = nullptr;
 
     Node* pop() {
