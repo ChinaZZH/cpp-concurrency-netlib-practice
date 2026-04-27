@@ -47,26 +47,26 @@ ABA问题是无锁编程中的一个经典陷阱。考虑以下场景:
 5. 实现方式: 使用 std::atomic<std::pair<Node*, uint64_t>> 或平台相关的双字 CAS（如 __int128）。仅当指针和版本号都匹配时，CAS 才成功。
 
 6.示例(简化)
-  struct TaggedPtr {
-      Node* ptr;
-      uint64_t tag;
-  };
-  std::atomic<TaggedPtr> head;
-  
-  void push(Node* node) {
-      TaggedPtr old = head.load();
-      TaggedPtr new_node = {node, old.tag + 1};
-      node->next = old.ptr;
-      while (!head.compare_exchange_weak(old, new_node)) {
+      struct TaggedPtr {
+          Node* ptr;
+          uint64_t tag;
+      };
+      std::atomic<TaggedPtr> head;
+      
+      void push(Node* node) {
+          TaggedPtr old = head.load();
+          TaggedPtr new_node = {node, old.tag + 1};
           node->next = old.ptr;
-          new_node = {node, old.tag + 1};
+          while (!head.compare_exchange_weak(old, new_node)) {
+              node->next = old.ptr;
+              new_node = {node, old.tag + 1};
+          }
       }
-  }
 
 7.优缺点
-  ✅ 原理简单，能彻底解决 ABA（只要 tag 不溢出）。
+      ✅ 原理简单，能彻底解决 ABA（只要 tag 不溢出）。
 
-  ❌ 需要双字 CAS（部分平台不支持），且 tag 有溢出风险（64 位基本安全）。
+      ❌ 需要双字 CAS（部分平台不支持），且 tag 有溢出风险（64 位基本安全）。
 
 
 ## 解决方案二: 风险指针（Hazard Pointer）
