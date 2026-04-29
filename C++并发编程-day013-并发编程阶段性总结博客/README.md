@@ -4,15 +4,17 @@ markdown
 ## Day13：  C++ 并发编程第一阶段总结。
 
 ## 一、基础同步原语（线程、mutex、条件变量、生产者-消费者）
+## 1.线程管理
+-- (1). std::thread：创建线程，传递参数时注意默认按值传递，若需要引用请使用 std::ref。
 
--- 1. std::thread：创建线程，传递参数时注意默认按值传递，若需要引用请使用 std::ref。
-
--- 2. 在std::thread对象被销毁前必须选择一种运行方式，join() 或者 detach(). 
+-- (2). 在std::thread对象被销毁前必须选择一种运行方式，join() 或者 detach(). 
 
       join() 是这个std::thread是在当前依附的线程中等待自身线程std::thread的结束。
       
       detach() 是这个std::thread是和当前依附的线程分离，自身由系统调度来决定线程何时结束。
 
+-- (3). 线程id: 通过std::this_thread::get_id()获取.
+## 1.线程管理
 
 ## 二、内存模型与原子操作（memory_order、自旋锁、CAS）
 
