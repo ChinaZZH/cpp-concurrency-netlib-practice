@@ -10,9 +10,9 @@ markdown
 
 -- (2). 在std::thread对象被销毁前必须选择一种运行方式，join() 或者 detach(). 
 
-      1.join() 是这个std::thread是在当前依附的线程中等待自身线程std::thread的结束。
+1.join() 是这个std::thread是在当前依附的线程中等待自身线程std::thread的结束。
       
-      2.detach() 是这个std::thread是和当前依附的线程分离，自身由系统调度来决定线程何时结束。
+2.detach() 是这个std::thread是和当前依附的线程分离，自身由系统调度来决定线程何时结束。
 
 -- (3). 线程id: 通过std::this_thread::get_id()获取.
 
