@@ -79,7 +79,9 @@ wait_until: 等待到绝对时间点 然后会被唤醒
  (3).C++11 引入了原子库和内存序，帮助程序员控制顺序。
 
 ## 2.std::atomic<T>
-(1).支持 store()、load()、exchange()、compare_exchange_weak/strong()、fetch_add() 等。
+(1).支持 store()、load()、exchange()、compare_exchange_weak/strong()、fetch_add() 、fetch_sub()等。
+    不特殊指定内存序，则默认的就是memory_order_seq_cst。
+    compare_exchange_weak/strong() 和 exchange() 这个就是读写改，使用memory_order_release的时候默认的读就是memory_order_acquire.
 
 (2). 保证对基本类型的读写是原子的。
 
@@ -100,25 +102,28 @@ wait_until: 等待到绝对时间点 然后会被唤醒
 (3).见 GitHub中的day3。
 
 ## 三、无锁数据结构（栈、队列、线程池）
-1. 无锁栈版本号解法: 通过版本号递增避免相同的内存地址被重用。 ABA 防御：即使指针地址被重用，tag 已递增，CAS 失败。
+1. 无锁栈版本号解法: 通过版本号递增避免相同的内存地址被重用。
+   使用store()、exchange()、compare_exchange_weak/strong()、fetch_add() 的时候就是把 (内存地址+版本号tag) 一起打包跟栈顶的 (内存地址+版本号tag) 做比较来进行ABA防御。
+   ABA 防御：即使指针地址被重用，tag 已递增，CAS 失败。
 
-2. 无锁栈引用计数解法: 通过引用计数方法中shared_ptr中的控制块的地址不同。 ABA 防御：即使指针地址被重用，控制块地址不同，CAS 失败。
+3. 无锁栈引用计数解法(隐式版本号): 通过引用计数方法中shared_ptr中的控制块的地址不同。
+   使用store()、exchange()、compare_exchange_weak/strong()、fetch_add() 的时候就是把 (内存地址+控制快地址) 一起打包跟栈顶的 (内存地址+控制快地址) 做比较来进行ABA防御。
+   ABA 防御：即使指针地址被重用，控制块地址不同，CAS 失败。
 
-3. 无锁队列（MPSC，链表版） 适用于单一消费者场景
+5. 无锁队列（MPSC，链表版） 适用于单一消费者场景
 
-4. 线程池（支持 std::future）
+6. 线程池（支持 std::future）
 
-5. 性能测试结论：当任务计算量较重时，线程池相比串行有明显加速；当任务极轻时，串行反而更快（调度开销主导）
+7. 性能测试结论：当任务计算量较重时，线程池相比串行有明显加速；当任务极轻时，串行反而更快（调度开销主导）
 
-6. 更多内容请看github相关。
+8. 更多内容请看github相关。
 
 ## 四、ABA 问题与解决方案（版本号、风险指针、引用计数，带对比表）
 ## 1.  ABA 问题本质
-线程 T1 读取地址 A。然后线程T1挂起。
+线程 T1 读取地址 A。然后线程T1挂起。T2 将 A 改为 B 又改回 A（地址被释放后重新分配得到相同地址）。T1 恢复后 CAS 成功，但 A 已不是原来的对象，导致数据错误。
+ABA问题会造成数据丢失，内存错误，程序崩溃。
 
-T2 将 A 改为 B 又改回 A（地址被释放后重新分配得到相同地址）。
 
-T1 恢复后 CAS 成功，但 A 已不是原来的对象，导致数据错误。
 
 ## 2. 解决方案一：版本号（Tagged Pointer）
 原理：指针 + 递增 tag，CAS 同时比较指针和 tag。
@@ -168,6 +173,7 @@ T1 恢复后 CAS 成功，但 A 已不是原来的对象，导致数据错误。
 
 
 ## 六、总结 & GitHub 链接
+在这个C++并发编程阶段的学习和练习感觉学习到了很多，对自身的时间管理和情绪管理也得到了提升。
 下一阶段将进入手写网络库（epoll 版），把并发知识落地到实际项目中
 github地址 https://github.com/ChinaZZH/cpp-concurrency-netlib-practice
 
