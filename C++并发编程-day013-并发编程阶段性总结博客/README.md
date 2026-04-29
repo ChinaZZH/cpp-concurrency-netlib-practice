@@ -8,13 +8,16 @@ markdown
 ## 1.线程管理
 -- (1). std::thread：创建线程，传递参数时注意默认按值传递，若需要引用请使用 std::ref。
 
+
 -- (2). 在std::thread对象被销毁前必须选择一种运行方式，join() 或者 detach(). 
 
 1.join() 是这个std::thread是在当前依附的线程中等待自身线程std::thread的结束。
       
 2.detach() 是这个std::thread是和当前依附的线程分离，自身由系统调度来决定线程何时结束。
 
+
 -- (3). 线程id: 通过std::this_thread::get_id()获取.
+
 
 ## 2.互斥(mutex)
 -- (1). 互斥锁 std::mutex, std::lock_guard, std::unique_lock。
@@ -24,6 +27,7 @@ markdown
 2.std::lock_guard是对std::mutex进行RAII的封装，构造的时候加锁，析构的时候解锁，不能去调用加锁和解锁的函数。用法简单不容易出错，是一个对std::mutex进行使用简化的产品。
 
 3. std::unique_lock对std::lock_guard功能进行升级不仅支持构造的时候加锁，析构的时候解锁。同时可以手动的进行延迟加锁和提前解锁(没有特殊情况不建议)，还可以配合条件变量使用功能强大。
+
       
 -- (2) 死锁：多个线程拥有对方想要的资源并且相当等待造成。 
 
@@ -31,8 +35,10 @@ markdown
 
 2.在工程上怎么避免死锁呢: 1. 资源的有序申请  2.给每个共享资源设置一个超时机制，持有超过该事件就释放  3.减少锁的粒度，尽量避免锁的申请和使用
 
+
 ## 3. 条件变量
 -- (1). std::condition_variable 需配合 std::unique_lock。
+
 
 -- (2). wait() 必须检查条件（防止虚假唤醒）：
 
@@ -40,13 +46,17 @@ markdown
       cv.wait(lock, []{ return !queue.empty(); });
 ```
 
+
 -- (3). notify_one() 与 notify_all()：唤醒等待线程。
+
 
 -- (4). 关注wait_for和wait_until的使用。
 
 wait_for: 等待一段时间（相对时间）然后会被唤醒
 
 wait_until: 等待到绝对时间点 然后会被唤醒
+
+-- (5).生产者-消费者示例（使用 mutex + 条件变量）见 GitHub中的day1。
 
 
 ## 二、内存模型与原子操作（memory_order、自旋锁、CAS）
