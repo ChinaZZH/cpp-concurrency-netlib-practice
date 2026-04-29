@@ -33,7 +33,7 @@ markdown
 
 1.形成死锁有四个条件: 资源处于互斥条件，资源不可剥夺条件，请求并保持， 循环等待。 四个条件中的任意一个不满足都不会形成死锁。
 
-2.在工程上怎么避免死锁呢: 1. 资源的有序申请  2.给每个共享资源设置一个超时机制，持有超过该事件就释放  3.减少锁的粒度，尽量避免锁的申请和使用
+2.在工程上怎么避免死锁呢: 1. 资源的有序申请  2.给每个共享资源设置一个超时机制，持有超过该事件就释放  3.减少锁的粒度，尽量避免锁的申请和使用, 4.避免嵌套锁。
 
 
 ## 3. 条件变量
@@ -56,10 +56,44 @@ wait_for: 等待一段时间（相对时间）然后会被唤醒
 
 wait_until: 等待到绝对时间点 然后会被唤醒
 
--- (5).生产者-消费者示例（使用 mutex + 条件变量）见 GitHub中的day1。
+|函数|	超时类型|	返回值（无谓词）|	返回值（有谓词）|	典型场景|
+|----|--------------|------------------|-----------------|----------|
+|wait|	无	|void	|void	|无限等待，直到被显式唤醒|
+|wait_for|	相对时间|	cv_status::timeout 或 no_timeout|	true（条件满足） / false（超时且条件不满足）|	等待资源最长不超过N秒|
+|wait_until|	绝对时间|	同上	|同上	|等待到某个绝对 |deadline|
 
+## 4. 生产者-消费者示例
+  (使用 mutex + 条件变量）见 GitHub中的day2。
+
+## 5. 其他
+-- (1). std::call_once 可以确保在多线程环境下只被调用一次，可以用作与单例。
+--  (2). 读写锁，后期扩容再补充。
+-- (3). std::recursive_mutex，递归锁，后期再补充修改。
 
 ## 二、内存模型与原子操作（memory_order、自旋锁、CAS）
+## 1.内存模型必要性
+-- (1).CPU 与编译器的指令重排会导致多线程下的可见性问题。
+
+-- (2).C++11 引入了原子库和内存序，帮助程序员控制顺序。
+
+## 2.std::atomic<T>
+-- (1).支持 store()、load()、exchange()、compare_exchange_weak/strong()、fetch_add() 等。
+
+-- (2). 保证对基本类型的读写是原子的。
+
+## 3.内存序
+|内存序	            |读部分	      |写部分	|用途      |            主要用途|
+|-----------------------|-----------------|-----------|----------|------------------|
+|memory_order_relaxed	|relaxed	|relaxed	|仅原子性，无顺序保证|所有函数都使用|
+|memory_order_acquire	|acquire	|relaxed	|读操作，之后读写不能重排到之前|load()、compare_exchange_weak/strong()、fetch_add()|
+|memory_order_release	|acquire（隐含）	|release	|写操作，之前读写不能重排到之后|load()、compare_exchange_weak/strong()、exchange()|
+|memory_order_acq_rel	|acquire	|release	|读‑改‑写操作，同时获取与释放|所有函数都使用|
+|memory_order_seq_cst	|seq_cst	|seq_cst	|全局顺序一致性（默认）|所有函数都使用|
+
+## 4.自旋锁
+-- (1).使用 std::atomic_flag 或 std::atomic<bool>）展示了 acquire/release 的典型用法 
+
+-- (2).见 GitHub中的day3。
 
 ## 三、无锁数据结构（栈、队列、线程池）
 
