@@ -6,7 +6,7 @@ markdown
 ## 一、基础同步原语（线程、mutex、条件变量、生产者-消费者）
 
 ## 1.线程管理
-*(1). std::thread：创建线程，传递参数时注意默认按值传递，若需要引用请使用 std::ref。
+(1). std::thread：创建线程，传递参数时注意默认按值传递，若需要引用请使用 std::ref。
 
 (2). 在std::thread对象被销毁前必须选择一种运行方式，join() 或者 detach(). 
 
@@ -167,6 +167,7 @@ T1 恢复后 CAS 成功，但 A 已不是原来的对象，导致数据错误。
 
 
 ## 六、总结 & GitHub 链接
+下一阶段将进入手写网络库（epoll 版），把并发知识落地到实际项目中
 github地址 https://github.com/ChinaZZH/cpp-concurrency-netlib-practice
 
 
