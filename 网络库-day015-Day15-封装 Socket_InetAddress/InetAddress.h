@@ -11,12 +11,16 @@ public:
     
     explicit InetAddress(int nPort);
 
+    explicit InetAddress(const sockaddr_in& addr);
+
 public:
-    sockaddr* GetSockAddr() { return (sockaddr*)&addr_;}
+    const sockaddr_in* GetSockAddr() const { return &addr_;}
+    sockaddr_in* GetSockAddr()  { return &addr_;}
 
-    socklen_t Len() { return sizeof(addr_); }
+    socklen_t Len() const { return sizeof(addr_); }
 
-    int InetToHost(char* szIpBuff);
+    std::string toIp() const;
+    int toPort() const;
 
 public:
     sockaddr_in addr_;

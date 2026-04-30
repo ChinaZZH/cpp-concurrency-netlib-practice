@@ -1,7 +1,8 @@
 
 
 
-#include "Socket.h"
+#include "ListenSocket.h"
+#include "ClientSocket.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -10,7 +11,13 @@
 int main()
 {
     // 1.创建socket
-    Socket listen;
+    ListenSocket listen;
+
+    if(!listen.IsValid())
+    {
+        std::cerr << "listen_Socket is invalid \n";
+        return 1;
+    }
 
     // 2.设置地址重用
     listen.SetReuseAddr();
@@ -36,14 +43,18 @@ int main()
     // 5.接受连接并echo
     while(true)
     {
-        ssize_t clientFd = listen.Accept();
-        if(clientFd < 0)
+        int nClientFd = listen.Accept();
+        if(nClientFd < 0)
         {
             std::cerr << "accept error \n";
             continue;
         }
 
-        Socket clientSocket(clientFd);
+        ClientSocket clientSocket(nClientFd);
+        if(false == clientSocket.IsValid())
+        {
+            continue;
+        }
 
 
         // 6.0 接受并回发
@@ -60,6 +71,6 @@ int main()
         }
     }
 
-   listen.Close();
-    return 0;
+
+   return 0;
 }

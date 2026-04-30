@@ -5,11 +5,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-InetAddress::InetAddress()
-{
 
-}
-    
 InetAddress::InetAddress(int nPort)
 {
     memset(&addr_, 0, sizeof(addr_));
@@ -18,9 +14,22 @@ InetAddress::InetAddress(int nPort)
     addr_.sin_port = htons(nPort);
 }
 
-int InetAddress::InetToHost(char* szIpBuff)
+InetAddress::InetAddress(const sockaddr_in& addr)
+:addr_(addr)
 {
-    //char ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &addr_.sin_addr, szIpBuff, sizeof(szIpBuff));
+
+}
+
+std::string InetAddress::toIp() const
+{
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &addr_.sin_addr, ip, INET_ADDRSTRLEN);
+    return std::string(ip);
+}
+    
+
+int InetAddress::toPort() const
+{
     return ntohs(addr_.sin_port);
 }
+
