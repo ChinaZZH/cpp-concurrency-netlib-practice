@@ -3,7 +3,7 @@
 #include <cstring>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include <fcntl.h>
 
 
 
@@ -48,6 +48,20 @@ ClientSocket& ClientSocket::operator=(ClientSocket&& other)   noexcept
 }
 
 
+void ClientSocket::SetNonBlock()
+{
+    if(false == IsValid())
+    {
+        std::cerr << "ClientSocket::SetNonBlock error \n";
+        return;
+    }
+
+    
+    int flags = ::fcntl(socket_fd_, F_GETFL, 0);
+    flags |= O_NONBLOCK;
+    ::fcntl(socket_fd_, F_SETFL, flags);
+}
+
 ssize_t ClientSocket::Read(char* buf, size_t len)
 {
     if(false == IsValid() || !buf)
@@ -56,13 +70,7 @@ ssize_t ClientSocket::Read(char* buf, size_t len)
         return -1;
     }
 
-    ssize_t nReadResult = ::read(socket_fd_, buf, len);
-    if(nReadResult <= 0)
-    {
-        Close();
-    }
-
-    return nReadResult;
+    return ::read(socket_fd_, buf, len);
 }
 
 
@@ -74,7 +82,13 @@ ssize_t ClientSocket::Write(const char* buf, size_t len)
         return -1;
     }
 
-    return ::write(socket_fd_, buf, len);
+    ssize_t write_len = ::write(socket_fd_, buf, len);
+    if(write_len != len)
+    {
+        std::cerr << "write error" << std::endl;
+    }
+
+    return write_len;
 }
 
 

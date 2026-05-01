@@ -22,8 +22,6 @@ public:
 
     // 监听socket
 public:
-    void SetNonBlock();
-    
     void SetReuseAddr(bool on = true);
 
     void SetReusePort(bool on = true);
@@ -37,6 +35,8 @@ public:
     void Close();
 
     bool IsValid() { return socket_fd_ >= 0;}
+
+    int GetSocketId() const { return socket_fd_; }
 
 private:
     int socket_fd_ = -1;

@@ -28,6 +28,8 @@ public:
 
     bool IsValid() { return socket_fd_ >= 0;}
 
+    void SetNonBlock();
+    
 private:
     int socket_fd_ = -1;
 };

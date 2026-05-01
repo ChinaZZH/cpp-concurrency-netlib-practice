@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 
 
+
  ListenSocket::ListenSocket()
  :socket_fd_(-1)
  {
@@ -46,20 +47,7 @@ ListenSocket& ListenSocket::operator=(ListenSocket&& other)   noexcept
     return (*this);
 }
 
-void ListenSocket::SetNonBlock()
-{
-    if(false == IsValid())
-    {
-        std::cerr << "ListenSocket::SetNonBlock error \n";
-        return;
-    }
 
-    
-    int flags = ::fcntl(socket_fd_, F_GETFL, 0);
-    flags |= O_NONBLOCK;
-    ::fcntl(socket_fd_, F_SETFL, flags);
-}
-    
 
 void ListenSocket::SetReuseAddr(bool on /*= true*/)
 {

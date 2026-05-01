@@ -7,8 +7,6 @@
 class InetAddress
 {
 public:
-    InetAddress();
-    
     explicit InetAddress(int nPort);
 
     explicit InetAddress(const sockaddr_in& addr);
