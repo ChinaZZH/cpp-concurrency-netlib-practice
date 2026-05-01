@@ -22,14 +22,14 @@ public:
 public:
     ssize_t Read(char* buf, size_t len);
 
-    ssize_t Write(const char* buf, size_t len);
+    bool Write(const char* buf, size_t len);
 
     void Close(bool bShowConsole = true);
 
     bool IsValid() { return socket_fd_ >= 0;}
 
     void SetNonBlock();
-    
+
 private:
     int socket_fd_ = -1;
 };

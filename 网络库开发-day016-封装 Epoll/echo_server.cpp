@@ -3,15 +3,15 @@
 
 #include "ListenSocket.h"
 #include "ClientSocket.h"
+#include "Epoll.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
-#include <sys/epoll.h>
 #include <map>
 #include <memory>
 
 
-#define MAX_EVENTS 10
+
 #define PORT 8888
 
 using namespace std;
@@ -22,7 +22,7 @@ int main()
 
     if(!listen.IsValid())
     {
-        std::cerr << "listen_Socket is invalid \n";
+        std::cerr << "listen_Socket is invalid " << std::endl;;
         return 1;
     }
 
@@ -33,7 +33,7 @@ int main()
     InetAddress addr(PORT);
     if(false == listen.Bind(addr))
     {
-         std::cerr << "listen_Socket bind error \n";
+         std::cerr << "listen_Socket bind error " << std::endl;;
          return 1;
     }
 
@@ -41,37 +41,33 @@ int main()
     // 4.监听
     if(false == listen.Listen())
     {
-        std::cerr << "listen_Socket listen error \n";
+        std::cerr << "listen_Socket listen error  " << std::endl;;
         return 1;
     }
 
     // 创建epoll
-    int epollFd = epoll_create1(0);
-    if(epollFd < 0)
+    Epoll epoll;
+    if(!epoll.IsValid())
     {
-        std::cerr << "epoll_create error \n";
+        std::cerr << "epoll_create error " << std::endl;;
         return 1;
     }
 
     // 将监听socket加入到epoll中去。
-    struct epoll_event ev;
-    ev.events = EPOLLIN;
-    ev.data.fd = listen.GetSocketId();
-    if(epoll_ctl(epollFd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+    if(false == epoll.AddFd(listen.GetSocketId(), EPOLLIN))
     {
-        std::cerr << "epoll_ctl add listenFd error \n";
-        close(epollFd);
+        std::cerr << "epoll_ctl add listenFd error " << std::endl;
         return 1;
     }
 
-    struct epoll_event events[MAX_EVENTS];
+    
 
 
     // 5.接受连接并echo
     std::map<int, std::unique_ptr<ClientSocket>> m_mapClientSocketList;
     while(true)
     {
-        int nfds = epoll_wait(epollFd, events, MAX_EVENTS, -1);
+        int nfds = epoll.Wait();
         if(nfds < 0)
         {
             std::cerr << "epoll_wait error" <<std::endl;
@@ -80,7 +76,13 @@ int main()
 
         for(int i = 0; i < nfds; ++i)
         {
-            int fd = events[i].data.fd;
+            int fd = epoll.GetClientFd(i);
+            if(fd < 0)
+            {
+                 std::cerr << "epoll fd  error \n";
+                continue;
+            }
+
             if(fd == listen.GetSocketId())
             {
                 int nClientFd = listen.Accept();
@@ -97,17 +99,14 @@ int main()
                 }
 
                 
-                // 将新连接加入epoll
-                struct epoll_event clientEv;
-                clientEv.events = EPOLLIN;      // 监听可读事件
-                clientEv.data.fd = nClientFd;
-                if(epoll_ctl(epollFd, EPOLL_CTL_ADD, nClientFd, &clientEv) < 0)
+                // 将新连接加入epoll               
+                if(false == epoll.AddFd(nClientFd, EPOLLIN | EPOLLET))
                 {
                     ClientSocket client(nClientFd);
                     std::cerr << "epoll_ctl add listenFd error \n";
                     continue;
                 }
-                
+
                 auto ptrClient = std::make_unique<ClientSocket>(nClientFd);
                 ptrClient->SetNonBlock();
                 m_mapClientSocketList.insert(std::make_pair(nClientFd, std::move(ptrClient)));
@@ -138,30 +137,25 @@ int main()
                 {
                     memset(buffer, 0, sizeof(buffer));
                     ssize_t n = ptrClient->Read(buffer, sizeof(buffer));
+                    int err = errno;   // 立即保存 errno
                     if(n < 0)
                     {
                         // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
-                        if(errno == EAGAIN || errno == EWOULDBLOCK) {
-                            
+                        if(err == EAGAIN || err == EWOULDBLOCK) {
+                            break;
                         }
                         else{
-                            //perror("read");
-                            std::cout << "error to close connection n < 0" << std::endl;
-
                              // 异常，则断开连接
                             m_mapClientSocketList.erase(itr);
-                            epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
+                            epoll.RemoveFd(fd);
+                            break;
                         }
-                    
-                       break;
                     }
                     else if(n == 0)
                     {
-                        std::cout << "error to close connection n == 0" << std::endl;
-
                         // 对方关闭连接
                         m_mapClientSocketList.erase(itr);
-                        epoll_ctl(epollFd, EPOLL_CTL_DEL, fd, nullptr);
+                        epoll.RemoveFd(fd);
                         break;
                     }
                     else{
@@ -174,6 +168,5 @@ int main()
 
     }
 
-    close(epollFd);
     return 0;
 }

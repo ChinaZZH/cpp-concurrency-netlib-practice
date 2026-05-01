@@ -74,21 +74,34 @@ ssize_t ClientSocket::Read(char* buf, size_t len)
 }
 
 
-ssize_t ClientSocket::Write(const char* buf, size_t len)
+bool ClientSocket::Write(const char* buf, size_t len)
 {
     if(false == IsValid() || !buf || len <= 0)
     {
         std::cerr << "ClientSocket::Write error \n";
-        return -1;
+        return false;
     }
 
-    ssize_t write_len = ::write(socket_fd_, buf, len);
-    if(write_len != len)
+    size_t total = 0;
+    while(total < len)
     {
-        std::cerr << "write error" << std::endl;
+        ssize_t write_len = ::write(socket_fd_, buf + total, len - total);
+        if(write_len < 0)
+        {
+            if(errno == EAGAIN || errno == EWOULDBLOCK) {
+                // 这里需要缓存未发送的数据，并注册 EPOLLOUT 事件（略复杂）
+                // 简单处理：返回 false，数据丢失
+                return false;
+            }
+
+            return false;
+        }
+
+        total += write_len;
     }
 
-    return write_len;
+
+    return true;
 }
 
 
