@@ -3,9 +3,12 @@
 
 #include <string>
 #include <sys/epoll.h>
+#include <memory>
+#include <vector>
 
 #define MAX_EVENTS 1024
 
+class Channel;
 class Epoll
 {
 public:
@@ -23,18 +26,16 @@ public:
 public:
     bool IsValid() const { return fd_ >= 0; }
 
-    bool AddFd(int nSocketFd, uint32_t events = EPOLLIN);
+    bool AddFd(Channel* ptrChannel);
 
-    bool ModifyFd(int nSocketFd, uint32_t events);
+    bool ModifyFd(Channel* ptrChannel);
 
     bool RemoveFd(int nSocketFd);
 
-    int  Wait();
+    int  Wait(std::vector<Channel*>& vecChannel);
 
-    int GetClientFd(int index);
-
+  
 private:
     int fd_ = -1;
-    int event_count_ = 0;
     struct epoll_event events_list_[MAX_EVENTS];
 };

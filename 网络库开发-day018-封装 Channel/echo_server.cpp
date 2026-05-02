@@ -4,34 +4,127 @@
 #include "ListenSocket.h"
 #include "ClientSocket.h"
 #include "Epoll.h"
+#include "Channel.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
 #include <map>
+#include <vector>
 #include <memory>
-
-
+#include <cerrno>
 
 #define PORT 8888
 
-using namespace std;
+ListenSocket g_listenScoket;
+Epoll g_epoll;
+std::map<int, std::unique_ptr<ClientSocket>> g_mapClientSocketList;
+std::map<int, std::unique_ptr<Channel>> g_mapChannel;
+
+void HandleCloseConnection(int nClientFd)
+{
+     g_mapChannel.erase(nClientFd);
+     g_epoll.RemoveFd(nClientFd);
+     g_mapClientSocketList.erase(nClientFd);
+}
+
+void HandleNewConnection()
+{
+    int nClientFd = g_listenScoket.Accept();
+    if(nClientFd < 0)
+    {
+        std::cerr << "accept error \n";
+        return;
+    }
+
+
+    {
+        auto itr = g_mapClientSocketList.find(nClientFd);
+        if(itr != g_mapClientSocketList.end())
+        {
+            return ;
+        }
+    }
+    
+
+    auto HandleRead = [nClientFd](){
+        auto itr = g_mapClientSocketList.find(nClientFd);
+        if(itr == g_mapClientSocketList.end())
+        {
+            std::cerr << "g_mapClientSocketList find error fd:" << nClientFd << std::endl;
+            return ;
+        }
+
+        auto& pClient = (itr->second);
+        if(false == pClient->IsValid())
+        {
+            std::cerr << "g_mapClientSocketList find error \n";
+            return ;
+        }
+       
+
+        // 6.0 接受并回发
+        char buffer[4096] = {0};
+        while(true)
+        {
+            memset(buffer, 0, sizeof(buffer));
+            errno = 0;
+            ssize_t n = pClient->Read(buffer, sizeof(buffer));
+            int err = errno;   // 立即保存 errno
+            if(n < 0)
+            {
+                // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
+                if(err == EAGAIN || err == EWOULDBLOCK) {
+                    break;
+                }
+                else{
+                    // 异常，则断开连接
+                    HandleCloseConnection(nClientFd);
+                    break;
+                }
+            }else if(n == 0){
+                // 对方关闭连接
+                HandleCloseConnection(nClientFd);
+                break;
+            }else{
+                pClient->Write(buffer, n);
+            }
+        }
+    };
+                
+    // 将新连接加入epoll  
+    auto clientChannel = std::make_unique<Channel>(nClientFd);
+    clientChannel->SetReadCallBack(HandleRead);
+    clientChannel->EnableReading();
+    clientChannel->EnableET();
+    
+    auto ptrClient = std::make_unique<ClientSocket>(nClientFd);
+    ptrClient->SetNonBlock();
+    if(false == g_epoll.AddFd(clientChannel.get()))
+    {
+        std::cerr << "epoll_ctl add client_fd error client fd:" << nClientFd << std::endl;
+        return ;
+    }
+
+    g_mapChannel.insert(std::make_pair(nClientFd, std::move(clientChannel)));
+    g_mapClientSocketList.insert(std::make_pair(nClientFd, std::move(ptrClient)));
+}
+
+
 int main()
 {
     // 1.创建socket
-    ListenSocket listen;
-
-    if(!listen.IsValid())
+    if(!g_listenScoket.IsValid())
     {
         std::cerr << "listen_Socket is invalid " << std::endl;;
         return 1;
     }
 
     // 2.设置地址重用
-    listen.SetReuseAddr();
+    g_listenScoket.SetReuseAddr();
 
     // 3.绑定地址
     InetAddress addr(PORT);
-    if(false == listen.Bind(addr))
+    if(false == g_listenScoket.Bind(addr))
     {
          std::cerr << "listen_Socket bind error " << std::endl;;
          return 1;
@@ -39,133 +132,58 @@ int main()
 
 
     // 4.监听
-    if(false == listen.Listen())
+    if(false == g_listenScoket.Listen())
     {
         std::cerr << "listen_Socket listen error  " << std::endl;;
         return 1;
     }
 
     // 创建epoll
-    Epoll epoll;
-    if(!epoll.IsValid())
+    if(!g_epoll.IsValid())
     {
         std::cerr << "epoll_create error " << std::endl;;
         return 1;
     }
 
     // 将监听socket加入到epoll中去。
-    if(false == epoll.AddFd(listen.GetSocketId(), EPOLLIN))
+    auto listenChannel = std::make_unique<Channel>(g_listenScoket.GetSocketId());
+    listenChannel->SetReadCallBack(HandleNewConnection);
+    listenChannel->EnableReading();
+    
+
+    if(false == g_epoll.AddFd(listenChannel.get()))
     {
-        std::cerr << "epoll_ctl add listenFd error " << std::endl;
+        std::cerr << "epoll_ctl add listenFd error listen fd:" << g_listenScoket.GetSocketId() << std::endl;
         return 1;
     }
 
-    
-
+    g_mapChannel.insert(std::make_pair(g_listenScoket.GetSocketId(), std::move(listenChannel)));
 
     // 5.接受连接并echo
-    std::map<int, std::unique_ptr<ClientSocket>> m_mapClientSocketList;
     while(true)
     {
-        int nfds = epoll.Wait();
+        std::vector<Channel*> activeChannels;
+        errno = 0;
+        int nfds = g_epoll.Wait(activeChannels);
         if(nfds < 0)
         {
-            std::cerr << "epoll_wait error" <<std::endl;
-            break;
+            if (errno != EINTR) {
+                std::cerr << "epoll_wait error\n";
+                break;
+            }
+
+            continue;
         }
 
-        for(int i = 0; i < nfds; ++i)
+        for(auto& ptrChannel: activeChannels)
         {
-            int fd = epoll.GetClientFd(i);
-            if(fd < 0)
+            if(!ptrChannel)
             {
-                 std::cerr << "epoll fd  error \n";
                 continue;
             }
 
-            if(fd == listen.GetSocketId())
-            {
-                int nClientFd = listen.Accept();
-                if(nClientFd < 0)
-                {
-                    std::cerr << "accept error \n";
-                    continue;
-                }
-
-                auto itr = m_mapClientSocketList.find(nClientFd);
-                if(itr != m_mapClientSocketList.end())
-                {
-                    continue;
-                }
-
-                
-                // 将新连接加入epoll               
-                if(false == epoll.AddFd(nClientFd, EPOLLIN | EPOLLET))
-                {
-                    ClientSocket client(nClientFd);
-                    std::cerr << "epoll_ctl add listenFd error \n";
-                    continue;
-                }
-
-                auto ptrClient = std::make_unique<ClientSocket>(nClientFd);
-                ptrClient->SetNonBlock();
-                m_mapClientSocketList.insert(std::make_pair(nClientFd, std::move(ptrClient)));
-
-                //char ip[INET_ADDRSTRLEN];
-                //inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip));
-                //std::cout << "New connection from " << ip << ":" << ntohs(clientAddr.sin_port) << std::endl;
-            }
-            else{
-
-                auto itr = m_mapClientSocketList.find(fd);
-                if(itr == m_mapClientSocketList.end())
-                {
-                   std::cerr << "m_mapClientSocketList find error fd:" << fd << std::endl;
-                    continue;
-                }
-
-                auto& ptrClient = (itr->second);
-                if(false == ptrClient->IsValid())
-                {
-                    std::cerr << "m_mapClientSocketList find error \n";
-                    continue;
-                }
-
-                // 6.0 接受并回发
-                char buffer[4096] = {0};
-                while(true)
-                {
-                    memset(buffer, 0, sizeof(buffer));
-                    ssize_t n = ptrClient->Read(buffer, sizeof(buffer));
-                    int err = errno;   // 立即保存 errno
-                    if(n < 0)
-                    {
-                        // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
-                        if(err == EAGAIN || err == EWOULDBLOCK) {
-                            break;
-                        }
-                        else{
-                             // 异常，则断开连接
-                            m_mapClientSocketList.erase(itr);
-                            epoll.RemoveFd(fd);
-                            break;
-                        }
-                    }
-                    else if(n == 0)
-                    {
-                        // 对方关闭连接
-                        m_mapClientSocketList.erase(itr);
-                        epoll.RemoveFd(fd);
-                        break;
-                    }
-                    else{
-                        ptrClient->Write(buffer, n);
-                    }
-                }
-                
-            }
+            ptrChannel->HandleEvent();
         }
-
     }
 
     return 0;
