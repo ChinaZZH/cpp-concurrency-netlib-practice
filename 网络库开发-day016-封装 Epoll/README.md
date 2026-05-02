@@ -3,27 +3,22 @@ markdown
 # Day16： 网络库day002 封装Epoll
 
 ## 核心收获
--- 1.  这一天是先写出了原生的socket模型，然后再这个基础上将socekt相关封装到clientSocket和ListenSocket上，将socket_addr相关封装到inetAddr上。
+-- 1.  在day15的基础上，也就是在echo_server.cpp加入原生的epoll来支持IO多路复用。
 
--- 2. clientSocket和ListenSocket进行RAII设计实现。构造的时候申请socket文件句柄资源，析构的时候释放，以防止忘记释放。
+-- 2. 将epoll相关的内容提取出来封装到Epoll文件Epoll对象中去。
 
--- 3. 对clientSocket和ListenSocket进行独占式设计，禁止拷贝构造和赋值运算符重载以防止多个socket共用一个句柄造成程序错误。同时支持移动语义。
+-- 3. ClientSocket 修改write函数，当一次没有办法写了len字节的时候那就用while循环分多次写入。
 
--- 4. 尽量维持对象设计的单一职责，使其功能明确。同时尽量让函数只返回一个返回值，也使其功能明确。
+-- 4. 支持Epoll中的Add, Del 还有Modify。
 
--- 5. 之前设计错误，将读换从去char buffer[4096] 放到clientSocket中去。这样造成每一个连接上来的客户端都分配一个4K的内存，等连接多了内存会急剧膨胀。修改为在外部使用 char buffer[4096].
+-- 5. 查epoll相关函数的参数以及返回值的含义，以保证正确使用。
+
+-- 6. 提高性能的优化。 将客户端socket的 读事件 从水平触发修改成边缘触发， 从原先的读一次修改成读数据知道没有数据为止。
 
 ## 代码
--- clientSocket.cpp
--- clientSocket.h
+-- Epoll.cpp
 
--- ListenSocket.cpp
--- ListenSocket.h
-
--- InetAddress.cpp
--- InetAddress.h
-
--- echo_server.cpp
+-- Epoll.h
 
 ## 测试
 -- 一切正常。
