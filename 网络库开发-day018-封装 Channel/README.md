@@ -3,27 +3,21 @@ markdown
 # Day18： 网络库day003 封装Channel
 
 ## 核心收获
--- 1.  这一天是先写出了原生的socket模型，然后再这个基础上将socekt相关封装到clientSocket和ListenSocket上，将socket_addr相关封装到inetAddr上。
+-- 1.  修改与Chanel相关的Epoll, AddFd 和 ModifyFd 传参由优先的 int fd 修改为 Channel* ptr, 同时Wait返回的也是一个Channel* 列表。
 
--- 2. clientSocket和ListenSocket进行RAII设计实现。构造的时候申请socket文件句柄资源，析构的时候释放，以防止忘记释放。
+-- 2.  Channel的作用是对epoll_event的事件进行分发和调度，通过注册事件回调函数同时识别epoll上发生的是什么事件来进行调度。
 
--- 3. 对clientSocket和ListenSocket进行独占式设计，禁止拷贝构造和赋值运算符重载以防止多个socket共用一个句柄造成程序错误。同时支持移动语义。
+-- 3. Channel的意思就是通道，就是连接ListenSocket/ClientSocket的相关桥梁。但是跟 ListenSocket/ClientSocket不同的是， 
 
--- 4. 尽量维持对象设计的单一职责，使其功能明确。同时尽量让函数只返回一个返回值，也使其功能明确。
+      Channel 是关联句柄id与其对应的调度事件(读写事件，异常事件)。而ListenSocket/ClientSocket关联的是句柄id和socket操作。具体可以看代码回顾。
 
--- 5. 之前设计错误，将读换从去char buffer[4096] 放到clientSocket中去。这样造成每一个连接上来的客户端都分配一个4K的内存，等连接多了内存会急剧膨胀。修改为在外部使用 char buffer[4096].
+-- 4. 使用std::unique_ptr 来代替纯指针，来让只能指针帮助管理内存，用来实现RAII机制。
+
+-- 5. g_epoll 执行 del 操作需要在close(fd) 之前不然会报错。 
 
 ## 代码
--- clientSocket.cpp
--- clientSocket.h
-
--- ListenSocket.cpp
--- ListenSocket.h
-
--- InetAddress.cpp
--- InetAddress.h
-
--- echo_server.cpp
+-- Channel.cpp
+-- Channel.h
 
 ## 测试
 -- 一切正常。
