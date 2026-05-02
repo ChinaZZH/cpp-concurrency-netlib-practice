@@ -1,6 +1,6 @@
 markdown
 
-# Day16： 网络库day002 封装Epoll
+# Day18： 网络库day003 封装Channel
 
 ## 核心收获
 -- 1.  这一天是先写出了原生的socket模型，然后再这个基础上将socekt相关封装到clientSocket和ListenSocket上，将socket_addr相关封装到inetAddr上。
