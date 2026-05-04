@@ -20,7 +20,7 @@ public:
     void Shutdown();
 
     EventLoop* GetLoop() const { return loop_; }
-    int GetFd() const;
+    int GetFd() const { return fd_; }
 
     using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&)>;
     using CloseCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
@@ -36,6 +36,7 @@ private:
 
 private:
     EventLoop* loop_;
+    int fd_;
     std::unique_ptr<Channel> channel_;
     std::unique_ptr<ClientSocket>  socket_;
     std::string inputBuffer_;       // 输入缓冲区

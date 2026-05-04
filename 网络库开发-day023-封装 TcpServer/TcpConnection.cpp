@@ -8,6 +8,7 @@
 
 TcpConnection::TcpConnection(EventLoop* loop, int fd)
 : loop_(loop)
+, fd_(fd)
 , channel_(std::make_unique<Channel>(fd))
 , socket_(std::make_unique<ClientSocket>(fd))
 , inputBuffer_()
@@ -52,12 +53,6 @@ void TcpConnection::Send(const std::string& strMessage)
 void TcpConnection::Shutdown()
 {
      HandleClose();
-}
-
-
-int TcpConnection::GetFd() const
-{
-    return channel_->GetFd();
 }
 
 
@@ -106,7 +101,12 @@ void TcpConnection::HandleWrite()
 
 void TcpConnection::HandleClose()
 {
-    loop_->RemoveChannel(channel_.get());
+    if(channel_)
+    {
+        loop_->RemoveChannel(channel_.get());
+        channel_.reset();
+    }
+    
     if(closeCallBack_)
     {
         closeCallBack_(shared_from_this());
