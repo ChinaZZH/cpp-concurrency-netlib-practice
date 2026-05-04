@@ -6,6 +6,7 @@
 #include "Epoll.h"
 #include "Channel.h"
 #include "EventLoop.h"
+#include "TcpConnection.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -17,70 +18,9 @@
 #define PORT 8888
 
 ListenSocket g_listenScoket;
+std::unique_ptr<Channel> g_listenChannel;
 EventLoop g_loop;
-std::map<int, std::unique_ptr<ClientSocket>> g_clientSocketMap;
-std::map<int, std::unique_ptr<Channel>> g_mapChannel;
-
-
-void HandleCloseConnection(int nClientFd)
-{
-     auto itr = g_mapChannel.find(nClientFd);
-     if(itr != g_mapChannel.end())
-     {
-        g_loop.RemoveChannel(itr->second.get());
-        g_mapChannel.erase(itr);
-     }
-
-     g_clientSocketMap.erase(nClientFd);
-}
-
-
-// 读事件处理(边缘触发)
-void HandleRead(int fd)
-{
-    auto itr = g_clientSocketMap.find(fd);
-    if(itr == g_clientSocketMap.end())
-    {
-        std::cerr << "g_clientSocketMap find error fd:" << fd << std::endl;
-        return ;
-    }
-
-    auto& pClient = (itr->second);
-    if(false == pClient->IsValid())
-    {
-        std::cerr << "g_clientSocketMap find error \n";
-        return;
-    }
-       
-
-    // 6.0 接受并回发
-    char buffer[4096] = {0};
-    while(true)
-    {
-        memset(buffer, 0, sizeof(buffer));
-        errno = 0;
-        ssize_t n = pClient->Read(buffer, sizeof(buffer));
-        int err = errno;   // 立即保存 errno
-        if(n < 0)
-        {
-            // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
-            if(err == EAGAIN || err == EWOULDBLOCK) {
-                break;
-            }
-            else{
-                // 异常，则断开连接
-                HandleCloseConnection(fd);
-                break;
-            }
-        }else if(n == 0){
-            // 对方关闭连接
-            HandleCloseConnection(fd);
-            break;
-        }else{
-            pClient->Write(buffer, n);
-        }
-    }
-}
+std::map<int, std::shared_ptr<TcpConnection>> g_mapTcpConnection;
 
 
 void HandleNewConnection()
@@ -95,29 +35,28 @@ void HandleNewConnection()
 
     {
         // 已经存在该对象了
-        auto itr = g_clientSocketMap.find(nClientFd);
-        if(itr != g_clientSocketMap.end())
+        auto itr = g_mapTcpConnection.find(nClientFd);
+        if(itr != g_mapTcpConnection.end())
         {
             return ;
         }
     }
     
 
-  
-                
     // 将新连接加入epoll  
-    auto clientChannel = std::make_unique<Channel>(nClientFd);
-    clientChannel->SetReadCallBack(std::bind(HandleRead, nClientFd));
-    clientChannel->EnableReading();
-    clientChannel->EnableET();
-    
-    auto ptrClient = std::make_unique<ClientSocket>(nClientFd);
-    ptrClient->SetNonBlock();
+    auto new_connection = std::make_shared<TcpConnection>(&g_loop, nClientFd);
+    new_connection->ConnectEstablished();
+    new_connection->SetMessageCallBack([](const std::shared_ptr<TcpConnection>& connection, std::string& strMsg){
+        // Echo 服务：原样发送回去
+        connection->Send(strMsg);
+    });
 
-    g_loop.UpdateChannel(clientChannel.get());
+    new_connection->SetCloseCallBack([](const std::shared_ptr<TcpConnection>& connection){
+        std::cout << "Connection closed, fd=" << connection->GetFd() << std::endl;
+        g_mapTcpConnection.erase(connection->GetFd());
+    });
 
-    g_mapChannel.insert(std::make_pair(nClientFd, std::move(clientChannel)));
-    g_clientSocketMap.insert(std::make_pair(nClientFd, std::move(ptrClient)));
+    g_mapTcpConnection.insert(std::make_pair(nClientFd, new_connection));
 }
 
 
@@ -150,17 +89,12 @@ int main()
     }
 
    
-
     // 将监听socket加入到epoll中去。
-    auto listenChannel = std::make_unique<Channel>(g_listenScoket.GetSocketId());
-    listenChannel->SetReadCallBack(HandleNewConnection);
-    listenChannel->EnableReading();
+    g_listenChannel = std::make_unique<Channel>(g_listenScoket.GetSocketId());
+    g_listenChannel->SetReadCallBack(HandleNewConnection);
+    g_listenChannel->EnableReading();
     
-    
-    g_loop.UpdateChannel(listenChannel.get());
-    g_mapChannel.insert(std::make_pair(g_listenScoket.GetSocketId(), std::move(listenChannel)));
-
+    g_loop.UpdateChannel(g_listenChannel.get());
     g_loop.Loop();
-
     return 0;
 }

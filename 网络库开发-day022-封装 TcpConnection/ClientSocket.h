@@ -24,7 +24,7 @@ public:
 
     bool Write(const char* buf, size_t len);
 
-    void Close(bool bShowConsole = true);
+    void Close();
 
     bool IsValid() { return socket_fd_ >= 0;}
 

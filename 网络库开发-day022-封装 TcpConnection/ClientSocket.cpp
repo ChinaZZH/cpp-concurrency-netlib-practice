@@ -36,7 +36,7 @@ ClientSocket& ClientSocket::operator=(ClientSocket&& other)   noexcept
     {
         if(socket_fd_ > 0)
         {
-            Close(false);
+            Close();
         }
 
         socket_fd_ = (other.socket_fd_);
@@ -91,6 +91,7 @@ bool ClientSocket::Write(const char* buf, size_t len)
             if(errno == EAGAIN || errno == EWOULDBLOCK) {
                 // 这里需要缓存未发送的数据，并注册 EPOLLOUT 事件（略复杂）
                 // 简单处理：返回 false，数据丢失
+                // 后续会进行优化
                 return false;
             }
 
@@ -105,13 +106,8 @@ bool ClientSocket::Write(const char* buf, size_t len)
 }
 
 
-void ClientSocket::Close(bool bConsoleInfo /*= true*/)
+void ClientSocket::Close()
 {
     close(socket_fd_);
     socket_fd_ = -1;
-
-    if(bConsoleInfo)
-    {
-        std::cout << "Connection closed\n";
-    }
 }

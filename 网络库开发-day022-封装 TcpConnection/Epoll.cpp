@@ -104,7 +104,7 @@ bool Epoll::RemoveFd(int nSocketFd)
     int result = epoll_ctl(fd_, EPOLL_CTL_DEL, nSocketFd, nullptr);
     if(0 == result)
     {
-        std::cout << "close connection client socket fd="<< nSocketFd << std::endl;
+        std::cout << "Epoll::RemoveFd socket fd="<< nSocketFd << std::endl;
         return true;
     }
     
