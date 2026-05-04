@@ -1,29 +1,42 @@
 markdown
 
-# Day16： 网络库day002 封装Epoll
+# Day22： 网络库day005 封装TcpConnection
 
 ## 核心收获
--- 1.  这一天是先写出了原生的socket模型，然后再这个基础上将socekt相关封装到clientSocket和ListenSocket上，将socket_addr相关封装到inetAddr上。
+-- 1. 封装了TcpConnection,TcpConnection是集成了 Channel和 ClientSocket. 
 
--- 2. clientSocket和ListenSocket进行RAII设计实现。构造的时候申请socket文件句柄资源，析构的时候释放，以防止忘记释放。
+-- 2. 把 ClientSocket相关的读写数据操作和关闭连接操作也一并集成 到 TcpConnnection.
 
--- 3. 对clientSocket和ListenSocket进行独占式设计，禁止拷贝构造和赋值运算符重载以防止多个socket共用一个句柄造成程序错误。同时支持移动语义。
+-- 3. 为了TcpConnection对象的 std::shared_ptr<TcpConnection>的this指针，则需要集成std::enable_shared_from_this<TcpConnection>。
 
--- 4. 尽量维持对象设计的单一职责，使其功能明确。同时尽量让函数只返回一个返回值，也使其功能明确。
+-- 4. 返回自身的 std::shared_ptr<TcpConnection>的this指针 需要调用 shared_from_this();
 
--- 5. 之前设计错误，将读换从去char buffer[4096] 放到clientSocket中去。这样造成每一个连接上来的客户端都分配一个4K的内存，等连接多了内存会急剧膨胀。修改为在外部使用 char buffer[4096].
+-- 5. 通过std::bind(&function_x， xx1); 实现有参函数转化为无参函数。
+
+-- 6. ClientSocekt具体的事件调用呈现栈式结构。该开始是 从EventLoop 中 通过Wait函数获取到 activeChannel. 
+
+    然后activeChannel 根据revents进行二进制位运算进行出到底是读写事件还是异常事件，然后通过 activeChannel->xxCallBack_ 执行回调函数。
+
+    因为TcpConnection拥有activeChannel所有权，所以xxCallBack_是TcpConnection在构造的时候就注册的。执行的是HandleRead, HandWrite,
+     
+    HandError等函数。并且目前TcpConnection是main函数左右，所以main函数注册了Tcp关于收到消息和关闭的函数。
+
+## 流程图
+   main[有TcpConnection所有权]->注册TcpConnection中的MessageCallBack和CloseCallBack函数
+
+   TcpConnection[有Channel所有权]->注册Channel中的readCallBack_和writeCallBack_函数和errorCallBack_
+
+   main ---> EventLoop中的Loop()函数 ---> Channel中的HandleEvent ---> 根据掩码调用 Channel中errorCallBack_，
+   
+   readCallBack_，writeCallBack_ ---> 等同与 TcpConnection的 HandleError， HandleRead， HandleWrite 
+   
+   ----> 然后调用 Tcp的 MessageCallBack 或者 CloseCallBack
+ 
 
 ## 代码
--- clientSocket.cpp
--- clientSocket.h
+-- TcpConnection.cpp
 
--- ListenSocket.cpp
--- ListenSocket.h
-
--- InetAddress.cpp
--- InetAddress.h
-
--- echo_server.cpp
+-- TcpConnection.h
 
 ## 测试
 -- 一切正常。
