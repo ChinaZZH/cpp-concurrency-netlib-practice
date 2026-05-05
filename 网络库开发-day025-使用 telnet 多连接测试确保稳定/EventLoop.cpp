@@ -122,7 +122,11 @@ void EventLoop::DelayRemoveQueue(int fd)
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
-        epoll_->RemoveFd(fd);
-        delayChannelsToRemove_.push_back(fd);
+        auto itrDelay = std::find(delayChannelsToRemove_.begin(), delayChannelsToRemove_.end(), fd);
+        if(itrDelay == delayChannelsToRemove_.end())
+        {
+            delayChannelsToRemove_.push_back(fd);
+            epoll_->RemoveFd(fd);
+        }
     }
 }
