@@ -43,10 +43,7 @@ TcpServer::TcpServer(EventLoop* loop, int nPort)
     }
 
    
-    // 将监听socket加入到epoll中去。
-    listenChannel_ = std::make_unique<Channel>(listenSocket_->GetSocketId());
-    listenChannel_->SetReadCallBack(std::bind(&TcpServer::HadleNewConnection, this));
-    listenChannel_->EnableReading();
+    
 }
     
 TcpServer::~TcpServer()
@@ -56,7 +53,11 @@ TcpServer::~TcpServer()
 
 void TcpServer::Start()
 {
-    loop_->UpdateChannel(listenChannel_.get());
+    // 将监听socket加入到epoll中去。
+    std::unique_ptr<Channel> listenChannel = std::make_unique<Channel>(listenSocket_->GetSocketId());
+    listenChannel->SetReadCallBack(std::bind(&TcpServer::HadleNewConnection, this));
+    listenChannel->EnableReading();
+    loop_->UpdateChannel(std::move(listenChannel));
 }
 
 

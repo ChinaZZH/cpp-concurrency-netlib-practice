@@ -43,6 +43,16 @@ void EventLoop::Loop()
 
             ptrChannel->HandleEvent();
         }
+
+        if(!delayChannelsToRemove_.empty())
+        {
+            for(auto& fd : delayChannelsToRemove_)
+            {
+                this->RemoveChannel(fd);
+            }
+            
+            delayChannelsToRemove_.clear();
+        }
     }
 }
 
@@ -53,7 +63,7 @@ void EventLoop::Quit()
 }
 
 // 添加或更新channel(线程安全)
-void EventLoop::UpdateChannel(Channel* channel)
+void EventLoop::UpdateChannel(std::unique_ptr<Channel> channel)
 {
     AssertInLoopThread();
 
@@ -61,34 +71,36 @@ void EventLoop::UpdateChannel(Channel* channel)
     auto itr = channels_.find(fd);
     if(itr == channels_.end())
     {
-        if(false == epoll_->AddFd(channel))
+        if(false == epoll_->AddFd(channel.get()))
         {
             std::cerr << "epoll_ctl add fd error listen fd:" << channel->GetFd() << std::endl;
             return ;
         }
 
-        channels_.insert(std::make_pair(channel->GetFd(), channel));
+        channels_.insert(std::make_pair(channel->GetFd(), std::move(channel)));
 
     }else{
-        if(false == epoll_->ModifyFd(channel))
+        if(false == epoll_->ModifyFd(channel.get()))
         {
             std::cerr << "epoll_ctl modify fd error listen fd:" << channel->GetFd() << std::endl;
             return ;
         }
+
+        std::cout << "epoll_ctl modify success fd :" << channel->GetFd() << std::endl;
+        channels_[channel->GetFd()] = std::move(channel);
     }
 }
 
 
 // 移除Channel
-void EventLoop::RemoveChannel(Channel* channel)
+void EventLoop::RemoveChannel(int fd)
 {
     AssertInLoopThread();
-    int fd = channel->GetFd();
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
-        epoll_->RemoveFd(channel->GetFd());
-        channels_.erase(channel->GetFd());
+        //epoll_->RemoveFd(fd); 移到DelayRemoveQueue 去处理，以保证顺序 epoll->RemoveFd, ClientSocket析构， Channel析构
+        channels_.erase(fd);
     }
 }
 
@@ -101,4 +113,16 @@ void EventLoop::AssertInLoopThread()
 bool EventLoop::IsInLoopThread() const
 {
     return threadId_ == std::this_thread::get_id();
+}
+
+
+void EventLoop::DelayRemoveQueue(int fd)
+{
+    AssertInLoopThread();
+    auto itr = channels_.find(fd);
+    if(itr != channels_.end())
+    {
+        epoll_->RemoveFd(fd);
+        delayChannelsToRemove_.push_back(fd);
+    }
 }

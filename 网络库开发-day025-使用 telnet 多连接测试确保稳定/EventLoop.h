@@ -26,11 +26,9 @@ public:
     void Quit();
 
     // 添加或更新channel(线程安全)
-    void UpdateChannel(Channel *channel);
+    void UpdateChannel(std::unique_ptr<Channel> channel);
 
-
-    // 移除Channel
-     void RemoveChannel(Channel* channel);
+    void DelayRemoveQueue(int fd);
 
 
 private:
@@ -38,9 +36,13 @@ private:
 
      bool IsInLoopThread() const;
 
+     // 移除Channel
+     void RemoveChannel(int fd);
+
 private:
     std::unique_ptr<Epoll>  epoll_;
-    std::map<int, Channel*> channels_;
+    std::map<int, std::unique_ptr<Channel>> channels_;
     bool quit_;
     std::thread::id threadId_;
+    std::vector<int> delayChannelsToRemove_;
 };

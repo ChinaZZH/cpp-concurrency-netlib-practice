@@ -6,7 +6,6 @@
 
 class EventLoop;
 class ClientSocket;
-class Channel;
 
 
 class TcpConnection: public std::enable_shared_from_this<TcpConnection>
@@ -37,7 +36,6 @@ private:
 private:
     EventLoop* loop_;
     int fd_;
-    std::unique_ptr<Channel> channel_;
     std::unique_ptr<ClientSocket>  socket_;
     std::string inputBuffer_;       // 输入缓冲区
     std::string outputBuffer_;      // 输出缓冲区

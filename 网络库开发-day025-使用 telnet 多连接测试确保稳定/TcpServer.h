@@ -34,7 +34,6 @@ private:
     EventLoop* loop_;
     int port_;
     std::unique_ptr<ListenSocket> listenSocket_;
-    std::unique_ptr<Channel>     listenChannel_;
     std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
 
     MessageCallBack messageCallBack_;

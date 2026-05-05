@@ -9,23 +9,19 @@
 TcpConnection::TcpConnection(EventLoop* loop, int fd)
 : loop_(loop)
 , fd_(fd)
-, channel_(std::make_unique<Channel>(fd))
 , socket_(std::make_unique<ClientSocket>(fd))
 , inputBuffer_()
 , outputBuffer_()
 {
-    channel_->SetReadCallBack(std::bind(&TcpConnection::HandleRead, this));
-    channel_->SetWriteCallBack(std::bind(&TcpConnection::HandleWrite, this));
-    channel_->SetErrorCallBack(std::bind(&TcpConnection::HandleError, this));
-    socket_->SetNonBlock();
+     socket_->SetNonBlock();
 }
 
 
 TcpConnection::~TcpConnection()
 {
-    if(channel_)
+    if(fd_ > 0)
     {
-        loop_->RemoveChannel(channel_.get());
+        loop_->DelayRemoveQueue(fd_);
     }
 }
 
@@ -33,9 +29,16 @@ TcpConnection::~TcpConnection()
 // 注册到EventLoop
 void TcpConnection::ConnectEstablished()  
 {
-    channel_->EnableReading();
-    channel_->EnableET();
-    loop_->UpdateChannel(channel_.get());
+    auto self = shared_from_this();
+
+    auto channel = std::make_unique<Channel>(fd_);
+    channel->SetReadCallBack([self]() { self->HandleRead(); } );
+    channel->SetWriteCallBack([self]() { self->HandleWrite(); });
+    channel->SetErrorCallBack([self]() { self->HandleError(); });
+
+    channel->EnableReading();
+    channel->EnableET();
+    loop_->UpdateChannel(std::move(channel));
 }
 
     
@@ -59,6 +62,7 @@ void TcpConnection::Shutdown()
 // 读事件处理(边缘触发)
 void TcpConnection::HandleRead()
 {
+    auto self = shared_from_this();
     char buffer[4096] = {0};
     while(true)
     {
@@ -82,12 +86,12 @@ void TcpConnection::HandleRead()
             }else{
                 // 异常，则断开连接
                 HandleError();
-                break;
+                return;
             }
         }else if(n == 0){
             // 对方关闭连接
             HandleClose();
-            break;
+            return;
         }else{
             inputBuffer_.append(buffer, n);
         }
@@ -97,19 +101,20 @@ void TcpConnection::HandleRead()
 void TcpConnection::HandleWrite()
 {
     // 暂时留空，后续配合输出缓冲区实现
+    auto self = shared_from_this();
 }
 
 void TcpConnection::HandleClose()
 {
-    if(channel_)
+    auto self = shared_from_this();
+    if(fd_ > 0)
     {
-        loop_->RemoveChannel(channel_.get());
-        channel_.reset();
+        loop_->DelayRemoveQueue(fd_);
     }
     
     if(closeCallBack_)
     {
-        closeCallBack_(shared_from_this());
+        closeCallBack_(self);
     }
 }
 
