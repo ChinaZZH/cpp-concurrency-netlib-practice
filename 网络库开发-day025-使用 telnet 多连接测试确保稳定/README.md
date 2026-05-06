@@ -13,9 +13,7 @@ markdown
 
 -- 5. 需要注意的是需要先调用 epoll.del 函数，然后才能调用socket析构。最后可以删除channel.
 
--- 6. TcpConnection::HandleRead, TcpConnection::HandleWrite, TcpConnection::HandleError 由自身的 std::shared_ptr 调用或者这些函数内部函数 自身的std::shared_ptr
-
-     指针。这样可以对本身的函数调用做一个保护，就算外部已经移除了这个std::shared_ptr对象，但是因为这个函数本身还有所以引用计算没有变成0，是知道这个函数调用结束后才会移除这个对象。
+-- 6. TcpConnection::HandleRead, TcpConnection::HandleWrite, TcpConnection::HandleError 由自身的 std::shared_ptr 调用或者这些函数内部函数 自身的std::shared_ptr指针。这样可以对本身的函数调用做一个保护，就算外部已经移除了这个std::shared_ptr对象，但是因为这个函数本身还有所以引用计算没有变成0，是知道这个函数调用结束后才会移除这个对象。
 
 
 ## 测试
