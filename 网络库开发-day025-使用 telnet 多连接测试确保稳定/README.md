@@ -1,42 +1,22 @@
 markdown
 
-# Day22： 网络库day005 封装TcpConnection
+# Day25： 网络库day007 使用telnet多连接测试确保稳定性
 
 ## 核心收获
--- 1. 封装了TcpConnection,TcpConnection是集成了 Channel和 ClientSocket. 
+-- 1. TcpConnection不再有Channel的所有权也不再保持Channel的指针。让EventLoop保有Channel的指针和所有权，这样统一管理不会出现已经被删除了野指针还在运行。
 
--- 2. 把 ClientSocket相关的读写数据操作和关闭连接操作也一并集成 到 TcpConnnection.
+-- 2. TcpServer 中的 listen Channel 也一并给 EventLoop管理。
 
--- 3. 为了TcpConnection对象的 std::shared_ptr<TcpConnection>的this指针，则需要集成std::enable_shared_from_this<TcpConnection>。
+-- 3. 用 std::unique_ptr 来管理Channel的生命周期， erase的时候就自动调用析构和释放内容更加方便。
 
--- 4. 返回自身的 std::shared_ptr<TcpConnection>的this指针 需要调用 shared_from_this();
+-- 4. 需要等待 Loop函数中关于该channel的所有函数都运行完，才能删除这个channel.所有需要提供延时删除的接口，外部需要删除的话先把要删除的socket句柄放到延时删除队列。
 
--- 5. 通过std::bind(&function_x， xx1); 实现有参函数转化为无参函数。
+-- 5. 需要注意的是需要先调用 epoll.del 函数，然后才能调用socket析构。最后可以删除channel.
 
--- 6. ClientSocekt具体的事件调用呈现栈式结构。该开始是 从EventLoop 中 通过Wait函数获取到 activeChannel. 
+-- 6. TcpConnection::HandleRead, TcpConnection::HandleWrite, TcpConnection::HandleError 由自身的 std::shared_ptr 调用或者这些函数内部函数 自身的std::shared_ptr
 
-    然后activeChannel 根据revents进行二进制位运算进行出到底是读写事件还是异常事件，然后通过 activeChannel->xxCallBack_ 执行回调函数。
+     指针。这样可以对本身的函数调用做一个保护，就算外部已经移除了这个std::shared_ptr对象，但是因为这个函数本身还有所以引用计算没有变成0，是知道这个函数调用结束后才会移除这个对象。
 
-    因为TcpConnection拥有activeChannel所有权，所以xxCallBack_是TcpConnection在构造的时候就注册的。执行的是HandleRead, HandWrite,
-     
-    HandError等函数。并且目前TcpConnection是main函数左右，所以main函数注册了Tcp关于收到消息和关闭的函数。
-
-## 流程图
-   main[有TcpConnection所有权]->注册TcpConnection中的MessageCallBack和CloseCallBack函数
-
-   TcpConnection[有Channel所有权]->注册Channel中的readCallBack_和writeCallBack_函数和errorCallBack_
-
-   main ---> EventLoop中的Loop()函数 ---> Channel中的HandleEvent ---> 根据掩码调用 Channel中errorCallBack_，
-   
-   readCallBack_，writeCallBack_ ---> 等同与 TcpConnection的 HandleError， HandleRead， HandleWrite 
-   
-   ----> 然后调用 Tcp的 MessageCallBack 或者 CloseCallBack
- 
-
-## 代码
--- TcpConnection.cpp
-
--- TcpConnection.h
 
 ## 测试
 -- 一切正常。
