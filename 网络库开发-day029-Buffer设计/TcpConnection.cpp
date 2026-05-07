@@ -44,12 +44,8 @@ void TcpConnection::ConnectEstablished()
     
 void TcpConnection::Send(const std::string& strMessage)
 {
-    bool bResult = socket_->Write(strMessage.c_str(), strMessage.length());
-    bool bErrorBuff = (errno == EAGAIN || errno == EWOULDBLOCK);
-    if(!bResult && !bErrorBuff)
-    {
-        HandleClose();
-    }
+    outputBuffer_.Append(strMessage);
+    SendAll();
 }
 
 
@@ -63,37 +59,32 @@ void TcpConnection::Shutdown()
 void TcpConnection::HandleRead()
 {
     auto self = shared_from_this();
-    char buffer[4096] = {0};
+    int savedErrno = 0;
+    //char buffer[4096] = {0};
     while(true)
     {
-        memset(buffer, 0, sizeof(buffer));
-        errno = 0;
-        ssize_t n = socket_->Read(buffer, sizeof(buffer));
-        int err = errno;   // 立即保存 errno
+        ssize_t n = inputBuffer_.ReadFd(fd_, &savedErrno);
         if(n < 0)
         {
             // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
             // 读完了则进行写数据到对端
-            if(err == EAGAIN || err == EWOULDBLOCK) {
-                if(messageCallBack_)
+            if(savedErrno == EAGAIN || savedErrno == EWOULDBLOCK) {
+                if(messageCallBack_ && inputBuffer_.ReadableBytes() > 0)
                 {
-                    std::string strMsg = std::move(inputBuffer_);
-                    inputBuffer_.clear();
+                    std::string strMsg = inputBuffer_.RetrieveAllAsString();
                     messageCallBack_(shared_from_this(), strMsg);
                 }
 
-                break;
             }else{
                 // 异常，则断开连接
                 HandleError();
-                return;
             }
+
+            return;
         }else if(n == 0){
             // 对方关闭连接
             HandleClose();
             return;
-        }else{
-            inputBuffer_.append(buffer, n);
         }
     }
 }
@@ -123,3 +114,21 @@ void TcpConnection::HandleError()
     HandleClose();
 }
 
+
+void TcpConnection::SendAll()
+{
+    if(outputBuffer_.ReadableBytes() <= 0)
+    {
+        return ;
+    }
+
+    int nSavedErrno = 0;
+    ssize_t n = outputBuffer_.WriteFd(fd_, &nSavedErrno);
+    if(n < 0)
+    {
+        if(nSavedErrno != EAGAIN && nSavedErrno != EWOULDBLOCK)
+        {
+            HandleClose();
+        }
+    }
+}

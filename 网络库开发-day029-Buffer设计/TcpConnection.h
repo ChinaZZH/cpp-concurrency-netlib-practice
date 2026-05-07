@@ -3,6 +3,7 @@
 #include <memory>
 #include <functional>
 #include <string>
+#include "Buffer.h"
 
 class EventLoop;
 class ClientSocket;
@@ -33,12 +34,14 @@ private:
     void HandleClose();
     void HandleError();
 
+    void SendAll();
+    
 private:
     EventLoop* loop_;
     int fd_;
     std::unique_ptr<ClientSocket>  socket_;
-    std::string inputBuffer_;       // 输入缓冲区
-    std::string outputBuffer_;      // 输出缓冲区
+    Buffer inputBuffer_;       // 输入缓冲区
+    Buffer outputBuffer_;      // 输出缓冲区
 
     MessageCallBack messageCallBack_;
     CloseCallBack closeCallBack_;
