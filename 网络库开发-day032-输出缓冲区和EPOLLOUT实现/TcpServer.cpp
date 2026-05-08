@@ -57,7 +57,7 @@ void TcpServer::Start()
     std::unique_ptr<Channel> listenChannel = std::make_unique<Channel>(listenSocket_->GetSocketId());
     listenChannel->SetReadCallBack(std::bind(&TcpServer::HadleNewConnection, this));
     listenChannel->EnableReading();
-    loop_->UpdateChannel(std::move(listenChannel));
+    loop_->AddChannel(std::move(listenChannel));
 }
 
 
@@ -85,7 +85,7 @@ void TcpServer::HadleNewConnection()
     auto new_connection = std::make_shared<TcpConnection>(loop_, nClientFd);
     new_connection->SetMessageCallBack([](const std::shared_ptr<TcpConnection>& connection, std::string& strMsg){
         // Echo 服务：原样发送回去
-        connection->Send("Hello:"+strMsg);
+        connection->Send(strMsg);
     });
 
     new_connection->SetCloseCallBack(std::bind(&TcpServer::RemoveConnection, this, std::placeholders::_1));

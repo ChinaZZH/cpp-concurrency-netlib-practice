@@ -28,7 +28,11 @@ public:
     void DisableReading() { events_ &= (~EPOLLIN);  }
     void EnableWriting()  { events_ |= EPOLLOUT;    }
     void DisableWriting() { events_ &= (~EPOLLOUT); }
-    void EnableET()       { events_ |= EPOLLET;     }           
+    void EnableET()       { events_ |= EPOLLET;     }        
+    
+    void EnableEvent(int et);
+    void DisableEvent(int et);
+
 private:
     int fd_;
     uint32_t events_;

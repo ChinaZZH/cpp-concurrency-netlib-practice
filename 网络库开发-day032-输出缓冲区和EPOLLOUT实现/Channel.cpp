@@ -39,3 +39,14 @@ void Channel::HandleEvent() const
         }
     }
 }
+
+
+void Channel::EnableEvent(int et)
+{
+    events_ |= et;
+}
+
+void Channel::DisableEvent(int et)
+{
+    events_ &= (~et);
+}

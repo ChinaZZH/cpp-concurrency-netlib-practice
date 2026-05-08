@@ -34,10 +34,9 @@ private:
     void HandleClose();
     void HandleError();
 
-    void SendAll();
-
+    void SendOutput();  // 尝试发送outputBuffer_中的数据
     void ProcessInputBuffer();
-    
+
 private:
     EventLoop* loop_;
     int fd_;

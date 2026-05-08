@@ -29,23 +29,55 @@ TcpConnection::~TcpConnection()
 // 注册到EventLoop
 void TcpConnection::ConnectEstablished()  
 {
-    auto self = shared_from_this();
-
     auto channel = std::make_unique<Channel>(fd_);
-    channel->SetReadCallBack([self]() { self->HandleRead(); } );
-    channel->SetWriteCallBack([self]() { self->HandleWrite(); });
-    channel->SetErrorCallBack([self]() { self->HandleError(); });
+
+    // 使用weak_ptr 避免循环引用
+    std::weak_ptr<TcpConnection> weak_self = shared_from_this();
+    channel->SetReadCallBack([weak_self]() { 
+        auto self = weak_self.lock();
+        if(self)
+        {
+            self->HandleRead(); 
+        }
+        
+    });
+
+    channel->SetWriteCallBack([weak_self]() { 
+        auto self = weak_self.lock();
+        if(self)
+        {
+            self->HandleWrite(); 
+        }
+    });
+
+    channel->SetErrorCallBack([weak_self]() { 
+        auto self = weak_self.lock();
+        if(self)
+        {
+            self->HandleError(); 
+        }
+    });
 
     channel->EnableReading();
     channel->EnableET();
-    loop_->UpdateChannel(std::move(channel));
+    loop_->AddChannel(std::move(channel));
 }
 
     
 void TcpConnection::Send(const std::string& strMessage)
 {
     outputBuffer_.Append(strMessage);
-    SendAll();
+    // 尝试立即发送
+    SendOutput();
+    // 如果发送后还有数据未发送完(比如发送缓冲区满)，需要注册EPOLLOUT
+    if(outputBuffer_.ReadableBytes() > 0)
+    {
+        if(loop_)
+        {
+            // 开启写事件
+            loop_->AddEventToUpdateChannel(fd_, EPOLLOUT);
+        }
+    }
 }
 
 
@@ -69,13 +101,6 @@ void TcpConnection::HandleRead()
             // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
             // 读完了则进行写数据到对端
             if(savedErrno == EAGAIN || savedErrno == EWOULDBLOCK) {
-                /*
-                if(messageCallBack_ && inputBuffer_.ReadableBytes() > 0)
-                {
-                    std::string strMsg = inputBuffer_.RetrieveAllAsString();
-                    messageCallBack_(shared_from_this(), strMsg);
-                }
-                */
                ProcessInputBuffer();
 
             }else{
@@ -98,6 +123,12 @@ void TcpConnection::HandleWrite()
 {
     // 暂时留空，后续配合输出缓冲区实现
     auto self = shared_from_this();
+    SendOutput();
+    if(outputBuffer_.ReadableBytes() <= 0)
+    {
+        // 关闭写事件
+        loop_->DelEventToUpdateChannel(fd_, EPOLLOUT);
+    }
 }
 
 void TcpConnection::HandleClose()
@@ -120,7 +151,8 @@ void TcpConnection::HandleError()
 }
 
 
-void TcpConnection::SendAll()
+ // 尝试发送outputBuffer_中的数据
+void TcpConnection::SendOutput()
 {
     if(outputBuffer_.ReadableBytes() <= 0)
     {
@@ -133,8 +165,26 @@ void TcpConnection::SendAll()
     {
         if(nSavedErrno != EAGAIN && nSavedErrno != EWOULDBLOCK)
         {
-            HandleClose();
+            HandleClose();  // 不可恢复错误
+        }else{
+            // 缓冲区满，已经无法写入，等待EPOLL_OUT事件调度
+            ;
         }
+
+        return ;
+    }
+
+    // 对端关闭连接(优雅关闭)
+    if(0 == n)
+    {
+        HandleClose();  // 对端关闭连接(优雅关闭)
+        return;
+    }
+
+    if(outputBuffer_.ReadableBytes() <= 0)
+    {
+        // 关闭写事件
+        loop_->DelEventToUpdateChannel(fd_, EPOLLOUT);
     }
 }
 
@@ -160,3 +210,5 @@ void TcpConnection::ProcessInputBuffer()
         inputBuffer_.Retrieve(len);
     }
 }
+
+ 

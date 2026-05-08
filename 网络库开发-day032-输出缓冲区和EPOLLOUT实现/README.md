@@ -1,40 +1,16 @@
 markdown
 
-# Day31： 网络库day009 测试处理
+# Day32： 网络库day010 输出缓冲区+EPOLLOUT实现
 
 ## 核心收获
 
-测试日期：2026-05-08
+\-- 1. 实现大数据写入，用EPOLLOUT方式实现。
 
-服务器： ./echo\_server
+\-- 2. Send的时候当有数据没有办法一次性完整的写入，则需要开启EPOLLOUT事件。这个事件是内核写缓冲区有剩余空间的时候就会通知这个事件。
 
-客户端： python test\_client.py
-
-
-
-测试1：发送 messages = \["hello","world","from","client"]
-
-结果：收到四行 "hello", "world", "from", "client"，正确。
+\-- 3. 当将所有数据都写入的时候，需要将这个事件EPOLLOUT事件关闭。
 
 
-
-测试1：发送 "hello\\nworld\\n"
-
-结果：收到两行 "hello" 和 "world"，正确。
-
-
-
-测试2：发送 "hel" + "lo\\nworld\\n"
-
-结果：服务器先缓存 "hel"，收到 "lo\\n" 后解析出 "hello"，再收到 "world\\n" 解析出 "world"。
-
-
-
-结论：Buffer 正确实现了按行解析，能够处理粘包和半包。
-
-## 代码
-
-\-- python test\_client.py
 
 ## 测试
 

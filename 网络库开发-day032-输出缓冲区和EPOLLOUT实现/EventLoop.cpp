@@ -63,7 +63,7 @@ void EventLoop::Quit()
 }
 
 // 添加或更新channel(线程安全)
-void EventLoop::UpdateChannel(std::unique_ptr<Channel> channel)
+void EventLoop::AddChannel(std::unique_ptr<Channel> channel)
 {
     AssertInLoopThread();
 
@@ -129,4 +129,34 @@ void EventLoop::DelayRemoveQueue(int fd)
             epoll_->RemoveFd(fd);
         }
     }
+}
+
+
+void EventLoop::AddEventToUpdateChannel(int fd, int event)
+{
+    AssertInLoopThread();
+    auto itr = channels_.find(fd);
+    if(itr == channels_.end())
+    {
+        return ;
+    }
+
+    auto& channel = (itr->second);
+    channel->EnableEvent(event);
+    epoll_->ModifyFd(channel.get());
+}
+
+
+void EventLoop::DelEventToUpdateChannel(int fd, int event)
+{
+    AssertInLoopThread();
+    auto itr = channels_.find(fd);
+    if(itr == channels_.end())
+    {
+        return ;
+    }
+
+    auto& channel = (itr->second);
+    channel->DisableEvent(event);
+    epoll_->ModifyFd(channel.get());
 }

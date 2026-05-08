@@ -26,10 +26,13 @@ public:
     void Quit();
 
     // 添加或更新channel(线程安全)
-    void UpdateChannel(std::unique_ptr<Channel> channel);
+    void AddChannel(std::unique_ptr<Channel> channel);
 
     void DelayRemoveQueue(int fd);
 
+    void AddEventToUpdateChannel(int fd, int event);
+
+    void DelEventToUpdateChannel(int fd, int event);
 
 private:
      void AssertInLoopThread();
