@@ -85,7 +85,7 @@ void TcpServer::HadleNewConnection()
     auto new_connection = std::make_shared<TcpConnection>(loop_, nClientFd);
     new_connection->SetMessageCallBack([](const std::shared_ptr<TcpConnection>& connection, std::string& strMsg){
         // Echo 服务：原样发送回去
-        connection->Send(strMsg);
+        connection->Send("Hello:"+strMsg);
     });
 
     new_connection->SetCloseCallBack(std::bind(&TcpServer::RemoveConnection, this, std::placeholders::_1));

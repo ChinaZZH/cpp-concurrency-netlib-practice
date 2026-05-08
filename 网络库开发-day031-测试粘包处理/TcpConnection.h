@@ -35,6 +35,8 @@ private:
     void HandleError();
 
     void SendAll();
+
+    void ProcessInputBuffer();
     
 private:
     EventLoop* loop_;

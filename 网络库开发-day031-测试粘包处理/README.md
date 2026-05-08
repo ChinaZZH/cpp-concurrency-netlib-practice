@@ -1,26 +1,40 @@
 markdown
 
-# Day29： 网络库day008 Buffer设计
+# Day31： 网络库day009 测试处理
 
 ## 核心收获
 
-\-- 1. 将设计以及测试好的buffer文件集成到TcpConnection中去。
+测试日期：2026-05-08
 
-\-- 2. 用memcpy和memmove替代std::copy和std::copy\_forward可以避免 处理重叠移动，更加安全。
+服务器： ./echo\_server
 
-\-- 3. MakeSpace当空余的空间不够时，则需要开辟新的空间，则需要用size\_t newSize = std::max(buffer\_.size() \* 2, buffer\_.size() + len); 这个策略会更加安全高效，不用频繁的开辟新空间，避免频繁的数据拷贝。
+客户端： python test\_client.py
 
 
+
+测试1：发送 messages = \["hello","world","from","client"]
+
+结果：收到四行 "hello", "world", "from", "client"，正确。
+
+
+
+测试1：发送 "hello\\nworld\\n"
+
+结果：收到两行 "hello" 和 "world"，正确。
+
+
+
+测试2：发送 "hel" + "lo\\nworld\\n"
+
+结果：服务器先缓存 "hel"，收到 "lo\\n" 后解析出 "hello"，再收到 "world\\n" 解析出 "world"。
+
+
+
+结论：Buffer 正确实现了按行解析，能够处理粘包和半包。
 
 ## 代码
 
-\-- Buffer.h
-
-
-
-\-- Buffer.cpp
-
-
+\-- python test\_client.py
 
 ## 测试
 

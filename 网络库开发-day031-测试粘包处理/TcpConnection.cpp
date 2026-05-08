@@ -69,11 +69,14 @@ void TcpConnection::HandleRead()
             // EAGAIN 或 EWOULDBLOCK 表示本次数据读完了（非阻塞模式）
             // 读完了则进行写数据到对端
             if(savedErrno == EAGAIN || savedErrno == EWOULDBLOCK) {
+                /*
                 if(messageCallBack_ && inputBuffer_.ReadableBytes() > 0)
                 {
                     std::string strMsg = inputBuffer_.RetrieveAllAsString();
                     messageCallBack_(shared_from_this(), strMsg);
                 }
+                */
+               ProcessInputBuffer();
 
             }else{
                 // 异常，则断开连接
@@ -86,6 +89,8 @@ void TcpConnection::HandleRead()
             HandleClose();
             return;
         }
+
+        ProcessInputBuffer();
     }
 }
 
@@ -130,5 +135,28 @@ void TcpConnection::SendAll()
         {
             HandleClose();
         }
+    }
+}
+
+
+void TcpConnection::ProcessInputBuffer()
+{
+    if(!messageCallBack_ || inputBuffer_.ReadableBytes() <= 0)
+    {
+        return;
+    }
+
+    while(true)
+    {
+        const char* crlf = static_cast<const char*>(memchr(inputBuffer_.Peek(), '\n', inputBuffer_.ReadableBytes()));
+        if(!crlf)
+        {
+            break;
+        }
+
+        int len = crlf - inputBuffer_.Peek() + 1;
+        std::string strLineMsg(inputBuffer_.Peek(), len);
+        messageCallBack_(shared_from_this(), strLineMsg);
+        inputBuffer_.Retrieve(len);
     }
 }
