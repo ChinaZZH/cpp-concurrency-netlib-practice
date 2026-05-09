@@ -3,17 +3,44 @@
 #include "Epoll.h"
 #include <cassert>
 #include <iostream>
+#include <cstring>
+#include <unistd.h>
+#include <sys/eventfd.h>
 
 
 EventLoop::EventLoop()
 :epoll_(std::make_unique<Epoll>())
 , quit_(false)
 ,threadId_(std::this_thread::get_id())
+, wakeUpFd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
 {
-   
+    {
+        if(wakeUpFd_ < 0)
+        {
+            perror("eventfd");
+            exit(1);
+        }
+
+        wakeUpChannel_ = std::make_unique<Channel>(wakeUpFd_);
+        wakeUpChannel_->SetReadCallBack([this](){
+            uint64_t one;
+            ssize_t ret = ::read(wakeUpFd_, &one, sizeof(one));
+            (void)ret;
+        });
+
+        wakeUpChannel_->EnableReading();
+        // 将 wakeup fd 加入 epoll
+        epoll_->AddFd(wakeUpChannel_.get());
+    }
 }
 
-EventLoop::~EventLoop() = default;
+EventLoop::~EventLoop() 
+{
+    if(wakeUpFd_ >= 0)
+    {
+        ::close(wakeUpFd_);
+    }
+}
 
 void EventLoop::Loop()
 {
@@ -44,6 +71,7 @@ void EventLoop::Loop()
             ptrChannel->HandleEvent();
         }
 
+        
         if(!delayChannelsToRemove_.empty())
         {
             for(auto& fd : delayChannelsToRemove_)
@@ -53,6 +81,8 @@ void EventLoop::Loop()
             
             delayChannelsToRemove_.clear();
         }
+
+        DoPendingFunctors();
     }
 }
 
@@ -60,6 +90,7 @@ void EventLoop::Loop()
 void EventLoop::Quit()
 {
     quit_ = true;
+    WakeUp();
 }
 
 // 添加或更新channel(线程安全)
@@ -159,4 +190,60 @@ void EventLoop::DelEventToUpdateChannel(int fd, int event)
     auto& channel = (itr->second);
     channel->DisableEvent(event);
     epoll_->ModifyFd(channel.get());
+}
+
+
+ // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
+void EventLoop::RunInLoop(std::function<void()> cb)
+{
+    if(this->IsInLoopThread())
+    {
+        cb();
+    }else{
+        QueueInLoop(std::move(cb));
+    }
+}
+
+void EventLoop::QueueInLoop(std::function<void()> cb)
+{
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        pendingFunctors_.emplace_back(std::move(cb));
+    }
+   
+    // 可选：唤醒 epoll_wait（简化实现，暂不唤醒，下次事件会处理）
+    // 若需要立即唤醒，可写 eventfd
+   WakeUp();
+}
+
+
+void EventLoop::DoPendingFunctors()
+{
+    std::vector<std::function<void()>> tmpFunctorsList;
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if(pendingFunctors_.empty())
+        {
+            return;
+        }
+        
+        pendingFunctors_.swap(tmpFunctorsList);
+    }
+
+    for(auto& func : tmpFunctorsList)
+    {
+        func();
+    }
+}
+
+     
+void EventLoop::WakeUp()
+{
+    if(wakeUpFd_ >= 0)
+    {
+        uint64_t one;
+        ssize_t ret = ::write(wakeUpFd_, &one, sizeof(one));
+        (void)ret;
+    }
+    
 }

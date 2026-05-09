@@ -6,6 +6,8 @@
 #include <map>
 #include <memory>
 #include <thread>
+#include <mutex>
+#include <functional>
 
 class Channel;
 class Epoll;
@@ -34,6 +36,11 @@ public:
 
     void DelEventToUpdateChannel(int fd, int event);
 
+public:
+    // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
+    void RunInLoop(std::function<void()> cb);
+    void QueueInLoop(std::function<void()> cb);
+
 private:
      void AssertInLoopThread();
 
@@ -42,10 +49,19 @@ private:
      // 移除Channel
      void RemoveChannel(int fd);
 
+     void DoPendingFunctors();
+     void WakeUp();              // 用于唤醒epoll_wait
+
 private:
     std::unique_ptr<Epoll>  epoll_;
     std::map<int, std::unique_ptr<Channel>> channels_;
     bool quit_;
     std::thread::id threadId_;
     std::vector<int> delayChannelsToRemove_;
+
+    std::vector<std::function<void()>> pendingFunctors_;
+	std::mutex mutex_;
+
+    int wakeUpFd_;
+    std::unique_ptr<Channel> wakeUpChannel_;
 };
