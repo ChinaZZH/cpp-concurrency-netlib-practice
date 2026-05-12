@@ -6,7 +6,6 @@
 #include "Channel.h"
 #include "EventLoop.h"
 #include "TcpConnection.h"
-#include "ThreadPool.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -15,6 +14,7 @@ TcpServer::TcpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread:
 :loop_(loop)
 ,port_(nPort)
 ,threadPool_(std::make_unique<ThreadPool>(std::max(1, nThreadNum)))
+,messageCallBack_(nullptr)
 {
    // 1.创建socket
     listenSocket_ = std::make_unique<ListenSocket>();
@@ -56,13 +56,13 @@ void TcpServer::Start()
 
     // 将监听socket加入到epoll中去。
     std::unique_ptr<Channel> listenChannel = std::make_unique<Channel>(listenSocket_->GetSocketId());
-    listenChannel->SetReadCallBack(std::bind(&TcpServer::HadleNewConnection, this));
+    listenChannel->SetReadCallBack(std::bind(&TcpServer::HandleNewConnection, this));
     listenChannel->EnableReading();
     loop_->AddChannel(std::move(listenChannel));
 }
 
 
-void TcpServer::HadleNewConnection()
+void TcpServer::HandleNewConnection()
 {
     int nClientFd = listenSocket_->Accept();
     if(nClientFd < 0)
@@ -84,23 +84,11 @@ void TcpServer::HadleNewConnection()
 
     // 将新连接加入epoll  
     auto new_connection = std::make_shared<TcpConnection>(loop_, nClientFd);
-    new_connection->SetMessageCallBack([this](const std::shared_ptr<TcpConnection>& connection, std::string& strMsg){
-        // Echo 服务：原样发送回去
-        //connection->Send(strMsg);
-        
-        // 将业务逻辑提交到线程池处理
-        threadPool_->AddTask([connection, strMsg](){
-            // 模拟耗时业务（例如解析、数据库查询）
-            std::cout << "start calculate" << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            std::cout << "end calculate" << std::endl;
-
-            // 复杂的逻辑计算在这边
-            // eventLoop->RunInLoop() 只会消息发送
-            connection->GetLoop()->RunInLoop([connection, strMsg](){ connection->Send(strMsg); });
-        });
-    });
-
+    if(messageCallBack_)
+    {
+        new_connection->SetMessageCallBack(messageCallBack_);
+    }
+    
     new_connection->SetCloseCallBack(std::bind(&TcpServer::RemoveConnection, this, std::placeholders::_1));
 
     new_connection->ConnectEstablished();
@@ -111,4 +99,23 @@ void TcpServer::RemoveConnection(const std::shared_ptr<TcpConnection>& conn)
 {
     std::cout << "Connection closed, fd=" << conn->GetFd() << std::endl;
     mapTcpConnection_.erase(conn->GetFd());
+}
+
+
+void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
+{
+    // Echo 服务：原样发送回去
+    //connection->Send(strMsg);
+        
+    // 将业务逻辑提交到线程池处理
+    threadPool_->AddTask([con, strMsg](){
+        // 模拟耗时业务（例如解析、数据库查询）
+        std::cout << "start calculate" << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::cout << "end calculate" << std::endl;
+
+        // 复杂的逻辑计算在这边
+        // eventLoop->RunInLoop() 只会消息发送
+        con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
+    });
 }

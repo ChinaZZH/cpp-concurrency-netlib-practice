@@ -4,13 +4,13 @@
 #include <functional>
 #include <map>
 #include <thread>
+#include "ThreadPool.h"
 
 
 class EventLoop;
 class ListenSocket;
 class Channel;
 class TcpConnection;
-class ThreadPool;
 
 
 class TcpServer
@@ -28,8 +28,11 @@ public:
     void SetMessageCallBack(MessageCallBack cb) { messageCallBack_ = cb; }
     void SetCloseCallBack(CloseCallBack cb) { closeCallBack_ = cb; }
 
+    ThreadPool* GetThreadPool() { return threadPool_.get(); }
+    void HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
+
 private:
-    void HadleNewConnection();
+    void HandleNewConnection();
     void RemoveConnection(const std::shared_ptr<TcpConnection>& conn);
 
 private:

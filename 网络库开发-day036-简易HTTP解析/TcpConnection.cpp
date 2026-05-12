@@ -196,6 +196,8 @@ void TcpConnection::ProcessInputBuffer()
         return;
     }
 
+    // 暂时不处理粘包
+    /*
     while(true)
     {
         const char* crlf = static_cast<const char*>(memchr(inputBuffer_.Peek(), '\n', inputBuffer_.ReadableBytes()));
@@ -206,9 +208,15 @@ void TcpConnection::ProcessInputBuffer()
 
         int len = crlf - inputBuffer_.Peek() + 1;
         std::string strLineMsg(inputBuffer_.Peek(), len);
+
+        std::cout << "TcpConnection::ProcessInputBuffer  " << strLineMsg.c_str() << std::endl;
         messageCallBack_(shared_from_this(), strLineMsg);
         inputBuffer_.Retrieve(len);
     }
+    */
+    
+    std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
+    messageCallBack_(shared_from_this(), strLineMsg);
 }
 
  
