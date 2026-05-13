@@ -2,6 +2,7 @@
 #include "EventLoop.h"
 #include "ClientSocket.h"
 #include "Channel.h"
+#include "HttpContext.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -13,6 +14,7 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 , inputBuffer_()
 , outputBuffer_()
 , pause_(false)
+,httpContext_(std::make_shared<HttpContext>())
 {
      socket_->SetNonBlock();
 }

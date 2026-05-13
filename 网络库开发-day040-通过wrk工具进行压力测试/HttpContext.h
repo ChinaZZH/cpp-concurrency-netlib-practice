@@ -43,13 +43,13 @@ public:
     void Reset();
 
 private:
-    bool ProcessRequestLine(const std::string& line);
+    bool ProcessRequestLine(const std::string_view& line);
 
-    bool ProcessHeader(const std::string& line);
+    bool ProcessHeader(const std::string_view& line);
 
     ParseState      state_;
     std::string     method_;
     std::string     path_;
     std::string     version_;
-    std::unordered_map<std::string, std::string>  headers_; // 由于这个数量极少，则用std::vector进行优化
+    std::vector<std::pair<std::string, std::string>>  headers_; // 由于这个数量极少，则用std::vector进行优化
 };

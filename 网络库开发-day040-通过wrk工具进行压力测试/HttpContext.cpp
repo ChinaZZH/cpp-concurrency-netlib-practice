@@ -1,5 +1,6 @@
 #include "HttpContext.h"
 #include <iostream>
+#include <algorithm>
 
 
 HttpContext::HttpContext()
@@ -14,7 +15,12 @@ HttpContext::HttpContext()
 
 std::string HttpContext::GetHeader(const std::string& key) const
 {
-    auto itr = headers_.find(key);
+    auto itr = std::find_if(headers_.begin(), headers_.end(), 
+                            [&key](const std::pair<std::string, std::string>& pairHead){ 
+                                return pairHead.first.compare(key);
+                        });
+
+
     if(itr == headers_.end())
     {
         return std::string();
@@ -57,7 +63,7 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
             return false;
         }
 
-        std::string strLine = data.substr(pos, request_line);
+        std::string_view strLine(data.data(), request_line);
         bool bRequestLine = ProcessRequestLine(strLine);
         if(!bRequestLine)
         {
@@ -87,7 +93,7 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
             break;
         }
 
-        std::string strHeader = data.substr(pos, eol - pos);
+        std::string_view strHeader(data.data()+pos, eol - pos);
         if(strHeader.empty())
         {
             state_ = kGotAll;
@@ -108,15 +114,15 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
 }
 
 
-bool HttpContext::ProcessRequestLine(const std::string& line)
+bool HttpContext::ProcessRequestLine(const std::string_view& line)
 {
     size_t method_index = line.find(' ');
-    if(method_index == std::string::npos){
+    if(method_index == std::string_view::npos){
         return false;
     }
 
     size_t path_index = line.find(' ', method_index + 1);
-    if(path_index == std::string::npos)
+    if(path_index == std::string_view::npos)
     {
         return false;
     }
@@ -128,22 +134,30 @@ bool HttpContext::ProcessRequestLine(const std::string& line)
 
 }
 
-bool HttpContext::ProcessHeader(const std::string& line)
+bool HttpContext::ProcessHeader(const std::string_view& line)
 {
     size_t key_index = line.find(':');
-    if(key_index == std::string::npos){
+    if(key_index == std::string_view::npos){
         return false;
     }
 
-    std::string strKey = line.substr(0, key_index);
-    strKey.erase(0, strKey.find_first_not_of(" \t"));
-    strKey.erase(strKey.find_last_not_of(" \t") + 1);
+    auto trimFunc = [](std::string_view& sv){
+        size_t start_index = sv.find_first_not_of(" \t");
+        if(start_index == std::string_view::npos)  start_index = sv.size();
 
-    std::string strValue = line.substr(key_index + 1);
-    strValue.erase(0, strValue.find_first_not_of(" \t"));
-    strValue.erase(strValue.find_last_not_of(" \t") + 1);
+        size_t end_index = sv.find_last_not_of(" \t");
+        if(end_index == std::string_view::npos) end_index = sv.size();
 
-    headers_[strKey] = strValue;
+        sv = sv.substr(start_index, end_index - start_index + 1);
+    };
+
+    std::string_view strKey = line.substr(0, key_index);
+    trimFunc(strKey);
+
+    std::string_view strValue = line.substr(key_index + 1);
+    trimFunc(strValue);
+
+    headers_.emplace_back(std::pair<std::string, std::string>(strKey, strValue));
     return true;
 }
 

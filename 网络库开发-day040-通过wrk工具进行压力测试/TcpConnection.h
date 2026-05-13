@@ -8,6 +8,7 @@
 
 class EventLoop;
 class ClientSocket;
+class HttpContext;
 
 
 class TcpConnection: public std::enable_shared_from_this<TcpConnection>
@@ -38,6 +39,8 @@ public:
     void WaitForWaterToLowMask(const std::string& strData);
     void WaterFromHighToLow();
 
+    std::shared_ptr<HttpContext> GetHttpContext() { return httpContext_; }
+    
 private:
     void HandleRead();
     void HandleWrite();
@@ -70,4 +73,6 @@ private:
     LowWaterMarkCallback  lowWaterMarkCallback_;
     bool pause_ = false;
     std::queue<std::string>  WaitLowWaterToSend_;
+    
+    std::shared_ptr<HttpContext>  httpContext_;
 };

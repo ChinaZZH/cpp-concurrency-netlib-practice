@@ -28,9 +28,10 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
      // 将业务逻辑提交到线程池处理
     pool->AddTask([this, con, strMsg](){
         // 模拟耗时业务（例如解析、数据库查询）
-        HttpContext ctx;
         size_t consumed = 0;
-        bool bOk = ctx.PraseRequest(strMsg, consumed);
+        auto ctx = con->GetHttpContext();
+        ctx->Reset();
+        bool bOk = ctx->PraseRequest(strMsg, consumed);
         if(bOk)
         {
             // 简单路由：返回 "Hello, World!"
@@ -64,9 +65,10 @@ void HttpServer::AsyncSendHttpResponse(const std::shared_ptr<TcpConnection>& con
 // 同步实现版本
 void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
-    HttpContext ctx;
     size_t consumed = 0;
-    bool bOk = ctx.PraseRequest(strMsg, consumed);
+    auto ctx = con->GetHttpContext();
+    ctx->Reset();
+    bool bOk = ctx->PraseRequest(strMsg, consumed);
     if(bOk)
     {
         // 简单路由：返回 "Hello, World!"
