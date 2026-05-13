@@ -14,6 +14,7 @@ EventLoop::EventLoop()
 ,threadId_(std::this_thread::get_id())
 , wakeUpFd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
 {
+
     {
         if(wakeUpFd_ < 0)
         {
@@ -45,7 +46,7 @@ EventLoop::~EventLoop()
 void EventLoop::Loop()
 {
     // 5.接受连接并echo
-    AssertInLoopThread();
+    AssertInLoopThread("EventLoop::Loop");
     while(!quit_)
     {
         std::vector<Channel*> activeChannels;
@@ -96,8 +97,7 @@ void EventLoop::Quit()
 // 添加或更新channel(线程安全)
 void EventLoop::AddChannel(std::unique_ptr<Channel> channel)
 {
-    AssertInLoopThread();
-
+    AssertInLoopThread("EventLoop::AddChannel");
     int fd = channel->GetFd();
     auto itr = channels_.find(fd);
     if(itr == channels_.end())
@@ -126,7 +126,7 @@ void EventLoop::AddChannel(std::unique_ptr<Channel> channel)
 // 移除Channel
 void EventLoop::RemoveChannel(int fd)
 {
-    AssertInLoopThread();
+    AssertInLoopThread("EventLoop::RemoveChannel");
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
@@ -136,8 +136,13 @@ void EventLoop::RemoveChannel(int fd)
 }
 
 
-void EventLoop::AssertInLoopThread()
+void EventLoop::AssertInLoopThread(std::string strInfo)
 {
+    if(threadId_ != std::this_thread::get_id())
+    {
+        std::cout << "EventLoop::AssertInLoopThread other thread_id:" << std::this_thread::get_id() << "In Info:=" << strInfo.c_str() << std::endl;
+    }
+
     assert(threadId_ == std::this_thread::get_id());
 }
 
@@ -149,7 +154,7 @@ bool EventLoop::IsInLoopThread() const
 
 void EventLoop::DelayRemoveQueue(int fd)
 {
-    AssertInLoopThread();
+    AssertInLoopThread("EventLoop::DelayRemoveQueue");
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
@@ -165,7 +170,7 @@ void EventLoop::DelayRemoveQueue(int fd)
 
 void EventLoop::AddEventToUpdateChannel(int fd, int event)
 {
-    AssertInLoopThread();
+    AssertInLoopThread("EventLoop::AddEventToUpdateChannel");
     auto itr = channels_.find(fd);
     if(itr == channels_.end())
     {
@@ -180,7 +185,7 @@ void EventLoop::AddEventToUpdateChannel(int fd, int event)
 
 void EventLoop::DelEventToUpdateChannel(int fd, int event)
 {
-    AssertInLoopThread();
+    AssertInLoopThread("EventLoop::DelEventToUpdateChannel");
     auto itr = channels_.find(fd);
     if(itr == channels_.end())
     {

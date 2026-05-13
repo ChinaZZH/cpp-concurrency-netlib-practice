@@ -7,7 +7,7 @@
 HttpServer::HttpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 :server_(loop, nPort, std::max(1, nThreadNum))
 {
-    server_.SetMessageCallBack(std::bind(&HttpServer::AsyncOnMessage, 
+    server_.SetMessageCallBack(std::bind(&HttpServer::OnMessage, 
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
@@ -92,7 +92,13 @@ void HttpServer::SendHttpResponse(const std::shared_ptr<TcpConnection>& con, con
              << "\r\n"
              << strContent << "\r\n";
 
-    con->Send(response.str());
+    if(con->IsPause())
+    {
+        con->WaitForWaterToLowMask(response.str());
+    }else{
+        con->Send(response.str());
+    }
+    
 }
 
 

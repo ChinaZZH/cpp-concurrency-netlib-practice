@@ -12,6 +12,7 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 , socket_(std::make_unique<ClientSocket>(fd))
 , inputBuffer_()
 , outputBuffer_()
+, pause_(false)
 {
      socket_->SetNonBlock();
 }
@@ -66,7 +67,15 @@ void TcpConnection::ConnectEstablished()
     
 void TcpConnection::Send(const std::string& strMessage)
 {
+    if(this->IsPause())
+    {
+        WaitForWaterToLowMask(strMessage);
+        return;
+    }
+
     outputBuffer_.Append(strMessage);
+    CheckWaterMark();
+
     // 尝试立即发送
     SendOutput();
     // 如果发送后还有数据未发送完(比如发送缓冲区满)，需要注册EPOLLOUT
@@ -181,6 +190,7 @@ void TcpConnection::SendOutput()
         return;
     }
 
+    CheckWaterMark();
     if(outputBuffer_.ReadableBytes() <= 0)
     {
         // 关闭写事件
@@ -220,3 +230,53 @@ void TcpConnection::ProcessInputBuffer()
 }
 
  
+void TcpConnection::SetWaterMarkCallbacks(HighWaterMarkCallback highCb, LowWaterMarkCallback lowCb, size_t highMark, size_t lowMark /*= 0*/)
+{
+    highWaterMarkCallback_ = highCb;
+    lowWaterMarkCallback_ = lowCb;
+
+    highWaterMark_ = highMark;
+    lowWaterMark_ = lowMark;
+}
+
+// 在Send或者SendOutput中调用内部函数
+void TcpConnection::CheckWaterMark()
+{
+    size_t readableBytes = outputBuffer_.ReadableBytes();
+    if(!pause_ && highWaterMark_ > 0 && readableBytes > highWaterMark_ && highWaterMarkCallback_)
+    {
+        pause_ = true;
+        highWaterMarkCallback_(shared_from_this());
+    }
+
+    if(pause_ && lowWaterMark_ > 0 && readableBytes <= lowWaterMark_ && lowWaterMarkCallback_)
+    {
+        pause_ = false;
+        lowWaterMarkCallback_(shared_from_this());
+    }
+}
+
+
+void TcpConnection::WaitForWaterToLowMask(const std::string& strData)
+{
+    if(this->IsPause())
+    {
+        WaitLowWaterToSend_.push(std::move(strData));
+    }
+}
+
+
+void TcpConnection::WaterFromHighToLow()
+{
+    if(this->IsPause())
+    {
+        return ;
+    }
+
+    while(!WaitLowWaterToSend_.empty() && !this->IsPause())
+    {
+        std::string strData = WaitLowWaterToSend_.front();
+        WaitLowWaterToSend_.pop();
+        this->Send(strData);
+    }
+}

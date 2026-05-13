@@ -4,6 +4,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /*
 Get的请求报文格式
@@ -50,5 +51,5 @@ private:
     std::string     method_;
     std::string     path_;
     std::string     version_;
-    std::unordered_map<std::string, std::string>  headers_;
+    std::unordered_map<std::string, std::string>  headers_; // 由于这个数量极少，则用std::vector进行优化
 };

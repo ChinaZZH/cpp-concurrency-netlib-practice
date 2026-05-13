@@ -42,7 +42,7 @@ public:
     void QueueInLoop(std::function<void()> cb);
 
 private:
-     void AssertInLoopThread();
+     void AssertInLoopThread(std::string strInfo);
 
      bool IsInLoopThread() const;
 

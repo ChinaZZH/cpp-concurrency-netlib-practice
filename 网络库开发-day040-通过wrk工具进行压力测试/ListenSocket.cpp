@@ -103,7 +103,7 @@ bool ListenSocket::Listen()
         return false;
     }
 
-    if(listen(socket_fd_, 128) < 0)
+    if(listen(socket_fd_, 32768) < 0)
     {
         std::cerr << "ListenSocket::Listen listen error \n";
         Close();

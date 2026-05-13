@@ -90,6 +90,23 @@ void TcpServer::HandleNewConnection()
     }
     
     new_connection->SetCloseCallBack(std::bind(&TcpServer::RemoveConnection, this, std::placeholders::_1));
+    new_connection->SetWaterMarkCallbacks(
+        [](const std::shared_ptr<TcpConnection>& con){
+            // 高水位回调：通知业务层暂停向该连接发送数据
+            // 这里仅仅打印日志
+            std::cout << "High water mark reached for fd=" << con->GetFd() << std::endl;
+        },
+
+        [](const std::shared_ptr<TcpConnection>& con){
+            // 低水位回调：恢复正常发送
+            // 这里仅仅打印日志
+            std::cout << "Low water mark reached for fd=" << con->GetFd() << std::endl;
+            con->WaterFromHighToLow();
+        },
+
+        64*1024,    // 高水位 64KB
+        32*1024     // 低水位 32KB
+    );
 
     new_connection->ConnectEstablished();
     mapTcpConnection_.insert(std::make_pair(nClientFd, new_connection));
