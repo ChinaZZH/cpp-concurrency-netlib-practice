@@ -1,36 +1,123 @@
 markdown
 
-# Day33： 网络库day011 集成线程池并且测试
+# Day40： 网络库day014 用wrk进行压测
 
 ## 核心收获
--- 1. 导入day6的线程池文件。
+-- 1. 安装wrk，用wrk进行压测 使用 wrk -t4 -c1000 -d100s http://localhost:8888  4个线程 1000个客户端连接持续100秒的测试。
 
--- 2. 当TcpConnection收到了客户端发过来的数据的时候，将数据和TcpConnection组合成一个函数放入线程池让线程池调度。
+-- 2. 下面是优化前的状态。
 
--- 3. 线程池调度到这个执行函数的时候，先花费一定时间执行计算逻辑，然后有需要写数据到客户端的话通过EventLoop->RunInLoop 将数据IO 切换回Reactor线程进行读写。
+wrk -t4 -c1000 -d100s http://localhost:8888
+Running 2m test @ http://localhost:8888
+  4 threads and 1000 connections
+^C  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    38.73ms   62.25ms   1.97s    79.85%
+    Req/Sec     4.60k     1.25k   10.01k    71.27%
+  1357603 requests in 1.66m, 115.23MB read
+  Socket errors: connect 0, read 1679, write 11029463, timeout 644
+Requests/sec:  13656.95
+Transfer/sec:      1.16MB
 
--- 4.当前设计的reactor模型是，reactor线程负责连接的建立数据IO读写。同时线程池负责做逻辑的计算。这样可以让reactor线程保持简单同时只专门处理IO可以相对高效。
 
--- 5. 当Reactor有数据写入的时候，需要通过eventfd的写事件通知。
+# 第一轮调优
+-- 1. 修改内核参数（需要 sudo）
 
-## 文件
--- ThreadPool.h
+    增大全连接队列长度（同时影响 listen 的 backlog）
+    sudo sysctl -w net.core.somaxconn=32768，同时调整 ListenSocket::listen 的 backlog 参数。
+    
+    ListenSocket::Listen(int backlog) 中，将 backlog 设置为与 somaxconn 相同的值（如 32768），两者取最小值才是实际队列长度。
 
--- ThreadPool.cpp
 
-## 测试记录
-测试环境：Ubuntu 22.04 (WSL)，g++ 13.4，4核CPU
-服务器编译命令：g++ -std=c++20 -pthread -O2 *.cpp -o server
-客户端：telnet（3个会话）
+    增大半连接队列长度（应对 SYN 洪水）
+    sudo sysctl -w net.ipv4.tcp_max_syn_backlog=8192
 
-- 16:23:45 启动服务器，监听8888端口
-- 16:23:50 客户端1连接，发送 "hello1"
-- 16:23:51 客户端2连接，发送 "hello2"
-- 16:23:52 客户端3连接，发送 "hello3"
-- 观察：客户端1在16:23:55收到回显 "hello1"（延迟5秒）
-- 客户端2在16:23:56收到 "hello2"
-- 客户端3在16:23:57收到 "hello3"
-- 新客户端4在16:23:58连接并发送 "hello4"，收到回显在01:23:56
+    开启 TIME_WAIT 快速重用（需配合 tcp_timestamps）
+    sudo sysctl -w net.ipv4.tcp_tw_reuse=1
+    sudo sysctl -w net.ipv4.tcp_timestamps=1
 
-结论：耗时业务在线程池中执行，主循环未被阻塞，多连接并发处理成功。
+    扩大本地端口范围（减少端口耗尽风险）
+    sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+
+    设置端口数目 ulimit -n 65535，确保在服务器启动前设置（可以在启动脚本中加入）
+
+
+-- 2. 同时使用高低水位。这一来可以控制outputBuffer的最长限度在64KB附近，同时也能够平缓outputBuffer写入内核缓冲区的速率，起到削峰填谷的作用。
+
+-- 3. 下面是一轮优化后的状态数据:
+ wrk -t4 -c1000 -d100s http://localhost:8888
+Running 2m test @ http://localhost:8888
+  4 threads and 1000 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    30.40ms   30.53ms   1.98s    99.86%
+    Req/Sec     8.11k   760.83    11.37k    83.60%
+  3228462 requests in 1.67m, 274.02MB read
+  Socket errors: connect 0, read 0, write 0, timeout 565
+Requests/sec:  32257.39
+Transfer/sec:      2.74MB
+
+
+# 第二轮优化
+-- 1. 减少 HttpContext 中的内存分配与拷贝, 预分配 HttpContext 对象，每个连接复用一次
+
+-- 2. 在HttpContext在解析过程中 使用 std::string_view 代替 std::string=substr() 减少内存复制和拷贝。
+
+-- 3. HttpContext 里面的header解析后的数据用 std::vector 替代 std::unordered_map。 因为header数据较少，直接遍历用了计算机CPU更高级的缓存会比哈希更快。
+
+-- 4. 下面是一轮优化后的状态数据:
+
+wrk -t4 -c1000 -d100s http://localhost:8888
+Running 2m test @ http://localhost:8888
+  4 threads and 1000 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    27.49ms   31.92ms   2.00s    99.84%
+    Req/Sec     9.07k   727.60    12.38k    84.30%
+  3611571 requests in 1.67m, 306.54MB read
+  Socket errors: connect 0, read 0, write 0, timeout 556
+Requests/sec:  36081.50
+Transfer/sec:      3.06MB
+
+
+# 第三轮优化（数据反馈未见提升）
+
+-- 1. 系统级调优补充
+
+    增大 net.ipv4.tcp_rmem 和 net.ipv4.tcp_wmem 的默认和最大缓冲区，例如：
+    sudo sysctl -w net.ipv4.tcp_rmem="4096 87380 16777216"
+    sudo sysctl -w net.ipv4.tcp_wmem="4096 65536 16777216"
+
+    开启 net.core.netdev_max_backlog 提高网卡队列长度：
+    sudo sysctl -w net.core.netdev_max_backlog=5000
+    使用 taskset 将服务进程绑定到固定 CPU 核心，减少上下文切换
+
+-- 2.下面是一轮优化后的状态数据:
+ wrk -t4 -c1000 -d100s http://localhost:8888
+Running 2m test @ http://localhost:8888
+  4 threads and 1000 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    28.09ms   30.10ms   1.99s    99.86%
+    Req/Sec     8.78k   754.98    16.84k    83.87%
+  3493231 requests in 1.67m, 296.50MB read
+  Socket errors: connect 0, read 0, write 0, timeout 593
+Requests/sec:  34896.49
+Transfer/sec:      2.96MB
+
+
+# 第四轮优化
+-- 1.可以适当增大输出缓冲区 OutBuffer 的初始大小（例如 8192)。
+
+
+
+# 当前优化效果总结
+指标	    优化前	第一次优化后	变化         第二次优化后      变化          第三次优化后    变化           第四次优化后        变化
+QPS	        13656     32,257	  +136.2%       36,082	        +11.8%         36081          基本持平       35944             基本持平
+平均延迟 	38.73ms    30.40ms	   -21.6%        27.49ms	     -9.6%          28.09ms         基本持平      27.60ms           基本持平 
+超时	    644          565	  -12.3%            556	            基本持平        556         基本持平       495              -11%
+延时标准差  62.25ms     30.53      -51%           31.92ms           基本持平        30.10ms     基本持平        29.12            基本持平
+
+
+
+
+
+
+
 
