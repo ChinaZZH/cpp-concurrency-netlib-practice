@@ -7,7 +7,7 @@
 HttpServer::HttpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 :server_(loop, nPort, std::max(1, nThreadNum))
 {
-    server_.SetMessageCallBack(std::bind(&HttpServer::OnMessage, 
+    server_.SetMessageCallBack(std::bind(&HttpServer::AsyncOnMessage, 
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
@@ -57,7 +57,7 @@ void HttpServer::AsyncSendHttpResponse(const std::shared_ptr<TcpConnection>& con
              << strContent;
 
     std::string strResponse = response.str();
-    con->GetLoop()->RunInLoop([con, strResponse](){ con->Send(strResponse); });
+    con->GetLoop()->RunInLoop([con, strResponse = std::move(strResponse)](){ con->Send(strResponse); });
 }
 
 
