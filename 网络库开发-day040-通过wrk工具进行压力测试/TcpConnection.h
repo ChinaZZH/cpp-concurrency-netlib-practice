@@ -40,7 +40,9 @@ public:
     void WaterFromHighToLow();
 
     std::shared_ptr<HttpContext> GetHttpContext() { return httpContext_; }
-    
+    void ClosedConnection() { closed = true; }
+    bool IsEffective() { return !closed; }
+
 private:
     void HandleRead();
     void HandleWrite();
@@ -75,4 +77,5 @@ private:
     std::queue<std::string>  WaitLowWaterToSend_;
     
     std::shared_ptr<HttpContext>  httpContext_;
+    bool closed = false;
 };

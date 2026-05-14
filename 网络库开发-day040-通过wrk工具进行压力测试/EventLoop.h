@@ -12,6 +12,7 @@
 class Channel;
 class Epoll;
 class ClientSocket;
+class TcpServer;
 
 class EventLoop
 {
@@ -21,6 +22,8 @@ public:
     ~EventLoop();
 
 public:
+    void InitServer(TcpServer* tcpServer) { tcpServer_ = tcpServer; }
+
     // 启动事件循环
     void Loop();
 
@@ -28,7 +31,7 @@ public:
     void Quit();
 
     // 添加或更新channel(线程安全)
-    void AddChannel(std::unique_ptr<Channel> channel);
+    void AddChannel(std::unique_ptr<Channel> channel, std::string strInfo = "OtherError");
 
     void DelayRemoveQueue(int fd);
 
@@ -40,10 +43,10 @@ public:
     // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
     void RunInLoop(std::function<void()> cb);
     void QueueInLoop(std::function<void()> cb);
+    void AssertInLoopThread(std::string strInfo);
 
+    std::thread::id GetReactorThreadId() const { return threadId_; }
 private:
-     void AssertInLoopThread(std::string strInfo);
-
      bool IsInLoopThread() const;
 
      // 移除Channel
@@ -63,5 +66,6 @@ private:
 	std::mutex mutex_;
 
     int wakeUpFd_;
-    std::unique_ptr<Channel> wakeUpChannel_;
+    TcpServer* tcpServer_; //保存裸指针
+    //std::unique_ptr<Channel> wakeUpChannel_;
 };

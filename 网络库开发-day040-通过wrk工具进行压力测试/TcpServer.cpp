@@ -16,6 +16,11 @@ TcpServer::TcpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread:
 ,threadPool_(std::make_unique<ThreadPool>(std::max(1, nThreadNum)))
 ,messageCallBack_(nullptr)
 {
+    if(loop_)
+    {
+        loop_->InitServer(this);
+    }
+
    // 1.创建socket
     listenSocket_ = std::make_unique<ListenSocket>();
     if(!listenSocket_->IsValid())
@@ -47,7 +52,7 @@ TcpServer::TcpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread:
     
 TcpServer::~TcpServer()
 {
-
+    
 }
 
 void TcpServer::Start()
@@ -89,7 +94,7 @@ void TcpServer::HandleNewConnection()
         new_connection->SetMessageCallBack(messageCallBack_);
     }
     
-    new_connection->SetCloseCallBack(std::bind(&TcpServer::RemoveConnection, this, std::placeholders::_1));
+    new_connection->SetCloseCallBack(std::bind(&TcpServer::ClosedConnection, this, std::placeholders::_1));
     new_connection->SetWaterMarkCallbacks(
         [](const std::shared_ptr<TcpConnection>& con){
             // 高水位回调：通知业务层暂停向该连接发送数据
@@ -112,10 +117,17 @@ void TcpServer::HandleNewConnection()
     mapTcpConnection_.insert(std::make_pair(nClientFd, new_connection));
 }
 
-void TcpServer::RemoveConnection(const std::shared_ptr<TcpConnection>& conn)
+void TcpServer::RemoveConnectionByFd(int fd)
 {
-    std::cout << "Connection closed, fd=" << conn->GetFd() << std::endl;
-    mapTcpConnection_.erase(conn->GetFd());
+    //std::cout << "Connection closed, fd=" << conn->GetFd() << std::endl;
+    mapTcpConnection_.erase(fd);
+}
+
+void TcpServer::ClosedConnection(const std::shared_ptr<TcpConnection>& conn)
+{
+    // 移除mapTcpConnection_的任务交给EventLoop以保证顺序的正确性。
+    // mapTcpConnection_.erase(conn->GetFd());
+    conn->ClosedConnection();
 }
 
 
@@ -127,12 +139,21 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
     // 将业务逻辑提交到线程池处理
     threadPool_->AddTask([con, strMsg](){
         // 模拟耗时业务（例如解析、数据库查询）
-        std::cout << "start calculate" << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(5));
-        std::cout << "end calculate" << std::endl;
-
         // 复杂的逻辑计算在这边
         // eventLoop->RunInLoop() 只会消息发送
         con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
     });
+}
+
+
+std::shared_ptr<TcpConnection> TcpServer::GetTcpConnection(int fd)
+{
+    auto itr = mapTcpConnection_.find(fd);
+    if(itr == mapTcpConnection_.end())
+    {
+        return nullptr;
+    }
+
+    return (itr->second);
 }

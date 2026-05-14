@@ -1,6 +1,7 @@
 #include "EventLoop.h"
 #include "Channel.h"
 #include "Epoll.h"
+#include "TcpServer.h"
 #include <cassert>
 #include <iostream>
 #include <cstring>
@@ -13,6 +14,7 @@ EventLoop::EventLoop()
 , quit_(false)
 ,threadId_(std::this_thread::get_id())
 , wakeUpFd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
+, tcpServer_(nullptr)
 {
 
     {
@@ -22,16 +24,15 @@ EventLoop::EventLoop()
             exit(1);
         }
 
-        wakeUpChannel_ = std::make_unique<Channel>(wakeUpFd_);
-        wakeUpChannel_->SetReadCallBack([this](){
-            uint64_t one;
+        auto wakeUpChannel = std::make_unique<Channel>(wakeUpFd_);
+        wakeUpChannel->SetReadCallBack([this](){
+            uint64_t one = 0;
             ssize_t ret = ::read(wakeUpFd_, &one, sizeof(one));
             (void)ret;
         });
 
-        wakeUpChannel_->EnableReading();
-        // 将 wakeup fd 加入 epoll
-        epoll_->AddFd(wakeUpChannel_.get());
+        wakeUpChannel->EnableReading();
+        this->AddChannel(std::move(wakeUpChannel));
     }
 }
 
@@ -95,7 +96,7 @@ void EventLoop::Quit()
 }
 
 // 添加或更新channel(线程安全)
-void EventLoop::AddChannel(std::unique_ptr<Channel> channel)
+void EventLoop::AddChannel(std::unique_ptr<Channel> channel, std::string strInfo /*= "OtherError"*/)
 {
     AssertInLoopThread("EventLoop::AddChannel");
     int fd = channel->GetFd();
@@ -104,21 +105,14 @@ void EventLoop::AddChannel(std::unique_ptr<Channel> channel)
     {
         if(false == epoll_->AddFd(channel.get()))
         {
-            std::cerr << "epoll_ctl add fd error listen fd:" << channel->GetFd() << std::endl;
+            std::cerr << "epoll_ctl add fd error fd:" << channel->GetFd() << std::endl;
             return ;
         }
 
         channels_.insert(std::make_pair(channel->GetFd(), std::move(channel)));
 
     }else{
-        if(false == epoll_->ModifyFd(channel.get()))
-        {
-            std::cerr << "epoll_ctl modify fd error listen fd:" << channel->GetFd() << std::endl;
-            return ;
-        }
-
-        std::cout << "epoll_ctl modify success fd :" << channel->GetFd() << std::endl;
-        channels_[channel->GetFd()] = std::move(channel);
+        std::cerr << "epoll_ctl modify fd error fd:" << channel->GetFd() << "Info" << strInfo << std::endl;
     }
 }
 
@@ -130,8 +124,9 @@ void EventLoop::RemoveChannel(int fd)
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
-        //epoll_->RemoveFd(fd); 移到DelayRemoveQueue 去处理，以保证顺序 epoll->RemoveFd, ClientSocket析构， Channel析构
+        epoll_->RemoveFd(fd); 
         channels_.erase(fd);
+        tcpServer_->RemoveConnectionByFd(fd);
     }
 }
 
@@ -155,6 +150,12 @@ bool EventLoop::IsInLoopThread() const
 void EventLoop::DelayRemoveQueue(int fd)
 {
     AssertInLoopThread("EventLoop::DelayRemoveQueue");
+    // 唤醒fd不通过外部移除
+    if(fd == wakeUpFd_)
+    {
+        return;
+    }
+
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
@@ -162,7 +163,6 @@ void EventLoop::DelayRemoveQueue(int fd)
         if(itrDelay == delayChannelsToRemove_.end())
         {
             delayChannelsToRemove_.push_back(fd);
-            epoll_->RemoveFd(fd);
         }
     }
 }
@@ -246,7 +246,7 @@ void EventLoop::WakeUp()
 {
     if(wakeUpFd_ >= 0)
     {
-        uint64_t one;
+        uint64_t one = 1;
         ssize_t ret = ::write(wakeUpFd_, &one, sizeof(one));
         (void)ret;
     }

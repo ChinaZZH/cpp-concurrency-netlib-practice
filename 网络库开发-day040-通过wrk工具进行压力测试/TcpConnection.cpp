@@ -12,9 +12,10 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 , fd_(fd)
 , socket_(std::make_unique<ClientSocket>(fd))
 , inputBuffer_()
-, outputBuffer_()
+, outputBuffer_(8192)
 , pause_(false)
 ,httpContext_(std::make_shared<HttpContext>())
+,closed(false)
 {
      socket_->SetNonBlock();
 }
@@ -22,7 +23,8 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 
 TcpConnection::~TcpConnection()
 {
-    if(fd_ > 0)
+    loop_->AssertInLoopThread("TcpConnection::~TcpConnection");  // 确保在 IO 线程
+    if(fd_ > 0 && !closed)
     {
         loop_->DelayRemoveQueue(fd_);
     }
@@ -63,7 +65,7 @@ void TcpConnection::ConnectEstablished()
 
     channel->EnableReading();
     channel->EnableET();
-    loop_->AddChannel(std::move(channel));
+    loop_->AddChannel(std::move(channel), "TcpConnection::ConnectEstablished");
 }
 
     
@@ -147,6 +149,7 @@ void TcpConnection::HandleClose()
     auto self = shared_from_this();
     if(fd_ > 0)
     {
+        loop_->AssertInLoopThread("TcpConnection::HandleClose");  // 确保在 IO 线程
         loop_->DelayRemoveQueue(fd_);
     }
     
@@ -221,7 +224,6 @@ void TcpConnection::ProcessInputBuffer()
         int len = crlf - inputBuffer_.Peek() + 1;
         std::string strLineMsg(inputBuffer_.Peek(), len);
 
-        std::cout << "TcpConnection::ProcessInputBuffer  " << strLineMsg.c_str() << std::endl;
         messageCallBack_(shared_from_this(), strLineMsg);
         inputBuffer_.Retrieve(len);
     }

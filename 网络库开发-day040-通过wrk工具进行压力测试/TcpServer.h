@@ -3,6 +3,7 @@
 #include <memory>
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include <thread>
 #include "ThreadPool.h"
 
@@ -29,17 +30,21 @@ public:
     void SetCloseCallBack(CloseCallBack cb) { closeCallBack_ = cb; }
 
     ThreadPool* GetThreadPool() { return threadPool_.get(); }
+    EventLoop* GetEventLoop()   { return loop_; }
+    std::shared_ptr<TcpConnection> GetTcpConnection(int fd);
+
     void HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
+    void RemoveConnectionByFd(int fd);
 
 private:
     void HandleNewConnection();
-    void RemoveConnection(const std::shared_ptr<TcpConnection>& conn);
+    void ClosedConnection(const std::shared_ptr<TcpConnection>& conn);
 
 private:
     EventLoop* loop_;
     int port_;
     std::unique_ptr<ListenSocket> listenSocket_;
-    std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
+    std::unordered_map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
 
     MessageCallBack messageCallBack_;
     CloseCallBack closeCallBack_;
