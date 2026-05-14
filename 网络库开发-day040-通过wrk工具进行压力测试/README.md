@@ -8,15 +8,25 @@ markdown
 -- 2. 下面是优化前的状态。
 
 wrk -t4 -c1000 -d100s http://localhost:8888
+
 Running 2m test @ http://localhost:8888
+
   4 threads and 1000 connections
+  
 ^C  Thread Stats   Avg      Stdev     Max   +/- Stdev
+
     Latency    38.73ms   62.25ms   1.97s    79.85%
+    
     Req/Sec     4.60k     1.25k   10.01k    71.27%
+    
   1357603 requests in 1.66m, 115.23MB read
+  
   Socket errors: connect 0, read 1679, write 11029463, timeout 644
+  
 Requests/sec:  13656.95
+
 Transfer/sec:      1.16MB
+
 
 
 # 第一轮调优
