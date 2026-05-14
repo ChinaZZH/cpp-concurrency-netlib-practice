@@ -15,9 +15,9 @@ Running 2m test @ http://localhost:8888
   
 Thread Stats   Avg      Stdev     Max   +/- Stdev
 
-    -- Latency    38.73ms   62.25ms   1.97s    79.85%
+    Latency    38.73ms   62.25ms   1.97s    79.85%
     
-    -- Req/Sec     4.60k     1.25k   10.01k    71.27%
+    Req/Sec     4.60k     1.25k   10.01k    71.27%
     
   1357603 requests in 1.66m, 115.23MB read
   
