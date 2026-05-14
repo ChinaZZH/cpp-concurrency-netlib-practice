@@ -24,12 +24,17 @@ void HttpServer::Start()
 // 异步实现 注释版本同步实现 因为解析这个过程计算过程很快，所以这个仅仅是用来学习，实际过程中应该使用同步
 void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
-    //std::weak_ptr<TcpConnection> weakConPtr = con;
-    int fd = con->GetFd();
+    //int fd = con->GetFd();
     ThreadPool* pool = server_.GetThreadPool();
+    if(!pool)
+    {
+        return;
+    }
 
+
+    std::weak_ptr<TcpConnection> weakConPtr = con;
      // 将业务逻辑提交到线程池处理
-    pool->AddTask([this](int fd, std::string strMsg){
+    pool->AddTask([this](const std::weak_ptr<TcpConnection>& conWeakPtr, std::string strMsg){
         //auto con = weakConPtr.lock();
         //if(con)
         {
@@ -42,18 +47,18 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
             {
                 // 简单路由：返回 "Hello, World!"
                 std::string body = "<h1>Hello, World!</h1>";
-                AsyncSendHttpResponse(fd, body, 200);
+                AsyncSendHttpResponse(conWeakPtr, body, 200);
             }else{
                 // 解析失败或需要更多数据，这里简单返回 400
-                std::string body = "Bad Request";
-                AsyncSendHttpResponse(fd, body, 400);
+                std::string body = "<h1>400! Bad Request</h1>";
+                AsyncSendHttpResponse(conWeakPtr, body, 400);
             }
         }
         
-    }, fd, std::move(strMsg));
+    }, weakConPtr, std::move(strMsg));
 }
 
-void HttpServer::AsyncSendHttpResponse(int fd, const std::string& strContent, int nStatusCode)
+void HttpServer::AsyncSendHttpResponse(const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode)
 {
     std::string strCode;
     strCode = (200 == nStatusCode? "OK": "Bad Request");
@@ -72,10 +77,10 @@ void HttpServer::AsyncSendHttpResponse(int fd, const std::string& strContent, in
     if(loop)
     {
         std::thread::id reactorThreadId = loop->GetReactorThreadId();
-        loop->RunInLoop([this, reactorThreadId, fd, strResponse = std::move(strResponse)](){ 
+        loop->RunInLoop([this, reactorThreadId, conWeakPtr, strResponse = std::move(strResponse)](){ 
             //if(weakConPtr.lock()) weakConPtr.lock()->Send(strResponse);
                 assert(reactorThreadId == std::this_thread::get_id());
-                std::shared_ptr<TcpConnection> con = server_.GetTcpConnection(fd);
+                std::shared_ptr<TcpConnection> con = conWeakPtr.lock(); 
                 if(con && con->IsEffective())
                 {
                     if(con->IsPause())

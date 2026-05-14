@@ -21,7 +21,7 @@ private:
     // 通过线程池异步执行
     void AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
 
-    void AsyncSendHttpResponse(int fd, const std::string& strContent, int nStatusCode);
+    void AsyncSendHttpResponse(const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode);
 
 private:
     TcpServer server_;
