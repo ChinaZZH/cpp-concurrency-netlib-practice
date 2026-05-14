@@ -176,7 +176,7 @@ Requests/sec:  45465.59
 
 Transfer/sec:      3.86MB
 
-# 将httpServer传递给线程池的由fd 修改为weak_ptr<TcpConnection>
+# 异步调用第一次优化，将httpServer传递给线程池的由fd 修改为weak_ptr<TcpConnection>
  
  wrk -t4 -c1000 -d100s http://localhost:8888
 
