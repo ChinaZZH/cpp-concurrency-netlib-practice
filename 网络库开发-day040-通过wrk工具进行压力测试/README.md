@@ -55,15 +55,25 @@ Transfer/sec:      1.16MB
 
 -- 3. 下面是一轮优化后的状态数据:
  wrk -t4 -c1000 -d100s http://localhost:8888
+
 Running 2m test @ http://localhost:8888
+  
   4 threads and 1000 connections
+  
   Thread Stats   Avg      Stdev     Max   +/- Stdev
+    
     Latency    30.40ms   30.53ms   1.98s    99.86%
+    
     Req/Sec     8.11k   760.83    11.37k    83.60%
+  
   3228462 requests in 1.67m, 274.02MB read
+  
   Socket errors: connect 0, read 0, write 0, timeout 565
+
 Requests/sec:  32257.39
+
 Transfer/sec:      2.74MB
+
 
 
 # 第二轮优化
@@ -76,14 +86,23 @@ Transfer/sec:      2.74MB
 -- 4. 下面是一轮优化后的状态数据:
 
 wrk -t4 -c1000 -d100s http://localhost:8888
+
 Running 2m test @ http://localhost:8888
+  
   4 threads and 1000 connections
+  
   Thread Stats   Avg      Stdev     Max   +/- Stdev
+    
     Latency    27.49ms   31.92ms   2.00s    99.84%
+    
     Req/Sec     9.07k   727.60    12.38k    84.30%
+  
   3611571 requests in 1.67m, 306.54MB read
+  
   Socket errors: connect 0, read 0, write 0, timeout 556
+
 Requests/sec:  36081.50
+
 Transfer/sec:      3.06MB
 
 
@@ -101,14 +120,23 @@ Transfer/sec:      3.06MB
 
 -- 2.下面是一轮优化后的状态数据:
  wrk -t4 -c1000 -d100s http://localhost:8888
+
 Running 2m test @ http://localhost:8888
+  
   4 threads and 1000 connections
+  
   Thread Stats   Avg      Stdev     Max   +/- Stdev
+    
     Latency    28.09ms   30.10ms   1.99s    99.86%
+    
     Req/Sec     8.78k   754.98    16.84k    83.87%
+  
   3493231 requests in 1.67m, 296.50MB read
+  
   Socket errors: connect 0, read 0, write 0, timeout 593
+
 Requests/sec:  34896.49
+
 Transfer/sec:      2.96MB
 
 
@@ -130,14 +158,23 @@ Transfer/sec:      2.96MB
 -- 1.线程池的线程个数为核心数-1
 
  wrk -t4 -c1000 -d100s http://localhost:8888
+
 Running 2m test @ http://localhost:8888
+  
   4 threads and 1000 connections
+  
   Thread Stats   Avg      Stdev     Max   +/- Stdev
+    
     Latency    22.64ms   36.66ms   2.00s    99.79%
+    
     Req/Sec    11.44k     1.34k   41.41k    83.49%
+  
   4550982 requests in 1.67m, 386.27MB read
+  
   Socket errors: connect 0, read 0, write 0, timeout 505
+
 Requests/sec:  45465.59
+
 Transfer/sec:      3.86MB
 
 |指标|	    同步最优情况前|	 优化成异步|	变化 |        异步的第一次优化    |  变化   |       异步的第二次优化|    变化        |   异步的第三次优化 |       变化|
