@@ -8,9 +8,9 @@
 class HttpServer
 {
 public:
-    HttpServer(EventLoop* loop, int nPort, int nThreadNum = std::thread::hardware_concurrency() - 1);
+    HttpServer(EventLoop* loop, int nPort);
 
-    void Start();
+    void Start(int option, int nThreadNum = std::thread::hardware_concurrency() - 1);
 
 private:
     // 同步 

@@ -20,11 +20,11 @@ public:
     using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&)>;
     using CloseCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
 
-    TcpServer(EventLoop* loop, int nPort, int nThreadNum = std::thread::hardware_concurrency() - 1);
+    TcpServer(EventLoop* loop, int nPort);
     
     ~TcpServer();
 
-    void Start();
+    void Start(int option, int nThreadNum = std::thread::hardware_concurrency() - 1);
 
     void SetMessageCallBack(MessageCallBack cb) { messageCallBack_ = cb; }
     void SetCloseCallBack(CloseCallBack cb) { closeCallBack_ = cb; }

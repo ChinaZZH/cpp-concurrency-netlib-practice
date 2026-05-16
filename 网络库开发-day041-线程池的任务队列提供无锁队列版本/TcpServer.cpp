@@ -10,10 +10,10 @@
 #include <cstring>
 #include <unistd.h>
 
-TcpServer::TcpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
+TcpServer::TcpServer(EventLoop* loop, int nPort)
 :loop_(loop)
 ,port_(nPort)
-,threadPool_(std::make_unique<ThreadPool>(std::max(1, nThreadNum)))
+,threadPool_(std::make_unique<ThreadPool>())
 ,messageCallBack_(nullptr)
 {
     if(loop_)
@@ -55,9 +55,11 @@ TcpServer::~TcpServer()
     
 }
 
-void TcpServer::Start()
+void TcpServer::Start(int option, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 {
-    threadPool_->Start();
+    nThreadNum= std::max(1, nThreadNum);
+    threadPool_->Start(option, nThreadNum);
+    std::cout << "thread_pool Server run at thread_num:=" << nThreadNum << std::endl;
 
     // 将监听socket加入到epoll中去。
     std::unique_ptr<Channel> listenChannel = std::make_unique<Channel>(listenSocket_->GetSocketId());

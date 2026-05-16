@@ -1,71 +1,65 @@
 #pragma once
 
-#include <iostream>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <queue>
-#include <vector>
-#include <future>
-#include <functional>
-#include <memory>
-#include <type_traits>
+#include "LibThreadPool/ThreadPool_Mutex.h"
+#include "LibThreadPool/ThreadPool_ConcurrentQueue.h"
+#include "LibThreadPool/ThreadPool_BlockingConcurrentQueue.h"
+#include "LibThreadPool/ThreadPool_HazardMpmcQueue.h"
 
-
+// 支持多种线程同步方式
 class ThreadPool
 {
 public:
-	ThreadPool(int threadCount);
+    ThreadPool()
+    { }
+
+    void Start(int option, int threadCount)
+    {
+        option_ = option;
+        if(0 == option_)
+        {
+            mutex_.Start(threadCount);
+        }
+        else if(1 == option_)
+        {
+            concurrentQueue_.Start(threadCount);
+        }
+        else if(2 == option_)
+        {
+            blockingConcurrentQueue_.Start(threadCount);
+        }
+        else
+        {
+            hazardMpmcQueue_.Start(threadCount);
+        }
+    }
 
 
-	~ThreadPool();
-
-    void Start();
-
-	template<typename F, typename... Args>
+    template<typename F, typename... Args>
 	auto AddTask(F&& f, Args&&... args) 
 		-> std::future<std::invoke_result_t<F, Args...>>
-	{
-		// 已经结束不加task
-		if(m_bStop)
-		{
-			throw std::runtime_error("enqueue on stopped ThreadPool");
-		}
-
-		using return_type = std::invoke_result_t<F, Args...>;
-		/*
-		auto task = std::make_shared<std::packaged_task<return_type()>>(
-			std::bind(std::forward<F>(f), std::forward<Args>(args)...)
-		);
-		*/
-
-		// 将用户函数f和参数args绑定成一个无参的可调用函数
-		auto bound_func = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
-
-		// 用绑定后的函数构造一个packaged_task ，他返回return_type
-		std::packaged_task<return_type()> task_obj(bound_func);
-
-		auto task = std::make_shared<std::packaged_task<return_type()>>(std::move(task_obj));
-
-		std::future<return_type> res = task->get_future();
-
-		{
-			std::unique_lock<std::mutex> lk(m_mtx);
-			m_tasks.emplace([task]() { (*task)(); });
-		}
-
-		m_cv.notify_one();
-		return res;
-	}
+    {
+        if(0 == option_)
+        {
+            return mutex_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
+        }
+        else if(1 == option_)
+        {
+            return concurrentQueue_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
+        }
+        else if(2 == option_){
+           return blockingConcurrentQueue_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
+        }
+        else{
+            return hazardMpmcQueue_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
+        }
+       
+    }
 
 private:
-	std::vector<std::thread> m_works;
-	std::queue<std::function<void()>> m_tasks;
-	bool m_bStop = false;
+    int option_;
 
-	std::mutex m_mtx;
-	std::condition_variable m_cv;
-    int threadNum_;
+    ThreadPool_Mutex mutex_;            // 互斥锁
+    ThreadPool_ConcurrentQueue              concurrentQueue_;               // 工业级无锁队列
+    ThreadPool_BlockingConcurrentQueue      blockingConcurrentQueue_;       // 工业级无锁队列
+    ThreadPool_HazardMpmcQueue              hazardMpmcQueue_;               // 自己实现教学使用的无锁队列
 };
-
-

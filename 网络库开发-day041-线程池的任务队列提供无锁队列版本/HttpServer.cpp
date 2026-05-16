@@ -5,8 +5,8 @@
 #include <sstream>
 #include <cassert>
 
-HttpServer::HttpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
-:server_(loop, nPort, std::max(1, nThreadNum))
+HttpServer::HttpServer(EventLoop* loop, int nPort)
+:server_(loop, nPort)
 {
     server_.SetMessageCallBack(std::bind(&HttpServer::AsyncOnMessage, 
         this, std::placeholders::_1, 
@@ -14,9 +14,9 @@ HttpServer::HttpServer(EventLoop* loop, int nPort, int nThreadNum /*= std::threa
     );
 }
 
-void HttpServer::Start()
+void HttpServer::Start(int option, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 {
-    server_.Start();
+    server_.Start(option, nThreadNum);
 }
 
 
