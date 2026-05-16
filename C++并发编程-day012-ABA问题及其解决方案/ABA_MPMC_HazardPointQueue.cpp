@@ -155,7 +155,7 @@ public:
 		old_tail->next.store(new_tail, std::memory_order_release);
 	}
 
-	// 消费者出队列(单线程)
+	// 消费者出队列(多线程安全)
 	bool dequeue(int& val, int tid)
 	{
 		register_thread();
