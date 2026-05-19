@@ -26,63 +26,55 @@ Epoll::wait数据到达  → Channel 读事件 → TcpConnection::HandleRead →
 
 Send → outputBuffer_ → sendOutput → 注册 EPOLLOUT → 可写事件 → 数据发出
 
+核心模块：
+- **EventLoop**：事件循环，负责 epoll 事件分发和跨线程回调
+- **TcpConnection**：管理单个连接，包含输入/输出 Buffer
+- **TcpServer**：管理所有连接，处理新连接
+- **HttpServer**：基于 TcpServer，解析 HTTP 请求，支持同步/异步响应
+- **ThreadPool**：异步处理业务逻辑，避免阻塞 IO 线程
+- 
 
-## 网络库架构图
--- 1. 安装wrk，用wrk进行压测 使用 wrk -t4 -c1000 -d100s http://localhost:8888  4个线程 1000个客户端连接持续100秒的测试。
+## 3. 关键实现细节
+### 3.1 事件驱动
+- Epoll 边缘触发 + 非阻塞 socket
+- Channel 绑定 fd 和回调，EventLoop 统一分发
 
--- 2. 下面是优化前的状态。
+### 3.2 跨线程唤醒
+- `runInLoop` / `queueInLoop` + `eventfd` 唤醒 epoll_wait
+- `pendingFunctors_` 队列保证回调在 IO 线程执行
 
-wrk -t4 -c1000 -d100s http://localhost:8888
+### 3.3 连接生命周期
+- `shared_ptr<TcpConnection>` 管理，`runInLoop` 中释放，确保析构在 IO 线程
 
-Running 2m test @ http://localhost:8888
+### 3.4 Buffer 与高低水位
+- `std::vector<char>` 动态缓冲区，支持 readv/writev
+- 高水位（64KB）暂停发送，低水位（32KB）恢复，削峰填谷
 
-  4 threads and 1000 connections
-  
-|Thread Stats|   Avg |     Stdev |    Max |  +/- Stdev|
-|-----------|-----------|-----------|-----------|-----------|
-|Latency   | 38.73ms |  62.25ms |  1.97s  |  79.85%|
-| Req/Sec    | 4.60k   |  1.25k  | 10.01k  |  71.27%|
-    
-  1357603 requests in 1.66m, 115.23MB read
-  
-  Socket errors: connect 0, read 1679, write 11029463, timeout 644
-  
-Requests/sec:  13656.95
+## 4. 优化与压测
+- 内核参数：`somaxconn=32768`、`tcp_tw_reuse=1`
+- 应用层：HttpContext 复用、string_view、vector 替代 unordered_map
+- 压测结果（`wrk -t4 -c1000 -d100s`）：
 
-Transfer/sec:      1.16MB
+| 版本 | QPS | 平均延迟 | 超时 |
+|------|-----|----------|------|
+| 同步 | 36081 | 27.49ms | 556 |
+| 异步 | 45639 | 22.51ms | 508 |
 
-
-
+## 5. 遇到的问题与解决
+- **跨线程析构**：`shared_ptr` 在 `runInLoop` 中释放 → 确保 IO 线程析构
+- **唤醒失效**：加入 `eventfd` 并正确读写,要环形的话写入需要写1，写0则没有事件在epoll_wait环形。
+- **无锁队列试验**：轻任务下互斥锁+条件变量性能更好。
+- **优化性能**：通过修改系统性能参数: 系统设定的全连接和半链接队列的个数 以及高低水位的设置来优化性能。
  
- wrk -t4 -c1000 -d100s http://localhost:8888
+## 6. 总结与展望
+- 收获：Reactor 模型、并发控制、性能调优
+- 后续：多线程 Reactor、io_uring、RPC 扩展
 
-Running 2m test @ http://localhost:8888
-  
-  4 threads and 1000 connections
-  
-  Thread Stats   Avg      Stdev     Max   +/- Stdev
-    
-    Latency    22.90ms   33.76ms   2.00s    99.75%
-    
-    Req/Sec    11.28k     1.39k   42.20k    92.52%
-  
-  4490023 requests in 1.67m, 381.10MB read
-  
-  Socket errors: connect 0, read 0, write 0, timeout 429
+## 7. 代码仓库
+[GitHub 链接](https://github.com/ChinaZZH/cpp-concurrency-netlib-practice)
 
-Requests/sec:  44855.56
-
-
-|指标|	    同步最优情况前|	 优化成异步|	变化 |        异步的第一次优化    |  变化   |       异步的第二次优化|    变化        |   异步的第三次优化 |       变化|
-|----|------------|------------|--------|------------------------|--------|--------------------|----------------|----------------|------------|
-|QPS	 |       36,082|     45465|	  +26%   |    	44855      |   基本持平 |           |     基本持平    |        |        基本持平|
-|平均延迟| 	27.49ms|    22.64ms|	   -17.7% |       22.90	|      基本持平  |       |       基本持平 |       |         基本持平 |
-|超时	 |   495   |       505	 | 基本持平     |      429 	    |     -15.1%   |          |     基本持平  |          |         -11%|
-|延时标准差|  29.12  |   31.70ms |     基本持平   |    33.76      |    基本持平       |      |    基本持平|          |          基本持平|
-
-
-
-
-
-
-
+## 8. 参考
+- muduo 网络库
+- 《Linux 高性能服务器编程》
+ 
+ 
