@@ -41,7 +41,8 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
             // 模拟耗时业务（例如解析、数据库查询）
             size_t consumed = 0;
             
-            HttpContext context;
+            thread_local HttpContext context;
+            context.Reset();
             bool bOk = context.PraseRequest(strMsg, consumed);
             if(bOk)
             {
@@ -50,7 +51,7 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
                 AsyncSendHttpResponse(conWeakPtr, body, 200);
             }else{
                 // 解析失败或需要更多数据，这里简单返回 400
-                std::string body = "<h1>400! Bad Request</h1>";
+                std::string body = "Bad Request";
                 AsyncSendHttpResponse(conWeakPtr, body, 400);
             }
         }

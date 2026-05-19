@@ -9,7 +9,7 @@
 class ThreadPool
 {
 public:
-    ThreadPool()
+    ThreadPool():option_(0)
     { }
 
     void Start(int option, int threadCount)
@@ -61,5 +61,5 @@ private:
     ThreadPool_Mutex mutex_;            // 互斥锁
     ThreadPool_ConcurrentQueue              concurrentQueue_;               // 工业级无锁队列
     ThreadPool_BlockingConcurrentQueue      blockingConcurrentQueue_;       // 工业级无锁队列
-    ThreadPool_HazardMpmcQueue              hazardMpmcQueue_;               // 自己实现教学使用的无锁队列
+    ThreadPool_HazardMpmcQueue              hazardMpmcQueue_;               // 自己实现教学使用的无锁队列(目前有问题，暂时搁置不查看)
 };
