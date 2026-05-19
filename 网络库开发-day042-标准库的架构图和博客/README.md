@@ -9,42 +9,20 @@ markdown
 -- 目标: 实现高并发 HTTP 服务器，支持同步/异步处理，压测达到 4.5w QPS。
 
 ## 2. 整体架构
-┌─────────────────────────────────────────────────────────┐
-│                     HttpServer                         │
-│  onMessage() → 解析请求 → 同步/异步 → 生成响应          │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────┐
-│                      TcpServer                          │
-│  管理 connections_ (fd -> shared_ptr<TcpConnection>)    │
-│  新连接回调: 创建 TcpConnection, 注册到 EventLoop        │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────┐
-│                    EventLoop (Reactor)                  │
-│  ┌──────────┐  ┌──────────┐  ┌─────────────────────┐   │
-│  │  Epoll   │  │ Channel  │  │  pendingFunctors_   │   │
-│  │ ctl/wait │  │ 回调分发 │  │  (跨线程任务队列)    │   │
-│  └──────────┘  └──────────┘  └──────────┬──────────┘   │
-└───────────────────────────────────────────┼─────────────┘
-                                            │
-      ┌─────────────────────────────────────┼─────────────────────────────────────┐
-      │                                     │                                     │
-┌─────▼─────┐                     ┌─────────▼─────────┐               ┌───────────▼───────────┐
-│ListenSocket│                     │  TcpConnection   │               │     ThreadPool        │
-│(监听fd)   │                     │   (已连接)        │               │    任务队列           │
-│           │                     │   Channel        │               │    工作线程 x N       │
-│accept()   │                     │   Buffer I/O     │               │    enqueue/dequeue    │
-└───────────┘                     └───────────────────┘               └───────────────────────┘
+
+<img width="770" height="590" alt="网络库整体架构图" src="https://github.com/user-attachments/assets/20bcf85d-c9b2-42b9-a7b8-e44753ebdc45" />
+
 
 
 数据流简述（直接写在图下方）：
 
-客户端连接 → ListenSocket → accept → 创建 TcpConnection 注册到 EventLoop
+Epoll::wait客户端连接 → ListenSocket → accept → Channel 读事件 → Epoll的Add 同时创建 TcpConnection 注册到 EventLoop 
 
-数据到达 → Channel 读事件 → TcpConnection::HandleRead → inputBuffer_ → HttpServer::onMessage
+Epoll::wait数据到达  → Channel 读事件 → TcpConnection::HandleRead → inputBuffer_ → HttpServer::onMessage
 
-同步处理：直接 Send 响应；异步处理：ThreadPool 执行任务 → runInLoop 回调 → TcpConnection::Send
+同步处理：直接 Send 响应；
+
+异步处理：ThreadPool 执行任务 → runInLoop 回调 → TcpConnection::Send
 
 Send → outputBuffer_ → sendOutput → 注册 EPOLLOUT → 可写事件 → 数据发出
 
