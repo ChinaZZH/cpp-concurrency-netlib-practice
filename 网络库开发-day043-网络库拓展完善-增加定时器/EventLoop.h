@@ -55,6 +55,16 @@ private:
      void DoPendingFunctors();
      void WakeUp();              // 用于唤醒epoll_wait
 
+// 新增定时器
+public:
+    // 单次定时器 delay为delay毫秒执行回调
+    void RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb);
+
+private:
+    void HandleTimerRead();
+    void UpdateTimerFd();
+    void ExecuteExpiredTimers();
+
 private:
     std::unique_ptr<Epoll>  epoll_;
     std::map<int, std::unique_ptr<Channel>> channels_;
@@ -66,6 +76,12 @@ private:
 	std::mutex mutex_;
 
     int wakeUpFd_;
+    //std::unique_ptr<Channel> wakeUpChannel_; 融入到channels_列表中去了，统一管理
+
     TcpServer* tcpServer_; //保存裸指针
-    //std::unique_ptr<Channel> wakeUpChannel_;
+    
+    int timerFd_;
+    //std::unique_ptr<Channel> timerChannel_; 融入到channels_列表中去了，统一管理
+    // 存储所有定时器：按超时时间排序（multimap 按时间自动排序）
+    std::multimap<std::chrono::steady_clock::time_point, std::function<void()>> timersFunc_;
 };

@@ -136,16 +136,35 @@ void TcpServer::ClosedConnection(const std::shared_ptr<TcpConnection>& conn)
 void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
     // Echo 服务：原样发送回去
-    //connection->Send(strMsg);
-        
+    // std::this_thread::sleep_for(std::chrono::seconds(1));
+    // connection->Send(strMsg);
+    
+
+
     // 将业务逻辑提交到线程池处理
     threadPool_->AddTask([con, strMsg](){
-        // 模拟耗时业务（例如解析、数据库查询）
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        // 复杂的逻辑计算在这边
-        // eventLoop->RunInLoop() 只会消息发送
-        con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
-    });
+            // 模拟耗时业务（例如解析、数据库查询）
+            //  测试定时器的使用使用
+            /*
+            auto micros = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            std::cout << "Start Delay start:=" <<  micros << std::endl;
+            std::chrono::seconds delay(5);
+
+
+            con->GetLoop()->RunAfter(delay, [con, strMsg]() {
+                auto micros = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                std::cout << "End Delay end:=" << micros << std::endl; 
+
+                con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
+            */
+
+            // 模拟耗时业务（例如解析、数据库查询）
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+
+            // 复杂的逻辑计算在这边
+            // eventLoop->RunInLoop() 只会消息发送
+            con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
+        });
 }
 
 

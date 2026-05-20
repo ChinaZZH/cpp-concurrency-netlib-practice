@@ -7,7 +7,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <sys/eventfd.h>
-
+#include <sys/timerfd.h>
 
 EventLoop::EventLoop()
 :epoll_(std::make_unique<Epoll>())
@@ -15,6 +15,7 @@ EventLoop::EventLoop()
 ,threadId_(std::this_thread::get_id())
 , wakeUpFd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
 , tcpServer_(nullptr)
+, timerFd_(::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC))
 {
 
     {
@@ -34,6 +35,22 @@ EventLoop::EventLoop()
         wakeUpChannel->EnableReading();
         this->AddChannel(std::move(wakeUpChannel));
     }
+
+
+    {
+        if(timerFd_ < 0)
+        {
+            perror("timerFd");
+            exit(1);
+        }
+
+        auto timerChannel = std::make_unique<Channel>(timerFd_);
+        timerChannel->SetReadCallBack([this](){ 
+            this->HandleTimerRead(); 
+        });
+        timerChannel->EnableReading();
+        this->AddChannel(std::move(timerChannel));
+    }
 }
 
 EventLoop::~EventLoop() 
@@ -41,6 +58,11 @@ EventLoop::~EventLoop()
     if(wakeUpFd_ >= 0)
     {
         ::close(wakeUpFd_);
+    }
+
+    if(timerFd_ >= 0)
+    {
+        ::close(timerFd_);
     }
 }
 
@@ -151,7 +173,7 @@ void EventLoop::DelayRemoveQueue(int fd)
 {
     AssertInLoopThread("EventLoop::DelayRemoveQueue");
     // 唤醒fd不通过外部移除
-    if(fd == wakeUpFd_)
+    if(fd == wakeUpFd_ || fd == timerFd_)
     {
         return;
     }
@@ -252,3 +274,70 @@ void EventLoop::WakeUp()
     }
     
 }
+
+
+void EventLoop::RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb)
+{
+    auto expire = std::chrono::steady_clock::now() + delay;
+    timersFunc_.insert(std::make_pair(expire, std::move(funcCb)));
+    UpdateTimerFd();
+}
+
+
+void EventLoop::ExecuteExpiredTimers()
+{
+    auto now = std::chrono::steady_clock::now();
+    for(auto it = timersFunc_.begin(); it != timersFunc_.end() && (it->first) <= now ; )
+    {
+        auto funcCb = std::move(it->second);
+        it = timersFunc_.erase(it);
+        funcCb();
+    }
+}
+
+
+ void EventLoop::HandleTimerRead()
+ {
+    uint64_t howMany = 0;
+    ssize_t n = ::read(timerFd_, &howMany, sizeof(howMany));
+    if(n != sizeof(howMany))
+    {
+        std::cerr << "timerfd read error" << std::endl;
+        return;
+    }
+
+    ExecuteExpiredTimers();
+    UpdateTimerFd();
+ }
+
+
+ void EventLoop::UpdateTimerFd()
+ {
+    ExecuteExpiredTimers();
+    if(timersFunc_.empty())
+    {
+        // 没有定时器，停止 timerfd（设置超时为 0 表示 disarm）
+        struct itimerspec new_value;
+        memset(&new_value, 0x00, sizeof(new_value));
+        ::timerfd_settime(timerFd_, 0, &new_value, nullptr);
+        return ;
+    }
+
+    auto startClock = timersFunc_.begin()->first;
+    auto now = std::chrono::steady_clock::now();
+    if (startClock <= now)
+    {
+        UpdateTimerFd();
+    }
+    else
+    {
+        auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(startClock-now).count();
+        
+        struct itimerspec new_value;
+        memset(&new_value, 0x00, sizeof(new_value));
+        new_value.it_value.tv_sec = ns / 1'000'000'000;
+        new_value.it_value.tv_nsec = ns % 1'000'000'000;
+        ::timerfd_settime(timerFd_, 0, &new_value, nullptr);
+    }
+
+ }
