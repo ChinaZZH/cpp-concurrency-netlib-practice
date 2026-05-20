@@ -278,11 +278,34 @@ void EventLoop::WakeUp()
 
 void EventLoop::RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb)
 {
-    auto expire = std::chrono::steady_clock::now() + delay;
-    timersFunc_.insert(std::make_pair(expire, std::move(funcCb)));
-    UpdateTimerFd();
+    std::chrono::milliseconds now(0);
+    if(delay <= now)
+    {
+        funcCb();
+    }else{
+        auto expire = std::chrono::steady_clock::now() + delay;
+        timersFunc_.insert(std::make_pair(expire, std::move(funcCb)));
+        UpdateTimerFd();
+    }
 }
 
+ // 周期性回调
+void EventLoop::RunEvery(std::chrono::milliseconds interval, std::function<void()> funcCb, bool bImmediatelyFlag /*= false*/)
+{
+    if(bImmediatelyFlag)
+    {
+        funcCb();
+    }
+
+    std::chrono::milliseconds now(0);
+    if(interval > now)
+    {
+        this->RunAfter(interval, [this, interval, funcCb](){
+            funcCb();
+            this->RunEvery(interval, funcCb, false);
+        });
+    }
+}
 
 void EventLoop::ExecuteExpiredTimers()
 {

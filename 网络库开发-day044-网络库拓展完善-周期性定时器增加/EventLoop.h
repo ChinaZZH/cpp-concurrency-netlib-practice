@@ -60,6 +60,9 @@ public:
     // 单次定时器 delay为delay毫秒执行回调
     void RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb);
 
+    // 周期性回调
+    void RunEvery(std::chrono::milliseconds interval, std::function<void()> funcCb, bool bImmediatelyFlag = false);
+
 private:
     void HandleTimerRead();
     void UpdateTimerFd();
