@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <queue>
+#include <chrono>
 #include "Buffer.h"
 
 class EventLoop;
@@ -41,7 +42,11 @@ public:
 
     std::shared_ptr<HttpContext> GetHttpContext() { return httpContext_; }
     void ClosedConnection() { closed = true; }
-    bool IsEffective() { return !closed; }
+    bool IsClosed() { return closed; }
+
+    // 空闲连接超时检测，检测到了就关闭了
+    std::chrono::steady_clock::time_point GetLastActiveTime() const { return lastActiveTime_; }
+    void UpdateLastActiveTime()  { lastActiveTime_ = std::chrono::steady_clock::now(); }
 
 private:
     void HandleRead();
@@ -78,4 +83,7 @@ private:
     
     std::shared_ptr<HttpContext>  httpContext_;
     bool closed = false;
+
+    // 延迟删除的时候使用
+    std::chrono::steady_clock::time_point lastActiveTime_;
 };

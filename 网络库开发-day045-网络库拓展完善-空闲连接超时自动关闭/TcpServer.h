@@ -36,17 +36,23 @@ public:
     void HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
     void RemoveConnectionByFd(int fd);
 
+    // 设置空闲时间
+    void SetConnectionIdleTimeOut(int nSecs);
 private:
     void HandleNewConnection();
     void ClosedConnection(const std::shared_ptr<TcpConnection>& conn);
+
+    void CheckIdleConnections();
 
 private:
     EventLoop* loop_;
     int port_;
     std::unique_ptr<ListenSocket> listenSocket_;
-    std::unordered_map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
+    std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
 
     MessageCallBack messageCallBack_;
     CloseCallBack closeCallBack_;
     std::unique_ptr<ThreadPool> threadPool_;
+
+    int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
 };

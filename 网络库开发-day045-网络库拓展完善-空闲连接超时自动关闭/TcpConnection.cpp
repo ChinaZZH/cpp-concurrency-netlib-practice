@@ -18,6 +18,9 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 ,closed(false)
 {
      socket_->SetNonBlock();
+
+     // 更新tcpConnection的活跃时间
+    this->UpdateLastActiveTime();
 }
 
 
@@ -66,6 +69,12 @@ void TcpConnection::ConnectEstablished()
     channel->EnableReading();
     channel->EnableET();
     loop_->AddChannel(std::move(channel), "TcpConnection::ConnectEstablished");
+
+     // 更新tcpConnection的活跃时间
+    this->UpdateLastActiveTime();
+
+    //auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    //std::cout << "TcpServer::ConnectEstablished sec:=" << now_secs << std::endl;
 }
 
     
@@ -96,6 +105,11 @@ void TcpConnection::Send(const std::string& strMessage)
 
 void TcpConnection::Shutdown()
 {
+    if(IsClosed())
+    {
+        return;
+    }
+
      HandleClose();
 }
 
@@ -103,6 +117,14 @@ void TcpConnection::Shutdown()
 // 读事件处理(边缘触发)
 void TcpConnection::HandleRead()
 {
+    if(IsClosed())
+    {
+        return;
+    }
+
+    // 更新连接的活跃时间
+    UpdateLastActiveTime();
+
     auto self = shared_from_this();
     int savedErrno = 0;
     //char buffer[4096] = {0};
@@ -134,6 +156,11 @@ void TcpConnection::HandleRead()
 
 void TcpConnection::HandleWrite()
 {
+    if(IsClosed())
+    {
+        return;
+    }
+
     // 暂时留空，后续配合输出缓冲区实现
     auto self = shared_from_this();
     SendOutput();
@@ -146,6 +173,11 @@ void TcpConnection::HandleWrite()
 
 void TcpConnection::HandleClose()
 {
+    if(IsClosed())
+    {
+        return;
+    }
+
     auto self = shared_from_this();
     if(fd_ > 0)
     {
@@ -161,6 +193,11 @@ void TcpConnection::HandleClose()
 
 void TcpConnection::HandleError()
 {
+    if(IsClosed())
+    {
+        return;
+    }
+
     HandleClose();
 }
 
@@ -194,6 +231,9 @@ void TcpConnection::SendOutput()
         HandleClose();  // 对端关闭连接(优雅关闭)
         return;
     }
+
+    // 更新连接的活跃时间
+    UpdateLastActiveTime();
 
     CheckWaterMark();
     if(outputBuffer_.ReadableBytes() <= 0)

@@ -66,6 +66,12 @@ void TcpServer::Start(int option, int nThreadNum /*= std::thread::hardware_concu
     listenChannel->SetReadCallBack(std::bind(&TcpServer::HandleNewConnection, this));
     listenChannel->EnableReading();
     loop_->AddChannel(std::move(listenChannel));
+
+
+    if(idleTimeOutSecs_ > 0)
+    {
+        loop_->RunEvery(std::chrono::seconds(5), [this](){ this->CheckIdleConnections(); });
+    }
 }
 
 
@@ -177,4 +183,37 @@ std::shared_ptr<TcpConnection> TcpServer::GetTcpConnection(int fd)
     }
 
     return (itr->second);
+}
+
+
+void TcpServer::SetConnectionIdleTimeOut(int nSecs)
+{
+    idleTimeOutSecs_ = nSecs;
+}
+
+
+void TcpServer::CheckIdleConnections()
+{
+    if(idleTimeOutSecs_ <= 0)
+    {
+        return ;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    for(auto itr = mapTcpConnection_.begin(); itr != mapTcpConnection_.end(); ++itr)
+    {
+        auto& con = (itr->second);
+        if(con->IsClosed())
+        {
+            continue;
+        }
+        
+        auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
+        if (idleDuration.count() >= idleTimeOutSecs_)
+        {
+            //auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+            //std::cout << "TcpServer::CheckIdleConnections now:=" <<  now_secs << std::endl;
+            con->Shutdown();
+        }
+    }
 }
