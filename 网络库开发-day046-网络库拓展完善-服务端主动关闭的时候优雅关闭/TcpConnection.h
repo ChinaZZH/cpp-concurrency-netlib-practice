@@ -43,6 +43,7 @@ public:
     std::shared_ptr<HttpContext> GetHttpContext() { return httpContext_; }
     void ClosedConnection() { closed = true; }
     bool IsClosed() { return closed; }
+    bool IsWriteClosed() { return IsClosed() || closedWrite_; }
 
     // 空闲连接超时检测，检测到了就关闭了
     std::chrono::steady_clock::time_point GetLastActiveTime() const { return lastActiveTime_; }
@@ -51,7 +52,7 @@ public:
 private:
     void HandleRead();
     void HandleWrite();
-    void HandleClose();
+    void HandleClose(std::string strCloseInfo);
     void HandleError();
 
     void SendOutput();  // 尝试发送outputBuffer_中的数据
@@ -83,6 +84,7 @@ private:
     
     std::shared_ptr<HttpContext>  httpContext_;
     bool closed = false;
+    bool closedWrite_ = false;
 
     // 延迟删除的时候使用
     std::chrono::steady_clock::time_point lastActiveTime_;

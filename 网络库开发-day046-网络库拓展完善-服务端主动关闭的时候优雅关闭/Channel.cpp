@@ -12,17 +12,7 @@ Channel::Channel(int fd)
 
 void Channel::HandleEvent() const
 {
-    if(revents_ & (EPOLLERR | EPOLLHUP))
-    {
-        if(errorCallBack_)
-        {
-            errorCallBack_();
-        }
-
-        return;
-    }
-    
-    
+    // (revents_ & EPOLLHUP) && (revents_ & EPOLLIN) 为服务端半关闭，但是客户端仍然发送读事件上来
     if(revents_ & (EPOLLIN | EPOLLPRI | EPOLLRDHUP))
     {
         if(readCallBack_)
@@ -38,6 +28,30 @@ void Channel::HandleEvent() const
             writeCallBack_();
         }
     }
+
+
+     //bool bCloseHup =  (() && (revents_ & EPOLLIN))?true:false;
+    if(revents_ & EPOLLHUP)
+    {
+        if(closeCallBack_)
+        {
+            closeCallBack_();
+        }
+    }
+
+
+    // 客户端 ((revents_ & EPOLLHUP) && !(revents_ & EPOLLIN)) 连接断了并且没有可读事件
+    //bool bErrorHup =  ((revents_ & EPOLLHUP) && !(revents_ & EPOLLIN))?true:false;
+    if(revents_ & EPOLLERR)
+    {
+        if(errorCallBack_)
+        {
+            //std::cout << "Channel::HandleEvent errorCallBack revents_:=" << revents_ << " EPOLLERR:="  <<  (revents_ & EPOLLERR) << " EPOLLHUP:= " << (revents_ & EPOLLHUP)  << std::endl;
+            errorCallBack_();
+        }
+    }
+
+   
 }
 
 

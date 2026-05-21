@@ -82,7 +82,7 @@ void HttpServer::AsyncSendHttpResponse(const std::weak_ptr<TcpConnection>& conWe
             //if(weakConPtr.lock()) weakConPtr.lock()->Send(strResponse);
                 assert(reactorThreadId == std::this_thread::get_id());
                 std::shared_ptr<TcpConnection> con = conWeakPtr.lock(); 
-                if(con && !con->IsClosed())
+                if(con && !con->IsWriteClosed())
                 {
                     if(con->IsPause())
                     {

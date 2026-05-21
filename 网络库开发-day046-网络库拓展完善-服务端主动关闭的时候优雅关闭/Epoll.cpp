@@ -104,6 +104,7 @@ bool Epoll::RemoveFd(int nSocketFd)
     int result = epoll_ctl(fd_, EPOLL_CTL_DEL, nSocketFd, nullptr);
     if(0 == result)
     {
+        //std::cout << "Epoll::RemoveFd epoll_ctl to del fd:=" << nSocketFd << std::endl;
         return true;
     }
     

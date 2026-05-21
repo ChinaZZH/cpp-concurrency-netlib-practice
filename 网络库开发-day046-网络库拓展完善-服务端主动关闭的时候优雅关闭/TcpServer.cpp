@@ -127,7 +127,7 @@ void TcpServer::HandleNewConnection()
 
 void TcpServer::RemoveConnectionByFd(int fd)
 {
-    //std::cout << "Connection closed, fd=" << conn->GetFd() << std::endl;
+    // std::cout <<  "Connection closed, fd=" << fd << std::endl;
     mapTcpConnection_.erase(fd);
 }
 
@@ -143,15 +143,17 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
 {
     // Echo 服务：原样发送回去
     // std::this_thread::sleep_for(std::chrono::seconds(1));
-    // connection->Send(strMsg);
-    
+    std::cout << "TcpServer::HandleOnMessage msg:=" << strMsg.c_str() << std::endl; 
+    con->Send(strMsg);
+    con->Shutdown();
 
 
     // 将业务逻辑提交到线程池处理
+    /*
     threadPool_->AddTask([con, strMsg](){
             // 模拟耗时业务（例如解析、数据库查询）
             //  测试定时器的使用使用
-            /*
+            
             auto micros = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             std::cout << "Start Delay start:=" <<  micros << std::endl;
             std::chrono::seconds delay(5);
@@ -162,7 +164,7 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
                 std::cout << "End Delay end:=" << micros << std::endl; 
 
                 con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
-            */
+            
 
             // 模拟耗时业务（例如解析、数据库查询）
             std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -171,6 +173,7 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
             // eventLoop->RunInLoop() 只会消息发送
             con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
         });
+        */
 }
 
 
@@ -203,7 +206,7 @@ void TcpServer::CheckIdleConnections()
     for(auto itr = mapTcpConnection_.begin(); itr != mapTcpConnection_.end(); ++itr)
     {
         auto& con = (itr->second);
-        if(con->IsClosed())
+        if(con->IsWriteClosed())
         {
             continue;
         }

@@ -23,6 +23,7 @@ public:
     void SetReadCallBack(EventCallback cb) { readCallBack_ = cb; }    
     void SetWriteCallBack(EventCallback cb) { writeCallBack_ = cb; }  
     void SetErrorCallBack(EventCallback cb) { errorCallBack_ = cb; }  
+    void SetCloseCallBack(EventCallback cb) { closeCallBack_ = cb; }
 
     void EnableReading()  { events_ |= EPOLLIN;     }
     void DisableReading() { events_ &= (~EPOLLIN);  }
@@ -41,4 +42,5 @@ private:
     EventCallback readCallBack_;
     EventCallback writeCallBack_;
     EventCallback errorCallBack_;
+    EventCallback closeCallBack_;
 };

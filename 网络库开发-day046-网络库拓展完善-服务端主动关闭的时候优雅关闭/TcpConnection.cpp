@@ -66,20 +66,31 @@ void TcpConnection::ConnectEstablished()
         }
     });
 
+    channel->SetCloseCallBack([weak_self]() { 
+        auto self = weak_self.lock();
+        if(self)
+        {
+            self->HandleClose("EPOLLHUP Channel CallBack"); 
+        }
+    });
+
     channel->EnableReading();
     channel->EnableET();
+    channel->EnableEvent(EPOLLRDHUP);
     loop_->AddChannel(std::move(channel), "TcpConnection::ConnectEstablished");
 
      // 更新tcpConnection的活跃时间
     this->UpdateLastActiveTime();
-
-    //auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-    //std::cout << "TcpServer::ConnectEstablished sec:=" << now_secs << std::endl;
 }
 
     
 void TcpConnection::Send(const std::string& strMessage)
 {
+    if(this->IsWriteClosed())
+    {
+        return;
+    }
+
     if(this->IsPause())
     {
         WaitForWaterToLowMask(strMessage);
@@ -105,12 +116,19 @@ void TcpConnection::Send(const std::string& strMessage)
 
 void TcpConnection::Shutdown()
 {
-    if(IsClosed())
+    if(IsClosed() || closedWrite_)
     {
         return;
     }
 
-     HandleClose();
+    if(::shutdown(fd_, SHUT_WR) < 0)
+    {
+        std::cerr << "shutdown error fd:=" << fd_ << std::endl;
+    }
+    else{
+        closedWrite_ = true;
+        // std::cout << "close write fd:=" << fd_ << std::endl;
+    }
 }
 
 
@@ -146,7 +164,7 @@ void TcpConnection::HandleRead()
             return;
         }else if(n == 0){
             // 对方关闭连接
-            HandleClose();
+            HandleClose("TcpConnection::HandleRead");
             return;
         }
 
@@ -156,7 +174,7 @@ void TcpConnection::HandleRead()
 
 void TcpConnection::HandleWrite()
 {
-    if(IsClosed())
+    if(this->IsWriteClosed())
     {
         return;
     }
@@ -171,13 +189,15 @@ void TcpConnection::HandleWrite()
     }
 }
 
-void TcpConnection::HandleClose()
+void TcpConnection::HandleClose(std::string strCloseInfo)
 {
     if(IsClosed())
     {
         return;
     }
 
+    // 需要的时候开启，不需要的时候注释
+    //std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
     auto self = shared_from_this();
     if(fd_ > 0)
     {
@@ -198,13 +218,18 @@ void TcpConnection::HandleError()
         return;
     }
 
-    HandleClose();
+    HandleClose("TcpConnection::HandleError");
 }
 
 
  // 尝试发送outputBuffer_中的数据
 void TcpConnection::SendOutput()
 {
+    if(this->IsWriteClosed())
+    {
+        return;
+    }
+
     if(outputBuffer_.ReadableBytes() <= 0)
     {
         return ;
@@ -216,7 +241,7 @@ void TcpConnection::SendOutput()
     {
         if(nSavedErrno != EAGAIN && nSavedErrno != EWOULDBLOCK)
         {
-            HandleClose();  // 不可恢复错误
+            HandleClose("TcpConnection::SendOutput n < 0");  // 不可恢复错误
         }else{
             // 缓冲区满，已经无法写入，等待EPOLL_OUT事件调度
             ;
@@ -228,7 +253,7 @@ void TcpConnection::SendOutput()
     // 对端关闭连接(优雅关闭)
     if(0 == n)
     {
-        HandleClose();  // 对端关闭连接(优雅关闭)
+        HandleClose("TcpConnection::SendOutput n == 0");  // 对端关闭连接(优雅关闭)
         return;
     }
 

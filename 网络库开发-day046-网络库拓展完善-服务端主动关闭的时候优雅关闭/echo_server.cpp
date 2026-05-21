@@ -1,11 +1,15 @@
 #include "EventLoop.h"
 #include "TcpServer.h"
 #include "HttpServer.h"
+#include <signal.h>
+
 #define PORT 8888
 
 
 int main()
 {
+    signal(SIGPIPE, SIG_IGN);
+    
     EventLoop loop;
     TcpServer server(&loop, PORT);
     server.SetMessageCallBack(std::bind(&TcpServer::HandleOnMessage, 
@@ -26,7 +30,7 @@ int main()
         ++num;
     });
     */
-   
+
     loop.Loop();
     return 0;
 }
