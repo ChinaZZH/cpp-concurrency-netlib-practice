@@ -21,10 +21,10 @@ public:
     EventLoop* StartLoop();
     
 private:
-    void threadFunc();  // 线程入口函数
+    void ThreadFunc();  // 线程入口函数
 
 private:
-    EventLoop* eventLoop_;          // 子线程创建的 EventLoop对象
+    EventLoop* loop_;          // 子线程创建的 EventLoop对象
     bool exiting_;                  // 退出标志
     std::unique_ptr<std::thread> thread_;
     std::mutex mutex_;
