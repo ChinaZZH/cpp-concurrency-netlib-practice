@@ -15,7 +15,7 @@ class HttpContext;
 class TcpConnection: public std::enable_shared_from_this<TcpConnection>
 {
 public:
-    TcpConnection(EventLoop* loop, int fd);
+    TcpConnection(EventLoop* mainloop, EventLoop* loop, int fd);
     ~TcpConnection();
 
     void ConnectEstablished();  // 注册到EventLoop
@@ -40,7 +40,6 @@ public:
     void WaitForWaterToLowMask(const std::string& strData);
     void WaterFromHighToLow();
 
-    std::shared_ptr<HttpContext> GetHttpContext() { return httpContext_; }
     void ClosedConnection() { closed = true; }
     bool IsClosed() { return closed; }
     bool IsWriteClosed() { return IsClosed() || closedWrite_; }
@@ -62,6 +61,7 @@ private:
     void CheckWaterMark();
 
 private:
+    EventLoop* main_loop_;
     EventLoop* loop_;
     int fd_;
     std::unique_ptr<ClientSocket>  socket_;
@@ -82,7 +82,6 @@ private:
     bool pause_ = false;
     std::queue<std::string>  WaitLowWaterToSend_;
     
-    std::shared_ptr<HttpContext>  httpContext_;
     bool closed = false;
     bool closedWrite_ = false;
 

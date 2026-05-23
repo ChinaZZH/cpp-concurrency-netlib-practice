@@ -45,7 +45,7 @@ public:
     void QueueInLoop(std::function<void()> cb);
     void AssertInLoopThread(std::string strInfo);
 
-    std::thread::id GetReactorThreadId() const { return threadId_; }
+    std::thread::id GetThreadId() const { return threadId_; }
 private:
      bool IsInLoopThread() const;
 

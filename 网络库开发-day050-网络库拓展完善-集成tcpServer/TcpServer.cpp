@@ -11,14 +11,15 @@
 #include <unistd.h>
 
 TcpServer::TcpServer(EventLoop* loop, int nPort)
-:loop_(loop)
+:mainLoop_(loop)
 ,port_(nPort)
-,threadPool_(std::make_unique<ThreadPool>())
+,taskThreadPool_(std::make_unique<ThreadPool>())
 ,messageCallBack_(nullptr)
+,eventLoopThreadPool_(std::make_unique<EventLoopThreadPool>(loop, "TcpServer"))
 {
-    if(loop_)
+    if(mainLoop_)
     {
-        loop_->InitServer(this);
+        mainLoop_->InitServer(this);
     }
 
    // 1.创建socket
@@ -55,22 +56,32 @@ TcpServer::~TcpServer()
     
 }
 
-void TcpServer::Start(int option, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
+void TcpServer::Start(int option, int nEventLoopThread /*= std::thread::hardware_concurrency() - 1*/, int nTaskThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 {
-    nThreadNum= std::max(1, nThreadNum);
-    threadPool_->Start(option, nThreadNum);
-    std::cout << "thread_pool Server run at thread_num:=" << nThreadNum << std::endl;
+    {
+        nEventLoopThreadCount_ = std::max(1, nEventLoopThread);
+        eventLoopThreadPool_->SetThreadNum(nEventLoopThreadCount_);
+        eventLoopThreadPool_->Start(this);
+    }
+
+    {
+        nTaskThreadNum = std::max(1, nTaskThreadNum);
+        taskThreadPool_->Start(option, nTaskThreadNum);
+    }
+    
+
+    std::cout << "event_loop_thread_pool thread_num:=" << nEventLoopThreadCount_ << " task_thread_pool thread_num:=" << nTaskThreadNum << std::endl;
 
     // 将监听socket加入到epoll中去。
     std::unique_ptr<Channel> listenChannel = std::make_unique<Channel>(listenSocket_->GetSocketId());
     listenChannel->SetReadCallBack(std::bind(&TcpServer::HandleNewConnection, this));
     listenChannel->EnableReading();
-    loop_->AddChannel(std::move(listenChannel));
+    mainLoop_->AddChannel(std::move(listenChannel));
 
 
     if(idleTimeOutSecs_ > 0)
     {
-        loop_->RunEvery(std::chrono::seconds(5), [this](){ this->CheckIdleConnections(); });
+        mainLoop_->RunEvery(std::chrono::seconds(5), [this](){ this->CheckIdleConnections(); });
     }
 }
 
@@ -95,8 +106,15 @@ void TcpServer::HandleNewConnection()
     }
     
 
+    EventLoop* loop = eventLoopThreadPool_->getNextLoop();
+    assert(loop);
+    
+    std::cout << "New connection fd=" << nClientFd 
+              << " assigned to thread " << std::this_thread::get_id() 
+              << " (ioLoop thread will be " << loop->GetThreadId() << ")" << std::endl;
+
     // 将新连接加入epoll  
-    auto new_connection = std::make_shared<TcpConnection>(loop_, nClientFd);
+    auto new_connection = std::make_shared<TcpConnection>(mainLoop_, loop, nClientFd);
     if(messageCallBack_)
     {
         new_connection->SetMessageCallBack(messageCallBack_);
@@ -121,13 +139,17 @@ void TcpServer::HandleNewConnection()
         32*1024     // 低水位 32KB
     );
 
-    new_connection->ConnectEstablished();
+    // 跟channel相关投递到connection所负债均衡选择的eventloop线程
+    loop->RunInLoop([new_connection](){
+        new_connection->ConnectEstablished();
+    });
+    
     mapTcpConnection_.insert(std::make_pair(nClientFd, new_connection));
 }
 
 void TcpServer::RemoveConnectionByFd(int fd)
 {
-    // std::cout <<  "Connection closed, fd=" << fd << std::endl;
+    std::cout <<  "Connection closed, fd=" << fd << std::endl;
     mapTcpConnection_.erase(fd);
 }
 
@@ -145,12 +167,10 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
     // std::this_thread::sleep_for(std::chrono::seconds(1));
     std::cout << "TcpServer::HandleOnMessage msg:=" << strMsg.c_str() << std::endl; 
     con->Send(strMsg);
-    con->Shutdown();
-
 
     // 将业务逻辑提交到线程池处理
     /*
-    threadPool_->AddTask([con, strMsg](){
+    taskThreadPool_->AddTask([con, strMsg](){
             // 模拟耗时业务（例如解析、数据库查询）
             //  测试定时器的使用使用
             
@@ -177,17 +197,6 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
 }
 
 
-std::shared_ptr<TcpConnection> TcpServer::GetTcpConnection(int fd)
-{
-    auto itr = mapTcpConnection_.find(fd);
-    if(itr == mapTcpConnection_.end())
-    {
-        return nullptr;
-    }
-
-    return (itr->second);
-}
-
 
 void TcpServer::SetConnectionIdleTimeOut(int nSecs)
 {
@@ -202,21 +211,44 @@ void TcpServer::CheckIdleConnections()
         return ;
     }
 
-    auto now = std::chrono::steady_clock::now();
     for(auto itr = mapTcpConnection_.begin(); itr != mapTcpConnection_.end(); ++itr)
     {
         auto& con = (itr->second);
-        if(con->IsWriteClosed())
+        if(!con)
         {
             continue;
         }
-        
-        auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
-        if (idleDuration.count() >= idleTimeOutSecs_)
+
+        EventLoop* loop = con->GetLoop();
+        if(!loop)
         {
-            //auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-            //std::cout << "TcpServer::CheckIdleConnections now:=" <<  now_secs << std::endl;
-            con->Shutdown();
+            continue;
         }
+
+        int timeOutIdleSecs = idleTimeOutSecs_;
+        std::weak_ptr<TcpConnection> weakConPtr = con;
+        loop->RunInLoop([weakConPtr, timeOutIdleSecs](){
+            auto con = weakConPtr.lock();
+            if(!con)
+            {
+                return ;
+            }
+
+            if(con->IsWriteClosed())
+            {
+                return ;
+            }
+        
+            auto now = std::chrono::steady_clock::now();
+            auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
+            if (idleDuration.count() >= timeOutIdleSecs)
+            {
+                //auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+                //std::cout << "TcpServer::CheckIdleConnections now:=" <<  now_secs << std::endl;
+                con->Shutdown();
+            }
+        });
+
+        
     }
 }

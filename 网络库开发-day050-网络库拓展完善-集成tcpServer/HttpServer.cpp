@@ -14,9 +14,9 @@ HttpServer::HttpServer(EventLoop* loop, int nPort)
     );
 }
 
-void HttpServer::Start(int option, int nThreadNum /*= std::thread::hardware_concurrency() - 1*/)
+void HttpServer::Start(int option, int nEventLoopThread /*= std::thread::hardware_concurrency() - 1*/, int nTaskThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 {
-    server_.Start(option, nThreadNum);
+    server_.Start(option, nEventLoopThread, nTaskThreadNum);
 }
 
 
@@ -32,9 +32,11 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
     }
 
 
+    EventLoop* loop = con->GetLoop();
     std::weak_ptr<TcpConnection> weakConPtr = con;
+
      // 将业务逻辑提交到线程池处理
-    pool->AddTask([this](const std::weak_ptr<TcpConnection>& conWeakPtr, std::string strMsg){
+    pool->AddTask([this](EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, std::string strMsg){
         //auto con = weakConPtr.lock();
         //if(con)
         {
@@ -48,19 +50,24 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
             {
                 // 简单路由：返回 "Hello, World!"
                 std::string body = "<h1>Hello, World!</h1>";
-                AsyncSendHttpResponse(conWeakPtr, body, 200);
+                AsyncSendHttpResponse(loop, conWeakPtr, body, 200);
             }else{
                 // 解析失败或需要更多数据，这里简单返回 400
                 std::string body = "Bad Request";
-                AsyncSendHttpResponse(conWeakPtr, body, 400);
+                AsyncSendHttpResponse(loop, conWeakPtr, body, 400);
             }
         }
         
-    }, weakConPtr, std::move(strMsg));
+    }, loop, weakConPtr, std::move(strMsg));
 }
 
-void HttpServer::AsyncSendHttpResponse(const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode)
+void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode)
 {
+    if(!loop)
+    {
+        return;
+    }
+
     std::string strCode;
     strCode = (200 == nStatusCode? "OK": "Bad Request");
 
@@ -74,13 +81,10 @@ void HttpServer::AsyncSendHttpResponse(const std::weak_ptr<TcpConnection>& conWe
 
     std::string strResponse = response.str();
     //std::weak_ptr<TcpConnection> weakConPtr = con;
-    EventLoop* loop = server_.GetEventLoop();
-    if(loop)
+    
     {
-        std::thread::id reactorThreadId = loop->GetReactorThreadId();
-        loop->RunInLoop([this, reactorThreadId, conWeakPtr, strResponse = std::move(strResponse)](){ 
+        loop->RunInLoop([this, conWeakPtr, strResponse = std::move(strResponse)](){ 
             //if(weakConPtr.lock()) weakConPtr.lock()->Send(strResponse);
-                assert(reactorThreadId == std::this_thread::get_id());
                 std::shared_ptr<TcpConnection> con = conWeakPtr.lock(); 
                 if(con && !con->IsWriteClosed())
                 {
@@ -101,9 +105,8 @@ void HttpServer::AsyncSendHttpResponse(const std::weak_ptr<TcpConnection>& conWe
 void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
     size_t consumed = 0;
-    auto ctx = con->GetHttpContext();
-    ctx->Reset();
-    bool bOk = ctx->PraseRequest(strMsg, consumed);
+    context_.Reset();
+    bool bOk = context_.PraseRequest(strMsg, consumed);
     if(bOk)
     {
         // 简单路由：返回 "Hello, World!"
@@ -135,7 +138,6 @@ void HttpServer::SendHttpResponse(const std::shared_ptr<TcpConnection>& con, con
     }else{
         con->Send(response.str());
     }
-    
 }
 
 

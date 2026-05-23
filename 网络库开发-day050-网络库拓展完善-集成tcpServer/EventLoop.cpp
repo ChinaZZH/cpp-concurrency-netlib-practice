@@ -148,7 +148,15 @@ void EventLoop::RemoveChannel(int fd)
     {
         epoll_->RemoveFd(fd); 
         channels_.erase(fd);
-        tcpServer_->RemoveConnectionByFd(fd);
+        
+        EventLoop* mainLoop = tcpServer_->GetMainLoop();
+        assert(mainLoop);
+
+        TcpServer* server = tcpServer_;
+        mainLoop->RunInLoop([server, fd](){ 
+            server->RemoveConnectionByFd(fd);
+        });
+        
     }
 }
 
@@ -157,7 +165,7 @@ void EventLoop::AssertInLoopThread(std::string strInfo)
 {
     if(threadId_ != std::this_thread::get_id())
     {
-        std::cout << "EventLoop::AssertInLoopThread other thread_id:" << std::this_thread::get_id() << "In Info:=" << strInfo.c_str() << std::endl;
+        std::cout << "EventLoop::AssertInLoopThread error thread_id:" << std::this_thread::get_id() << " Right thread_id:=" << threadId_ << " In Info:=" << strInfo.c_str() << std::endl;
     }
 
     assert(threadId_ == std::this_thread::get_id());

@@ -2,19 +2,18 @@
 #include "EventLoop.h"
 #include "ClientSocket.h"
 #include "Channel.h"
-#include "HttpContext.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
 
-TcpConnection::TcpConnection(EventLoop* loop, int fd)
-: loop_(loop)
+TcpConnection::TcpConnection(EventLoop* mainloop, EventLoop* loop, int fd)
+: main_loop_(mainloop)
+, loop_(loop)
 , fd_(fd)
 , socket_(std::make_unique<ClientSocket>(fd))
 , inputBuffer_()
 , outputBuffer_(8192)
 , pause_(false)
-,httpContext_(std::make_shared<HttpContext>())
 ,closed(false)
 {
      socket_->SetNonBlock();
@@ -26,17 +25,15 @@ TcpConnection::TcpConnection(EventLoop* loop, int fd)
 
 TcpConnection::~TcpConnection()
 {
-    loop_->AssertInLoopThread("TcpConnection::~TcpConnection");  // 确保在 IO 线程
-    if(fd_ > 0 && !closed)
-    {
-        loop_->DelayRemoveQueue(fd_);
-    }
+    main_loop_->AssertInLoopThread("TcpConnection::~TcpConnection");  // 确保是在主线程析构
 }
 
 
 // 注册到EventLoop
 void TcpConnection::ConnectEstablished()  
 {
+    std::cout << "connectEstablished: fd=" << fd_ << " on thread " << std::this_thread::get_id() << std::endl;
+
     auto channel = std::make_unique<Channel>(fd_);
 
     // 使用weak_ptr 避免循环引用
@@ -86,6 +83,7 @@ void TcpConnection::ConnectEstablished()
     
 void TcpConnection::Send(const std::string& strMessage)
 {
+    loop_->AssertInLoopThread("TcpConnection::Send");
     if(this->IsWriteClosed())
     {
         return;
@@ -116,6 +114,7 @@ void TcpConnection::Send(const std::string& strMessage)
 
 void TcpConnection::Shutdown()
 {
+    loop_->AssertInLoopThread("TcpConnection::Shutdown");
     if(IsClosed() || closedWrite_)
     {
         return;
@@ -139,6 +138,9 @@ void TcpConnection::HandleRead()
     {
         return;
     }
+
+    loop_->AssertInLoopThread("TcpConnection::HandleRead");
+    std::cout << "HandleRead: fd=" << fd_ << " on thread " << std::this_thread::get_id() << std::endl;
 
     // 更新连接的活跃时间
     UpdateLastActiveTime();
@@ -197,11 +199,11 @@ void TcpConnection::HandleClose(std::string strCloseInfo)
     }
 
     // 需要的时候开启，不需要的时候注释
-    //std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
+    std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
     auto self = shared_from_this();
     if(fd_ > 0)
     {
-        loop_->AssertInLoopThread("TcpConnection::HandleClose");  // 确保在 IO 线程
+        loop_->AssertInLoopThread("TcpConnection::HandleClose");  // 确保在 对应的工作线程
         loop_->DelayRemoveQueue(fd_);
     }
     
@@ -225,6 +227,7 @@ void TcpConnection::HandleError()
  // 尝试发送outputBuffer_中的数据
 void TcpConnection::SendOutput()
 {
+    loop_->AssertInLoopThread("TcpConnection::SendOutput");
     if(this->IsWriteClosed())
     {
         return;
