@@ -59,7 +59,7 @@ TcpServer::~TcpServer()
 void TcpServer::Start(int option, int nEventLoopThread /*= std::thread::hardware_concurrency() - 1*/, int nTaskThreadNum /*= std::thread::hardware_concurrency() - 1*/)
 {
     {
-        nEventLoopThreadCount_ = std::max(1, nEventLoopThread);
+        nEventLoopThreadCount_ = std::max(0, nEventLoopThread);
         eventLoopThreadPool_->SetThreadNum(nEventLoopThreadCount_);
         eventLoopThreadPool_->Start(this);
     }
@@ -109,9 +109,11 @@ void TcpServer::HandleNewConnection()
     EventLoop* loop = eventLoopThreadPool_->getNextLoop();
     assert(loop);
     
+    /*
     std::cout << "New connection fd=" << nClientFd 
               << " assigned to thread " << std::this_thread::get_id() 
               << " (ioLoop thread will be " << loop->GetThreadId() << ")" << std::endl;
+    */
 
     // 将新连接加入epoll  
     auto new_connection = std::make_shared<TcpConnection>(mainLoop_, loop, nClientFd);
@@ -149,7 +151,8 @@ void TcpServer::HandleNewConnection()
 
 void TcpServer::RemoveConnectionByFd(int fd)
 {
-    std::cout <<  "Connection closed, fd=" << fd << std::endl;
+    mainLoop_->AssertInLoopThread("TcpServer::RemoveConnectionByFd");
+    //std::cout <<  "Connection closed, fd=" << fd << std::endl;
     mapTcpConnection_.erase(fd);
 }
 
@@ -157,6 +160,7 @@ void TcpServer::ClosedConnection(const std::shared_ptr<TcpConnection>& conn)
 {
     // 移除mapTcpConnection_的任务交给EventLoop以保证顺序的正确性。
     // mapTcpConnection_.erase(conn->GetFd());
+    conn->GetLoop()->AssertInLoopThread("TcpServer::ClosedConnection");
     conn->ClosedConnection();
 }
 
@@ -165,7 +169,8 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
 {
     // Echo 服务：原样发送回去
     // std::this_thread::sleep_for(std::chrono::seconds(1));
-    std::cout << "TcpServer::HandleOnMessage msg:=" << strMsg.c_str() << std::endl; 
+    //std::cout << "TcpServer::HandleOnMessage msg:=" << strMsg.c_str() << std::endl; 
+    con->GetLoop()->AssertInLoopThread("TcpServer::HandleOnMessage");
     con->Send(strMsg);
 
     // 将业务逻辑提交到线程池处理
@@ -243,8 +248,6 @@ void TcpServer::CheckIdleConnections()
             auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
             if (idleDuration.count() >= timeOutIdleSecs)
             {
-                //auto now_secs = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
-                //std::cout << "TcpServer::CheckIdleConnections now:=" <<  now_secs << std::endl;
                 con->Shutdown();
             }
         });

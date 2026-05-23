@@ -54,7 +54,7 @@ private:
     CloseCallBack closeCallBack_;
     std::unique_ptr<ThreadPool> taskThreadPool_;
 
-    int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
+    int idleTimeOutSecs_ = 10; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
 
     std::unique_ptr<EventLoopThreadPool> eventLoopThreadPool_;
     int nEventLoopThreadCount_;

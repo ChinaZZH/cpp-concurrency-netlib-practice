@@ -33,6 +33,7 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
 
 
     EventLoop* loop = con->GetLoop();
+    loop->AssertInLoopThread("HttpServer::AsyncOnMessage");
     std::weak_ptr<TcpConnection> weakConPtr = con;
 
      // 将业务逻辑提交到线程池处理

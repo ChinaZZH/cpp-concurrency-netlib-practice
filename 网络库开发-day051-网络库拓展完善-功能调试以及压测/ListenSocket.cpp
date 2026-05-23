@@ -128,7 +128,7 @@ int ListenSocket::Accept()
     if(connFd > 0)
     {
         InetAddress peerAddr(addr);
-        std::cout << "Accepted fd:=" << connFd <<  " connection from " << peerAddr.toIp() << ":" << peerAddr.toPort() << "\n";
+        //std::cout << "Accepted fd:=" << connFd <<  " connection from " << peerAddr.toIp() << ":" << peerAddr.toPort() << "\n";
     }
 
     return connFd;
