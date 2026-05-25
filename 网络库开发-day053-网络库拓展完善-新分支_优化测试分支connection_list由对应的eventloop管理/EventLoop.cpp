@@ -2,6 +2,7 @@
 #include "Channel.h"
 #include "Epoll.h"
 #include "TcpServer.h"
+#include "TcpConnection.h"
 #include <cassert>
 #include <iostream>
 #include <cstring>
@@ -51,6 +52,11 @@ EventLoop::EventLoop()
         timerChannel->EnableReading();
         this->AddChannel(std::move(timerChannel));
     }
+
+    if(idleTimeOutSecs_ > 0)
+    {
+        this->RunEvery(std::chrono::seconds(5), [this](){ this->CheckIdleConnections(); });
+    }
 }
 
 EventLoop::~EventLoop() 
@@ -78,7 +84,7 @@ void EventLoop::Loop()
         if(nfds < 0)
         {
             if (errno != EINTR) {
-                std::cerr << "epoll_wait error\n";
+                std::cerr << "epoll_wait error code:=" << errno << std::endl;
                 break;
             }
 
@@ -143,20 +149,24 @@ void EventLoop::AddChannel(std::unique_ptr<Channel> channel, std::string strInfo
 void EventLoop::RemoveChannel(int fd)
 {
     AssertInLoopThread("EventLoop::RemoveChannel");
+
+    EventLoop* mainLoop = tcpServer_->GetMainLoop();
+    assert(mainLoop);
+    TcpServer* server = tcpServer_;
+
     auto itr = channels_.find(fd);
     if(itr != channels_.end())
     {
         epoll_->RemoveFd(fd); 
         channels_.erase(fd);
         
-        EventLoop* mainLoop = tcpServer_->GetMainLoop();
-        assert(mainLoop);
+        //std::cout <<  "Connection closed, fd=" << fd << std::endl;
+        mapTcpConnection_.erase(fd);
 
-        TcpServer* server = tcpServer_;
+        // 删除tcpServer客户端轻量化存储
         mainLoop->RunInLoop([server, fd](){ 
-            server->RemoveConnectionByFd(fd);
+            server->RemoveClinetFd(fd);
         });
-        
     }
 }
 
@@ -372,3 +382,81 @@ void EventLoop::ExecuteExpiredTimers()
     }
 
  }
+
+
+ void EventLoop::HandleNewConnection(std::shared_ptr<TcpConnection> newConnection)
+ {
+     /*
+    std::cout << "New connection fd=" << nClientFd 
+              << " assigned to thread " << std::this_thread::get_id() 
+              << " (ioLoop thread will be " << loop->GetThreadId() << ")" << std::endl;
+    */
+
+    
+    // 将新连接加入epoll  
+   
+
+    
+    newConnection->SetCloseCallBack(std::bind(&EventLoop::ClosedConnection, this, std::placeholders::_1));
+    newConnection->SetWaterMarkCallbacks(
+        [](const std::shared_ptr<TcpConnection>& con){
+            // 高水位回调：通知业务层暂停向该连接发送数据
+            // 这里仅仅打印日志
+            std::cout << "High water mark reached for fd=" << con->GetFd() << std::endl;
+        },
+
+        [](const std::shared_ptr<TcpConnection>& con){
+            // 低水位回调：恢复正常发送
+            // 这里仅仅打印日志
+            std::cout << "Low water mark reached for fd=" << con->GetFd() << std::endl;
+            con->WaterFromHighToLow();
+        },
+
+        64*1024,    // 高水位 64KB
+        32*1024     // 低水位 32KB
+    );
+
+    newConnection->ConnectEstablished();
+    mapTcpConnection_.insert(std::make_pair(newConnection->GetFd(), newConnection));
+ }
+
+
+ void EventLoop::ClosedConnection(const std::shared_ptr<TcpConnection>& conn)
+{
+    // 移除mapTcpConnection_的任务交给EventLoop以保证顺序的正确性。
+    // mapTcpConnection_.erase(conn->GetFd());
+    conn->GetLoop()->AssertInLoopThread("EventLoop::ClosedConnection");
+    conn->ClosedConnection();
+}
+
+
+void EventLoop::CheckIdleConnections()
+{
+    if(idleTimeOutSecs_ <= 0)
+    {
+        return ;
+    }
+
+    for(auto itr = mapTcpConnection_.begin(); itr != mapTcpConnection_.end(); ++itr)
+    {
+        auto& con = (itr->second);
+        if(!con)
+        {
+            continue;
+        }
+
+        
+        if(con->IsWriteClosed())
+        {
+            continue;
+        }
+        
+        auto now = std::chrono::steady_clock::now();
+        auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
+        if (idleDuration.count() >= idleTimeOutSecs_)
+        {
+            con->Shutdown();
+        }
+        
+    }
+}

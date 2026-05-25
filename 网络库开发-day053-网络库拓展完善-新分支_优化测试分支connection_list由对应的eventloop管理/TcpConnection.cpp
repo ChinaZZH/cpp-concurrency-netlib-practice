@@ -25,7 +25,7 @@ TcpConnection::TcpConnection(EventLoop* mainloop, EventLoop* loop, int fd)
 
 TcpConnection::~TcpConnection()
 {
-    main_loop_->AssertInLoopThread("TcpConnection::~TcpConnection");  // 确保是在主线程析构
+    loop_->AssertInLoopThread("TcpConnection::~TcpConnection");  // 确保是在主线程析构
 }
 
 

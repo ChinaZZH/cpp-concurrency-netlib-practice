@@ -14,8 +14,9 @@ TcpServer::TcpServer(EventLoop* loop, int nPort)
 :mainLoop_(loop)
 ,port_(nPort)
 ,taskThreadPool_(std::make_unique<ThreadPool>())
-,messageCallBack_(nullptr)
 ,eventLoopThreadPool_(std::make_unique<EventLoopThreadPool>(loop, "TcpServer"))
+,messageCallBack_(nullptr)
+,closeCallBack_(nullptr)
 {
     if(mainLoop_)
     {
@@ -77,12 +78,6 @@ void TcpServer::Start(int option, int nEventLoopThread /*= std::thread::hardware
     listenChannel->SetReadCallBack(std::bind(&TcpServer::HandleNewConnection, this));
     listenChannel->EnableReading();
     mainLoop_->AddChannel(std::move(listenChannel));
-
-
-    if(idleTimeOutSecs_ > 0)
-    {
-        mainLoop_->RunEvery(std::chrono::seconds(5), [this](){ this->CheckIdleConnections(); });
-    }
 }
 
 
@@ -98,8 +93,8 @@ void TcpServer::HandleNewConnection()
 
     {
         // 已经存在该对象了
-        auto itr = mapTcpConnection_.find(nClientFd);
-        if(itr != mapTcpConnection_.end())
+        auto itr = mapLightClient.find(nClientFd);
+        if(itr != mapLightClient.end())
         {
             return ;
         }
@@ -108,60 +103,27 @@ void TcpServer::HandleNewConnection()
 
     EventLoop* loop = eventLoopThreadPool_->getNextLoop();
     assert(loop);
-    
-    /*
-    std::cout << "New connection fd=" << nClientFd 
-              << " assigned to thread " << std::this_thread::get_id() 
-              << " (ioLoop thread will be " << loop->GetThreadId() << ")" << std::endl;
-    */
-
-    // 将新连接加入epoll  
-    auto new_connection = std::make_shared<TcpConnection>(mainLoop_, loop, nClientFd);
-    if(messageCallBack_)
-    {
-        new_connection->SetMessageCallBack(messageCallBack_);
-    }
-    
-    new_connection->SetCloseCallBack(std::bind(&TcpServer::ClosedConnection, this, std::placeholders::_1));
-    new_connection->SetWaterMarkCallbacks(
-        [](const std::shared_ptr<TcpConnection>& con){
-            // 高水位回调：通知业务层暂停向该连接发送数据
-            // 这里仅仅打印日志
-            std::cout << "High water mark reached for fd=" << con->GetFd() << std::endl;
-        },
-
-        [](const std::shared_ptr<TcpConnection>& con){
-            // 低水位回调：恢复正常发送
-            // 这里仅仅打印日志
-            std::cout << "Low water mark reached for fd=" << con->GetFd() << std::endl;
-            con->WaterFromHighToLow();
-        },
-
-        64*1024,    // 高水位 64KB
-        32*1024     // 低水位 32KB
-    );
 
     // 跟channel相关投递到connection所负债均衡选择的eventloop线程
-    loop->RunInLoop([new_connection](){
-        new_connection->ConnectEstablished();
+    auto newConnection = std::make_shared<TcpConnection>(mainLoop_, loop, nClientFd);
+    if(messageCallBack_)
+    {
+        newConnection->SetMessageCallBack(messageCallBack_);
+    }
+
+    loop->RunInLoop([loop, newConnection](){
+        if(loop){
+            loop->HandleNewConnection(newConnection);
+        }
     });
-    
-    mapTcpConnection_.insert(std::make_pair(nClientFd, new_connection));
+
+    mapLightClient.insert(std::make_pair(nClientFd, loop));
 }
 
-void TcpServer::RemoveConnectionByFd(int fd)
-{
-    mainLoop_->AssertInLoopThread("TcpServer::RemoveConnectionByFd");
-    //std::cout <<  "Connection closed, fd=" << fd << std::endl;
-    mapTcpConnection_.erase(fd);
-}
 
-void TcpServer::ClosedConnection(const std::shared_ptr<TcpConnection>& conn)
+void TcpServer::RemoveClinetFd(int fd)
 {
-    // 移除mapTcpConnection_的任务交给EventLoop以保证顺序的正确性。
-    // mapTcpConnection_.erase(conn->GetFd());
-    conn->GetLoop()->AssertInLoopThread("TcpServer::ClosedConnection");
-    conn->ClosedConnection();
+    mapLightClient.erase(fd);
 }
 
 
@@ -209,49 +171,3 @@ void TcpServer::SetConnectionIdleTimeOut(int nSecs)
 }
 
 
-void TcpServer::CheckIdleConnections()
-{
-    if(idleTimeOutSecs_ <= 0)
-    {
-        return ;
-    }
-
-    for(auto itr = mapTcpConnection_.begin(); itr != mapTcpConnection_.end(); ++itr)
-    {
-        auto& con = (itr->second);
-        if(!con)
-        {
-            continue;
-        }
-
-        EventLoop* loop = con->GetLoop();
-        if(!loop)
-        {
-            continue;
-        }
-
-        int timeOutIdleSecs = idleTimeOutSecs_;
-        std::weak_ptr<TcpConnection> weakConPtr = con;
-        loop->RunInLoop([weakConPtr, timeOutIdleSecs](){
-            auto con = weakConPtr.lock();
-            if(!con)
-            {
-                return ;
-            }
-
-            if(con->IsWriteClosed())
-            {
-                return ;
-            }
-        
-            auto now = std::chrono::steady_clock::now();
-            auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
-            if (idleDuration.count() >= timeOutIdleSecs)
-            {
-                con->Shutdown();
-            }
-        });
-
-        
-    }
-}

@@ -25,12 +25,12 @@ int main()
         &server, std::placeholders::_1, 
         std::placeholders::_2)
     );
-    server.Start(0, 2);
+    server.Start(0, 6);
     */
 
     // httpSrver
     HttpServer server(&loop, PORT);
-    server.Start(0, 8);
+    server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
     loop.Loop();
     return 0;
 }

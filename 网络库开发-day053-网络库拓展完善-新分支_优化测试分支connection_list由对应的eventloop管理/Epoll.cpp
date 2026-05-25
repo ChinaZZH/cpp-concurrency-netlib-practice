@@ -124,7 +124,6 @@ int Epoll::Wait(std::vector<Channel*>& vecChannel)
     int nfds = epoll_wait(fd_, events_list_, MAX_EVENTS, -1);
     if(nfds < 0)
     {
-        std::cerr << "Epoll::Wait epoll_wait error \n" ;
         return -1;
     }
 

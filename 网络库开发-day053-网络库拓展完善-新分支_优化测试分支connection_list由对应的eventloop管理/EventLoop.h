@@ -13,10 +13,14 @@ class Channel;
 class Epoll;
 class ClientSocket;
 class TcpServer;
+class EventLoop;
+class TcpConnection;
 
 class EventLoop
 {
 public:
+    using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&)>;
+
     EventLoop();
 
     ~EventLoop();
@@ -38,6 +42,11 @@ public:
     void AddEventToUpdateChannel(int fd, int event);
 
     void DelEventToUpdateChannel(int fd, int event);
+
+    // 将connection_list移植到event_loop中来
+    void HandleNewConnection(std::shared_ptr<TcpConnection> newConnection);
+
+    void ClosedConnection(const std::shared_ptr<TcpConnection>& conn);
 
 public:
     // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
@@ -68,6 +77,13 @@ private:
     void UpdateTimerFd();
     void ExecuteExpiredTimers();
 
+
+private:
+    // 将connection_list移植到event_loop中来
+    void RemoveConnectionByFd(int fd);
+
+    void CheckIdleConnections();
+
 private:
     std::unique_ptr<Epoll>  epoll_;
     std::map<int, std::unique_ptr<Channel>> channels_;
@@ -87,4 +103,10 @@ private:
     //std::unique_ptr<Channel> timerChannel_; 融入到channels_列表中去了，统一管理
     // 存储所有定时器：按超时时间排序（multimap 按时间自动排序）
     std::multimap<std::chrono::steady_clock::time_point, std::function<void()>> timersFunc_;
+
+    // 将connection_list一直到对应的eventloop中来
+    std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
+    
+
+    int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
 };
