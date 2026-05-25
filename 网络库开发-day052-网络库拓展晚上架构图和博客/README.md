@@ -89,23 +89,25 @@ TcpConnection::handleClose 在自己的工作线程中执行：从 EventLoop 的
 |8|	76,275	|13.26ms	|34.17ms	|0	|~433%	|非常均衡|
 注：CPU 总占用为 top 中所有 echo_server 线程的 %CPU 总和，反映进程占用的总核心算力。
 
+6线程达到 77k QPS，继续增加线程性能不再提升
+
 ## 7. 遇到的问题与解决
-- **超时自动关闭**：超时自动关闭功能，在tcpConnection构造成功和onEstablished的时候也需要激活当前事件为活跃时间。
+- **超时自动关闭**：超时自动关闭功能，在tcpConnection构造成功和ConnectEstablished的时候也需要激活当前事件为活跃时间。
 
 - **优雅关闭**：测试优雅关闭需要用C++客户端测试，python客户端测试不准确。
 
-- **Channel::HandleEvent单次多个事件**：单Channel::HandleEvent有多个事件一起发上来的时候，需要按照顺序执行，先读写，然后是关闭，最后才是异常处理。
+- **Channel::HandleEvent同一个channel上的多个事件一起触发**：单Channel::HandleEvent有多个事件一起发上来的时候，需要按照顺序执行，先读写，然后是关闭，最后才是异常处理。
 
 - **多线程eventLoop**：需要明确不同的操作需要在哪个eventLoop线程执行，若需要在其他线程执行需要通过其他线程的eventLoop->runInLoop进行投递执行函数。
  
-## 6. 总结与展望
+## 8. 总结与展望
 - 收获：多线程reactor
 - 后续：io_uring、RPC 扩展
 
-## 7. 代码仓库
+## 9. 代码仓库
 [GitHub 链接](https://github.com/ChinaZZH/cpp-concurrency-netlib-practice)
 
-## 8. 参考
+## 10. 参考
 - muduo 网络库
 - 《Linux 高性能服务器编程》
  
