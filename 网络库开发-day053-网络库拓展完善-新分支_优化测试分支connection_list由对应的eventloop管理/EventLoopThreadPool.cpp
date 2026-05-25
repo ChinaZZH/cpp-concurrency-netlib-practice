@@ -47,9 +47,13 @@ void EventLoopThreadPool::Start(TcpServer* tcpServer, int idleSecTimeOut, const 
     }
 
     // 如果没有创建子线程但是提供了回调，则再baseLoop上执行
-    if(0 == numThreads_ && cb)
+    if(0 == numThreads_)
     {
-        cb(baseLoop_);
+        baseLoop_->StartIdleConnectionSecsTimeOut(idleSecTimeOut);
+        if(cb)
+        {
+            cb(baseLoop_);
+        }
     }
 }
 
