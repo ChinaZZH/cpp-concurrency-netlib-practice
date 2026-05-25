@@ -1,6 +1,6 @@
 markdown
 
-# Day45： 网络库扩展完善 多线程EventLoop设计
+# Day48： 网络库扩展完善实现 eventLoopThread
 
 ## 核心收获
 -- 1.  EventLoopThread 职责
@@ -18,27 +18,6 @@ markdown
 子线程栈上创建 EventLoop，生命周期与线程绑定。
 
 支持初始化回调（如设置线程名、执行额外配置）。
-
--- 2. EventLoopThreadPool 职责
-
--- 管理一组 EventLoopThread，实现“one loop per thread”模型。
-
--- setThreadNum() 设置工作线程数量（通常为 CPU 核心数或稍多）。
-
--- start() 创建指定数量的 EventLoopThread 并启动，收集每个线程的 EventLoop 指针。
-
--- getNextLoop() 采用简单轮询（round-robin）分配 EventLoop，用于将新连接分发到不同的工作线程。
-
--- 主线程的 baseLoop_ 不参与工作线程池，通常用于 accept 新连接。
-
-
--- 3. 与现有 TcpServer 的集成思路。
-
--- TcpServer 持有 EventLoopThreadPool 对象。
-
--- 在 handleNewConnection 中，调用 threadPool_->getNextLoop() 获取一个工作线程的 EventLoop。
-
--- 使用 ioLoop->runInLoop([conn] { conn->ConnectEstablished(); }) 将 TcpConnection 的初始化投递到正确的 IO 线程，避免跨线程访问 Channel。
 
 
 ## 代码
