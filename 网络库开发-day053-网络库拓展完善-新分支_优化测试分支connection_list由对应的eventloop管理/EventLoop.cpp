@@ -52,11 +52,6 @@ EventLoop::EventLoop()
         timerChannel->EnableReading();
         this->AddChannel(std::move(timerChannel));
     }
-
-    if(idleTimeOutSecs_ > 0)
-    {
-        this->RunEvery(std::chrono::seconds(5), [this](){ this->CheckIdleConnections(); });
-    }
 }
 
 EventLoop::~EventLoop() 
@@ -70,6 +65,19 @@ EventLoop::~EventLoop()
     {
         ::close(timerFd_);
     }
+}
+
+
+bool EventLoop::StartIdleConnectionSecsTimeOut(int idleSecTimeOut)
+{
+    if(idleSecTimeOut <= 0)
+    {
+        return false;
+    }
+
+
+    this->RunEvery(std::chrono::seconds(5), [this, idleSecTimeOut](){ this->CheckIdleConnections(idleSecTimeOut); });
+    return true;
 }
 
 void EventLoop::Loop()
@@ -430,9 +438,9 @@ void EventLoop::ExecuteExpiredTimers()
 }
 
 
-void EventLoop::CheckIdleConnections()
+void EventLoop::CheckIdleConnections(int idleSecTimeOut)
 {
-    if(idleTimeOutSecs_ <= 0)
+    if(idleSecTimeOut <= 0)
     {
         return ;
     }
@@ -453,7 +461,7 @@ void EventLoop::CheckIdleConnections()
         
         auto now = std::chrono::steady_clock::now();
         auto idleDuration = std::chrono::duration_cast<std::chrono::seconds>(now - con->GetLastActiveTime()); 
-        if (idleDuration.count() >= idleTimeOutSecs_)
+        if (idleDuration.count() >= idleSecTimeOut)
         {
             con->Shutdown();
         }

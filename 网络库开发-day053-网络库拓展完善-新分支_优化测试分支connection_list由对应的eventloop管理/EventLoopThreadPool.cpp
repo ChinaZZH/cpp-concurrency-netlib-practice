@@ -19,7 +19,7 @@ EventLoopThreadPool::~EventLoopThreadPool()
     // 不主动调用baseLoop->Quit 不主动销毁 baseLoop_，它由外部管理
 }
 
-void EventLoopThreadPool::Start(TcpServer* tcpServer, const ThreadInitallback& cb /*= ThreadInitallback()*/)
+void EventLoopThreadPool::Start(TcpServer* tcpServer, int idleSecTimeOut, const ThreadInitallback& cb /*= ThreadInitallback()*/)
 {
     assert(!started_); 
     baseLoop_->AssertInLoopThread("EventLoopThreadPool::Start");
@@ -37,6 +37,11 @@ void EventLoopThreadPool::Start(TcpServer* tcpServer, const ThreadInitallback& c
             threads_.emplace_back(std::move(event_loop_thread));
             
             loop->InitServer(tcpServer);
+            if(idleSecTimeOut > 0)
+            {
+                loop->StartIdleConnectionSecsTimeOut(idleSecTimeOut);
+            }
+            
             loops_.emplace_back(loop);
         }
     }

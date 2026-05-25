@@ -57,12 +57,13 @@ TcpServer::~TcpServer()
     
 }
 
-void TcpServer::Start(int option, int nEventLoopThread /*= std::thread::hardware_concurrency() - 1*/, int nTaskThreadNum /*= std::thread::hardware_concurrency() - 1*/)
+void TcpServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
+    
     {
         nEventLoopThreadCount_ = std::max(0, nEventLoopThread);
         eventLoopThreadPool_->SetThreadNum(nEventLoopThreadCount_);
-        eventLoopThreadPool_->Start(this);
+        eventLoopThreadPool_->Start(this, idleSecTimeOut);
     }
 
     {
@@ -165,9 +166,5 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
 
 
 
-void TcpServer::SetConnectionIdleTimeOut(int nSecs)
-{
-    idleTimeOutSecs_ = nSecs;
-}
 
 

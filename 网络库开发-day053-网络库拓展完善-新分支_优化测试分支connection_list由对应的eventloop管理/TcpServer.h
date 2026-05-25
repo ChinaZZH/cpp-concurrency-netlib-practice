@@ -25,14 +25,11 @@ public:
     
     ~TcpServer();
 
-    void Start(int option, int nEventLoopThread = std::thread::hardware_concurrency() - 1, int nTaskThreadNum = std::thread::hardware_concurrency() - 1);
+    void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
 
 
     ThreadPool* GetThreadPool() { return taskThreadPool_.get(); }
     EventLoop* GetMainLoop() { return mainLoop_; }
-
-    // 设置空闲时间(暂时不用，看后面怎么向loop传递)
-    void SetConnectionIdleTimeOut(int nSecs);
 
     void SetMessageCallBack(MessageCallBack cb) { messageCallBack_ = cb; }
     
@@ -55,11 +52,9 @@ private:
     std::unique_ptr<EventLoopThreadPool> eventLoopThreadPool_;
     int nEventLoopThreadCount_;
 
-    int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
-
     MessageCallBack messageCallBack_;
 
     CloseCallBack closeCallBack_;
 
-    std::map<int, EventLoop*> mapLightClient;
+    std::map<int, EventLoop*> mapLightClient; // 轻量化客户端连接
 };

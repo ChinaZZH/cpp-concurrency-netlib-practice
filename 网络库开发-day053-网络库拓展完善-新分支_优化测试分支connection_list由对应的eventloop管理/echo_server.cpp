@@ -19,18 +19,18 @@ int main()
     signal(SIGPIPE, SIG_IGN);
     
     EventLoop loop;
-    /*
+    
     TcpServer server(&loop, PORT);
     server.SetMessageCallBack(std::bind(&TcpServer::HandleOnMessage, 
         &server, std::placeholders::_1, 
         std::placeholders::_2)
     );
-    server.Start(0, 6);
-    */
+    server.Start(0, 6, 5);
+    
 
     // httpSrver
-    HttpServer server(&loop, PORT);
-    server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
+    //HttpServer server(&loop, PORT);
+    //server.Start(0, 6, 60); // eventloopThread 6个工作线程为最佳性能
     loop.Loop();
     return 0;
 }

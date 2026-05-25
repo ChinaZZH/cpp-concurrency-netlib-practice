@@ -19,7 +19,7 @@ public:
     ~EventLoopThreadPool();
 
     void SetThreadNum(int threadCount) { numThreads_ = threadCount; }
-    void Start(TcpServer* tcpServer, const ThreadInitallback& cb = ThreadInitallback());
+    void Start(TcpServer* tcpServer, int idleSecTimeOut, const ThreadInitallback& cb = ThreadInitallback());
 
     // 轮询分配EventLoop(负载均衡)
     EventLoop* getNextLoop();

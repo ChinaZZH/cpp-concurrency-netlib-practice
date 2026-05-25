@@ -12,7 +12,7 @@ class HttpServer
 public:
     HttpServer(EventLoop* loop, int nPort);
 
-    void Start(int option, int nEventLoopThread = std::thread::hardware_concurrency() - 1, int nTaskThreadNum = std::thread::hardware_concurrency() - 1);
+    void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
 
 private:
     // 同步 

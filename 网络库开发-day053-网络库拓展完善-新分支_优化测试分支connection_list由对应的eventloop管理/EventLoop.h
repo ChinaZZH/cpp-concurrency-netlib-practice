@@ -48,6 +48,8 @@ public:
 
     void ClosedConnection(const std::shared_ptr<TcpConnection>& conn);
 
+    bool StartIdleConnectionSecsTimeOut(int idleSecTimeOut);
+
 public:
     // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
     void RunInLoop(std::function<void()> cb);
@@ -82,7 +84,7 @@ private:
     // 将connection_list移植到event_loop中来
     void RemoveConnectionByFd(int fd);
 
-    void CheckIdleConnections();
+    void CheckIdleConnections(int idleSecTimeOut);
 
 private:
     std::unique_ptr<Epoll>  epoll_;
@@ -108,5 +110,5 @@ private:
     std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
     
 
-    int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
+   // int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
 };
