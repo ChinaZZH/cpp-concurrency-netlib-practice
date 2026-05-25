@@ -10,7 +10,8 @@ markdown
 
 ## 2. 整体架构
 
-<img width="770" height="590" alt="网络库整体架构图" src="https://github.com/user-attachments/assets/20bcf85d-c9b2-42b9-a7b8-e44753ebdc45" />
+<img width="760" height="710" alt="网络库拓展" src="https://github.com/user-attachments/assets/4002ba32-5e47-4168-b129-0ab37cd07139" />
+
 
 
 
