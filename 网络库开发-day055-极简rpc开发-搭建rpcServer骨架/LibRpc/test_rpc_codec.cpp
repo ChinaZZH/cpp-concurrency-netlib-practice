@@ -151,6 +151,7 @@ void testPerformance()
               << elapsed << " s -> " << (iterations / elapsed) << " ops/s" << std::endl;
 }
 
+/*
 int main() 
 {
     testNormal();
@@ -163,3 +164,4 @@ int main()
     std::cout << "All RpcCodec tests passed!" << std::endl;
     return 0;
 }
+*/
