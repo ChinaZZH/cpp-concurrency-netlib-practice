@@ -1,48 +1,50 @@
 markdown
 
-# Day45： 网络库扩展完善 多线程EventLoop设计
+# Day54： 极简rpc开发 协议设计和编码解码器实现
+
+## 消息定义
+所有消息采用大端字节序（网络字节序）。
+
+请求消息
+|字段|	类型|	长度(字节)|	说明|
+|----|------|-----------|-----|
+|请求ID|	uint32_t|	4|	客户端生成的唯一ID，用于关联响应|
+|方法名长度|	uint32_t|	4|	方法名字符串的长度|
+|方法名|	char[]|	变长|	UTF-8字符串，不含结尾'\0'|
+|参数长度|	uint32_t|	4|	参数字符串的长度|
+|参数|	char[]|	变长|	JSON格式的参数（如 "{\"a\":1,\"b\":2}"）|
+
+响应消息
+|字段|	类型|	长度(字节)|	说明|
+|----|------|-----------|-----|
+|请求ID|	uint32_t|	4|	对应请求的ID|
+|结果码|	int32_t|	4|	0=成功，1=方法未找到，2=参数错误等|
+|结果长度|	uint32_t|	4|	结果字符串的长度|
+|结果|	char[]|	变长|	JSON格式的结果（如 "{\"result\":3}"）或错误描述|
+
+## 错误码定义
+0：成功
+
+1：方法未找到
+
+2：参数解析失败
+
+3：内部错误
 
 ## 核心收获
--- 1.  EventLoopThread 职责
 
---  创建一个独立线程，并在该线程中运行 EventLoop::loop()。
+-- 1. 通过设计好的消息格式来进行对应的请求的编码解码，响应的编码解码的编写
 
---  提供 startLoop() 方法：启动线程，等待 EventLoop 对象创建完成，然后返回其指针。
+-- 2. 解码函数保证原子性，当解码失败的时候，原来的数值不受影响。
 
---  析构时安全退出：唤醒 EventLoop 的 quit() 并等待线程结束。
+-- 3. 解码的时候设置字符串最大程度设置。超过最大长度则解码失败。
 
-关键点：
+-- 4. 进行各种边界条件测试。正常情况测试，方法名空串和参数空串测试，参数长度到达边界值测试，
 
-使用条件变量同步主线程与子线程，确保 startLoop() 返回前 loop_ 已初始化。
-
-子线程栈上创建 EventLoop，生命周期与线程绑定。
-
-支持初始化回调（如设置线程名、执行额外配置）。
-
--- 2. EventLoopThreadPool 职责
-
--- 管理一组 EventLoopThread，实现“one loop per thread”模型。
-
--- setThreadNum() 设置工作线程数量（通常为 CPU 核心数或稍多）。
-
--- start() 创建指定数量的 EventLoopThread 并启动，收集每个线程的 EventLoop 指针。
-
--- getNextLoop() 采用简单轮询（round-robin）分配 EventLoop，用于将新连接分发到不同的工作线程。
-
--- 主线程的 baseLoop_ 不参与工作线程池，通常用于 accept 新连接。
-
-
--- 3. 与现有 TcpServer 的集成思路。
-
--- TcpServer 持有 EventLoopThreadPool 对象。
-
--- 在 handleNewConnection 中，调用 threadPool_->getNextLoop() 获取一个工作线程的 EventLoop。
-
--- 使用 ioLoop->runInLoop([conn] { conn->ConnectEstablished(); }) 将 TcpConnection 的初始化投递到正确的 IO 线程，避免跨线程访问 Channel。
-
+-- 方法名长度到达边界测试，不完整数据测试， 构造恶意请求测试，性能测试。
 
 ## 代码
-
+-- 1.  RpcCodec.h  RpcCodec.cpp
 
 ## 测试
 -- 一切正常。
