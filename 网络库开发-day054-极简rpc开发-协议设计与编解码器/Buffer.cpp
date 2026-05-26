@@ -147,3 +147,10 @@ ssize_t Buffer::WriteFd(int fd, int* nSaveErrno)
     Retrieve(n);
     return n;
 }
+
+
+void Buffer::Clear()
+{
+    read_index_ = 0;
+    write_index_ = 0;
+}

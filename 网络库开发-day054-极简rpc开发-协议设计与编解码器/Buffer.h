@@ -51,6 +51,8 @@ public:
     // 预留writable 空间，确保能容纳len字节
     void EnsureWritableBytes(size_t len);
 
+    void Clear();
+    
 private:
     char* Begin() { return buffer_.data(); }
 
