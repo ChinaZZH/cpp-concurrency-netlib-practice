@@ -4,27 +4,6 @@
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 
-/*
-class RpcServer
-{
-public:
-    using Handler = std::function<std::string(const std::string&)>;
-
-     RpcServer(EventLoop* loop, int nPort);
-
-    void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
-
-    void RegisterMethod(const std::string& strMethod, Handler handler);
-
-private:
-    void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
-
-private:
-    TcpServer server_;
-    std::unordered_map<std::string, Handler> methods_;
-};
-*/
-
 
 RpcServer::RpcServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
@@ -64,6 +43,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
         return;
     }
 
+    std::cout << "RpcServer::OnMessage id:="  << id << " method:"  << strMethod.c_str() << " params:" << strParams.c_str() << std::endl;
     auto itr = methods_.find(strMethod);
     if(itr == methods_.end())
     {
