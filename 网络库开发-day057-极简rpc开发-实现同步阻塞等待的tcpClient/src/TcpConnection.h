@@ -15,7 +15,7 @@ class HttpContext;
 class TcpConnection: public std::enable_shared_from_this<TcpConnection>
 {
 public:
-    TcpConnection(EventLoop* mainloop, EventLoop* loop, int fd);
+    TcpConnection(EventLoop* loop, int fd, bool tcpClient = false);
     ~TcpConnection();
 
     void ConnectEstablished();  // 注册到EventLoop
@@ -43,6 +43,7 @@ public:
     void ClosedConnection() { closed = true; }
     bool IsClosed() { return closed; }
     bool IsWriteClosed() { return IsClosed() || closedWrite_; }
+    bool IsValid()  { return !IsWriteClosed(); }
 
     // 空闲连接超时检测，检测到了就关闭了
     std::chrono::steady_clock::time_point GetLastActiveTime() const { return lastActiveTime_; }
@@ -61,7 +62,6 @@ private:
     void CheckWaterMark();
 
 private:
-    EventLoop* main_loop_;
     EventLoop* loop_;
     int fd_;
     std::unique_ptr<ClientSocket>  socket_;

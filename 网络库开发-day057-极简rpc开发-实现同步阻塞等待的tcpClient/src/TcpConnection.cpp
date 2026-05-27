@@ -6,17 +6,16 @@
 #include <cstring>
 #include <unistd.h>
 
-TcpConnection::TcpConnection(EventLoop* mainloop, EventLoop* loop, int fd)
-: main_loop_(mainloop)
-, loop_(loop)
+TcpConnection::TcpConnection(EventLoop* loop, int fd, bool tcpClient /*= false*/)
+: loop_(loop)
 , fd_(fd)
-, socket_(std::make_unique<ClientSocket>(fd))
+, socket_(std::make_unique<ClientSocket>(fd, tcpClient))
 , inputBuffer_()
 , outputBuffer_(8192)
 , pause_(false)
 ,closed(false)
 {
-     socket_->SetNonBlock();
+    socket_->SetNonBlock();
 
      // 更新tcpConnection的活跃时间
     this->UpdateLastActiveTime();
@@ -204,10 +203,19 @@ void TcpConnection::HandleClose(std::string strCloseInfo)
     // 需要的时候开启，不需要的时候注释
     //std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
     auto self = shared_from_this();
-    if(fd_ > 0)
-    {    
-        loop_->DelayRemoveQueue(fd_);
+
+    if(socket_->IsTcpClient())
+    {
+        loop_->NowToRemoveChannel(fd_, EventLoop::RemoveChannelNowToken());
     }
+    else
+    {
+        if(fd_ > 0)
+        {    
+            loop_->DelayRemoveQueue(fd_);
+        }
+    }
+    
     
     if(closeCallBack_)
     {
@@ -300,6 +308,9 @@ void TcpConnection::ProcessInputBuffer()
     */
     
     std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
+    std::cout << "TcpConnection::ProcessInputBuffer fd:=" << socket_->GetSocketFd() << std::endl;
+    std::cout << "Info:=" << strLineMsg << std::endl;
+
     messageCallBack_(shared_from_this(), strLineMsg);
 }
 

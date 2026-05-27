@@ -4,11 +4,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <string>
 
 class ClientSocket
 {
 public:
-    explicit ClientSocket(int fd);
+    explicit ClientSocket(int fd, bool tcpClient = false);
 
      ~ClientSocket();
 
@@ -30,7 +31,14 @@ public:
 
     void SetNonBlock();
 
+    bool Connect(const std::string& strIp, int nPort);
+
+    int GetSocketFd() const { return socket_fd_; }
+
+    bool IsTcpClient() const { return bTcpClient_; }
+
 private:
     int socket_fd_ = -1;
+    bool bTcpClient_ = false;
 };
 

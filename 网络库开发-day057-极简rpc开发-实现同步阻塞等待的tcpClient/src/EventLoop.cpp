@@ -114,7 +114,7 @@ void EventLoop::Loop()
         {
             for(auto& fd : delayChannelsToRemove_)
             {
-                this->RemoveChannel(fd);
+                this->RemoveChannelInLoop(fd);
             }
             
             delayChannelsToRemove_.clear();
@@ -154,9 +154,9 @@ void EventLoop::AddChannel(std::unique_ptr<Channel> channel, std::string strInfo
 
 
 // 移除Channel
-void EventLoop::RemoveChannel(int fd)
+void EventLoop::RemoveChannelInLoop(int fd)
 {
-    AssertInLoopThread("EventLoop::RemoveChannel");
+    AssertInLoopThread("EventLoop::RemoveChannelInLoop");
 
     EventLoop* mainLoop = tcpServer_->GetMainLoop();
     assert(mainLoop);
@@ -177,6 +177,8 @@ void EventLoop::RemoveChannel(int fd)
         });
     }
 }
+
+
 
 
 void EventLoop::AssertInLoopThread(std::string strInfo)
@@ -213,6 +215,35 @@ void EventLoop::DelayRemoveQueue(int fd)
             delayChannelsToRemove_.push_back(fd);
         }
     }
+}
+
+
+
+bool EventLoop::NowToRemoveChannel(int fd, RemoveChannelNowToken token)
+{
+
+    if(fd == wakeUpFd_ || fd == timerFd_)
+    {
+        return false;
+    }
+
+    auto it_channel = channels_.find(fd);
+    if(it_channel == channels_.end())
+    {
+        return false;
+    }
+
+    // 不是tcpClient的channel只能延时删除
+    auto it_connection = mapTcpConnection_.find(fd);
+    if(it_connection != mapTcpConnection_.end())
+    {
+        return false;
+    }
+
+    
+    epoll_->RemoveFd(fd); 
+    channels_.erase(fd);
+    return true;
 }
 
 

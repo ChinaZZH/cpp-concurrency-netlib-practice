@@ -30,6 +30,7 @@ void RpcServer::RegisterMethod(const std::string& strMethod, Handler handler)
 void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
     con->GetLoop()->AssertInLoopThread("RpcServer::OnMessage");
+    //std::this_thread::sleep_for(std::chrono::seconds(10));
 
     Buffer buf;
     buf.Append(strMsg.data(), strMsg.size());
@@ -72,6 +73,7 @@ void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con,
     RpcCodec::EncodeResponse(resBuf, id, code, strResult);
 
     std::string strResponse = resBuf.RetrieveAllAsString();
+    std::cout << "Server sending response, size=" << strResponse.size() << " id=" << id << " code=" << code << std::endl;
     con->Send(strResponse);
 }
 

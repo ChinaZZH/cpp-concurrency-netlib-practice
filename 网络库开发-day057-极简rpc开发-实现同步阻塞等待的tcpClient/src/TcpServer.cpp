@@ -106,7 +106,7 @@ void TcpServer::HandleNewConnection()
     assert(loop);
 
     // 跟channel相关投递到connection所负债均衡选择的eventloop线程
-    auto newConnection = std::make_shared<TcpConnection>(mainLoop_, loop, nClientFd);
+    auto newConnection = std::make_shared<TcpConnection>(loop, nClientFd);
     if(messageCallBack_)
     {
         newConnection->SetMessageCallBack(messageCallBack_);

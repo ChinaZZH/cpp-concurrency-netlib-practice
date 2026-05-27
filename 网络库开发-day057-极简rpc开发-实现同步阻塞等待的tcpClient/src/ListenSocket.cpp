@@ -9,7 +9,7 @@
  ListenSocket::ListenSocket()
  :socket_fd_(-1)
  {
-    socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+    socket_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
     if(socket_fd_ < 0){
         std::cerr << "ListenSocket socket error \n";
     }
@@ -124,7 +124,7 @@ int ListenSocket::Accept()
 
     sockaddr_in addr;
     socklen_t len = sizeof(addr);
-    int connFd = accept(socket_fd_, (struct sockaddr*)(&addr), &len);
+    int connFd = ::accept(socket_fd_, (struct sockaddr*)(&addr), &len);
     if(connFd > 0)
     {
         InetAddress peerAddr(addr);
@@ -139,6 +139,6 @@ int ListenSocket::Accept()
 
 void ListenSocket::Close()
 {
-    close(socket_fd_);
+    ::close(socket_fd_);
     socket_fd_ = -1;
 }

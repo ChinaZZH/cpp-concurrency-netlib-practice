@@ -37,6 +37,16 @@ public:
     // 添加或更新channel(线程安全)
     void AddChannel(std::unique_ptr<Channel> channel, std::string strInfo = "OtherError");
 
+    // 钥匙类：只有 TcpClient 能构造
+    class RemoveChannelNowToken {
+    private:
+        RemoveChannelNowToken() = default;          // 私有构造
+        friend class TcpClient;                    // 仅 TcpClient 可访问构造
+        friend class TcpConnection;
+    };
+
+    bool NowToRemoveChannel(int fd, RemoveChannelNowToken token);
+
     void DelayRemoveQueue(int fd);
 
     void AddEventToUpdateChannel(int fd, int event);
@@ -61,7 +71,7 @@ private:
      bool IsInLoopThread() const;
 
      // 移除Channel
-     void RemoveChannel(int fd);
+     void RemoveChannelInLoop(int fd);
 
      void DoPendingFunctors();
      void WakeUp();              // 用于唤醒epoll_wait

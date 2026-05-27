@@ -14,6 +14,16 @@ InetAddress::InetAddress(int nPort)
     addr_.sin_port = htons(nPort);
 }
 
+
+InetAddress::InetAddress(const std::string& ip, int nPort)
+{
+    memset(&addr_, 0, sizeof(addr_));
+    addr_.sin_family = AF_INET;
+    addr_.sin_port = htons(nPort);
+    inet_pton(AF_INET, ip.c_str(), &addr_.sin_addr);
+}
+
+
 InetAddress::InetAddress(const sockaddr_in& addr)
 :addr_(addr)
 {

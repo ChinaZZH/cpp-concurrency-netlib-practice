@@ -7,11 +7,12 @@
 
 
 
-ClientSocket::ClientSocket(int fd)
+ClientSocket::ClientSocket(int fd, bool tcpClient /*= false*/)
  :socket_fd_(fd)
+ ,bTcpClient_(tcpClient)
 {
     if(socket_fd_ < 0){
-        std::cerr << "ClientSocket socket error \n";
+        std::cerr << "ClientSocket socket error socket_fd:=" << socket_fd_ << std::endl;
     }
 }
 
@@ -110,4 +111,31 @@ void ClientSocket::Close()
 {
     close(socket_fd_);
     socket_fd_ = -1;
+}
+
+
+bool ClientSocket::Connect(const std::string& strIp, int nPort)
+{
+    if(socket_fd_ >= 0)
+    {
+        return false;
+    }
+
+    socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd_ < 0)
+    {
+        std::cerr << "ClientSocket socket error \n";
+        return false;
+    }
+    
+    SetNonBlock();
+    InetAddress addr(strIp, nPort);
+    int result = ::connect(socket_fd_, (struct sockaddr*)addr.GetSockAddr(), sizeof(addr));
+    if(result < 0 && errno != EINPROGRESS)
+    {
+        std::cerr << "ClientSocket connect error \n";
+        return false;
+    }
+
+    return true;
 }
