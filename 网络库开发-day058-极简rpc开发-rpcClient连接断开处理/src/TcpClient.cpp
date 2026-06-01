@@ -1,49 +1,3 @@
-/*
-#pragma once
-
-#include <memory>
-#include <functional>
-#include <string>
-
-
-class Channel;
-class EventLoop;
-class TcpConnection;
-using TcpConnectionPtr = std::shared_ptr<TcpConnection>;
-
-class TcpClient: public std::enable_shared_from_this<TcpClient>
-{
-public:
-    using ConnectionCallBack = std::function<void(const TcpConnectionPtr&)>;
-    using MessageCallBack = std::function<void(const TcpConnectionPtr&, std::string&)>;
-   
-    TcpClient(EventLoop* loop, const std::string& strIp, int nPort);
-
-    ~TcpClient();
-
-    void Connect();
-
-    void SetConnectionCallBack(ConnectionCallBack cb) { connectionCb_ = cb; }
-
-    void SetMessageCallBack(MessageCallBack cb) { msgCb_ = cb; }
-
-private:
-    void HandleWrite();     // 连接建立完成时的回调
-
-    void NewConnection(int socket_fd);
-
-private:
-    EventLoop* loop_;
-    std::string ip_;
-    int port_;
-    int socketFd_;
-    std::unique_ptr<Channel> channel_;
-    TcpConnectionPtr connection_;
-
-    ConnectionCallBack  connectionCb_;
-    MessageCallBack     msgCb_;     
-};
-*/
 
 #include "TcpClient.h"
 #include "ClientSocket.h"
@@ -60,7 +14,7 @@ TcpClient::TcpClient(EventLoop* loop, const std::string& strIp, int nPort)
 ,fd_(-1)
 ,bConnecting(false)
 {
-
+    std::cout << "TcpClient::TcpClient thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
 }
 
 TcpClient::~TcpClient()
@@ -126,24 +80,29 @@ void TcpClient::Connect()
     
     channel->EnableWriting();       // 用来检测非阻塞 connect 是否完成。 连接完成后，再注册读事件 (EPOLLIN)
     loop_->AddChannel(std::move(channel), "TcpClient::Connect");
-    channel.reset();
+    //channel.reset();
     bConnecting = true;
+    std::cout << "TcpClient::Connect thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
 }
 
  // 连接建立完成时的回调
 void TcpClient::HandleWrite()
 {
+    std::cout << "first TcpClient::HandleWrite thread_id " << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
     //loop_->DelEventToUpdateChannel(clientSocket_->GetSocketFd(), EPOLLOUT);
     loop_->NowToRemoveChannel(fd_, EventLoop::RemoveChannelNowToken());
     bConnecting = false;
 
     connection_ = std::make_shared<TcpConnection>(loop_, fd_, true);
     connection_->SetMessageCallBack(msgCb_);
+
     connection_->ConnectEstablished();
 
     if(connectionCb_)
     {
         connectionCb_(connection_);
     }
+
+    std::cout << "TcpClient::HandleWrite thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
 }
 

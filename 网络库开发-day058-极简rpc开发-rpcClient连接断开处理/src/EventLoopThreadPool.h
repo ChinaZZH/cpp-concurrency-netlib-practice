@@ -28,9 +28,9 @@ public:
     std::vector<EventLoop*> GetAllLoops() const;
 
     bool IsStarted() const { return started_; }
-
-    EventLoop* GetIndexLoop(int index) { return loops_[index]; }
     
+    EventLoop* GetIndexLoop(int index) { return loops_[index]; }
+
 private:
     EventLoop* baseLoop_; // 主线程的eventLoop用于accept
     std::string name_;

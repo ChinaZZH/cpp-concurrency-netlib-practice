@@ -2,25 +2,54 @@
 #include "RpcCodec.h"
 #include "../TcpConnection.h"
 #include "../Buffer.h"
+#include "../EventLoop.h"
 #include <stdexcept>
 #include <iostream>
 
 RpcClient::RpcClient(TcpConnectionPtr con)
-:con_(std::move(con))   // 暂时和deepseek提供的代码一致，使用std::move
 {
-
+    if(con)
+    {
+        SetConnection(con);
+    }
 }
+
+void RpcClient::SetConnection(const TcpConnectionPtr& con)
+{
+    con_ = con;
+    bConnected_.store(nullptr != con, std::memory_order_release);
+    if (con_)
+    {
+        std::weak_ptr<RpcClient> weakClient = this->shared_from_this();
+        con->SetCloseCallBack([weakClient](const TcpConnectionPtr&){
+            auto rpcClient = weakClient.lock();
+            if(rpcClient)
+            {
+                rpcClient->OncConnectionClosed();
+            }
+        });
+    }
+    
+}
+
 
 // 发送请求，返回请求ID(不等待响应)
 uint64_t RpcClient::SendRequest(const std::string& method, const std::string& params)
 {
+    if(!bConnected_.load(std::memory_order_acquire))
+    {
+        throw std::runtime_error("RpcClient::SendRequest Not connected to server");
+    }
+
     uint64_t req_id = next_id_.fetch_add(1, std::memory_order_release);
 
     Buffer buf;
     RpcCodec::EncodeRequest(buf, req_id, method, params);
     
     std::string strData = buf.RetrieveAllAsString();
+    std::cout << "before RpcClient::SendRequest thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << con_->GetLoop()->GetThreadId() << std::endl;
     con_->Send(strData);
+    std::cout << "After RpcClient::SendRequest thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << con_->GetLoop()->GetThreadId() << std::endl;
     return req_id;
 }
 
@@ -28,6 +57,11 @@ uint64_t RpcClient::SendRequest(const std::string& method, const std::string& pa
  // 同步调用， 阻塞直到收到响应或者超时
 std::string RpcClient::Call(const std::string& method, const std::string& params, int timeout_ms /*= 3000*/)
 {
+    if(!bConnected_.load(std::memory_order_acquire))
+    {
+        throw std::runtime_error("RpcClient::Call Not connected to server");
+    }
+
     uint64_t id = SendRequest(method, params);
     std::promise<std::string> pro;
     std::future<std::string> fut = pro.get_future();
@@ -87,5 +121,23 @@ void RpcClient::OnResponse(const std::string& data)
     {
         auto exception_ptr = std::make_exception_ptr(std::runtime_error("rpc error code: " + std::to_string(code)));
         p.set_exception(exception_ptr);
+    }
+}
+
+
+void RpcClient::OncConnectionClosed()
+{
+    std::unordered_map<uint64_t, std::promise<std::string>> copy_pending;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pending_.swap(copy_pending);
+    }
+
+
+    bConnected_.store(false, std::memory_order_release);
+    for(auto& pair: copy_pending)
+    {
+        auto exception_ptr = std::make_exception_ptr(std::runtime_error("connection_closed"));
+        pair.second.set_exception(exception_ptr);
     }
 }

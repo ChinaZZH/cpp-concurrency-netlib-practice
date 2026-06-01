@@ -183,12 +183,16 @@ void EventLoop::RemoveChannelInLoop(int fd)
 
 void EventLoop::AssertInLoopThread(std::string strInfo)
 {
-    if(threadId_ != std::this_thread::get_id())
+    // 服务端loop才需要判断，客户端loop不需要判断
+    if(tcpServer_)
     {
-        std::cout << "EventLoop::AssertInLoopThread error thread_id:" << std::this_thread::get_id() << " Right thread_id:=" << threadId_ << " In Info:=" << strInfo.c_str() << std::endl;
-    }
+        if(threadId_ != std::this_thread::get_id())
+        {
+            std::cout << "EventLoop::AssertInLoopThread error thread_id:" << std::this_thread::get_id() << " Right thread_id:=" << threadId_ << " In Info:=" << strInfo.c_str() << std::endl;
+        }
 
-    assert(threadId_ == std::this_thread::get_id());
+        assert(threadId_ == std::this_thread::get_id());
+    }
 }
 
 bool EventLoop::IsInLoopThread() const

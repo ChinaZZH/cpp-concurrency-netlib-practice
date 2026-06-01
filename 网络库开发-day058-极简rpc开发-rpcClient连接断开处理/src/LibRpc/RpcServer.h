@@ -19,7 +19,7 @@ public:
     void RegisterMethod(const std::string& strMethod, Handler handler);
 
     // 暂时测试使用
-    //EventLoop* GetIndexLoop(int index) { return server_.GetIndexLoop(index); }
+    EventLoop* GetIndexLoop(int index) { return server_.GetIndexLoop(index); }
 
 private:
     // 同步处理，不走任务线程池

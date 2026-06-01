@@ -39,6 +39,8 @@ public:
 
     void RemoveClinetFd(int fd);
 
+    // 暂时测试使用
+     EventLoop* GetIndexLoop(int index) { return eventLoopThreadPool_->GetIndexLoop(index); }
 private:
     void HandleNewConnection();
 

@@ -34,8 +34,6 @@ private:
     std::string ip_;
     int port_;
     
-    // std::unique_ptr<ClientSocket> clientSocket_;
-    //std::unique_ptr<Channel> channel_;
     int fd_;
     TcpConnectionPtr connection_;
 
