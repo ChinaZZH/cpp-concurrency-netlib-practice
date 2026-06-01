@@ -78,7 +78,7 @@ void client_function() {
     std::thread io_thread([&loop]() {
         loop.Loop();
     });
-
+    
     // 等待连接建立
     {
         std::unique_lock<std::mutex> lock(mtx);

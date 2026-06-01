@@ -114,28 +114,32 @@ void ClientSocket::Close()
 }
 
 
-bool ClientSocket::Connect(const std::string& strIp, int nPort)
+int ClientSocket::Connect(const std::string& strIp, int nPort)
 {
-    if(socket_fd_ >= 0)
-    {
-        return false;
-    }
-
-    socket_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd_ < 0)
+    int connectFd = -1;
+    connectFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (connectFd < 0)
     {
         std::cerr << "ClientSocket socket error \n";
-        return false;
+        return -1;
     }
     
-    SetNonBlock();
+    // SetNonBlock
+    {
+        int flags = ::fcntl(connectFd, F_GETFL, 0);
+        flags |= O_NONBLOCK;
+        ::fcntl(connectFd, F_SETFL, flags);
+    }
+    
+
     InetAddress addr(strIp, nPort);
-    int result = ::connect(socket_fd_, (struct sockaddr*)addr.GetSockAddr(), sizeof(addr));
+    int result = ::connect(connectFd, (struct sockaddr*)addr.GetSockAddr(), sizeof(addr));
     if(result < 0 && errno != EINPROGRESS)
     {
+        ::close(connectFd);
         std::cerr << "ClientSocket connect error \n";
-        return false;
+        return -1;
     }
 
-    return true;
+    return connectFd;
 }

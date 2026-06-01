@@ -44,30 +44,14 @@ TcpClient::~TcpClient()
 void TcpClient::Connect()
 {
     // 创建socekt并且连接
+    int socketFd = ClientSocket::Connect(ip_, port_);
+    if(socketFd < 0)
     {
-        int socketFd = socket(AF_INET, SOCK_STREAM, 0);
-        if (socketFd < 0)
-        {
-            std::cerr << "TcpClient::Connect socket error \n";
-            return ;
-        }
-    
-        int flags = ::fcntl(socketFd, F_GETFL, 0);
-        flags |= O_NONBLOCK;
-        ::fcntl(socketFd, F_SETFL, flags);
-    
-        InetAddress addr(ip_, port_);
-        int result = ::connect(socketFd, (struct sockaddr*)addr.GetSockAddr(), sizeof(addr));
-        if(result < 0 && errno != EINPROGRESS)
-        {
-            close(socketFd);
-            std::cerr << "ClientSocket connect error \n";
-            return ;
-        }
-
-        fd_ = socketFd;
+        std::cerr << "TcpClient::Connect connect error \n";
+        return;
     }
-    
+
+    fd_ = socketFd;
     auto channel = std::make_unique<Channel>(fd_);
     std::weak_ptr<TcpClient> weakClient = shared_from_this();
     channel->SetWriteCallBack([weakClient](){
