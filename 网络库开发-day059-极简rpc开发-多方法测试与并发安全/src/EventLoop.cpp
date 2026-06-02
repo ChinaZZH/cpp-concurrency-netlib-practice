@@ -3,6 +3,7 @@
 #include "Epoll.h"
 #include "TcpServer.h"
 #include "TcpConnection.h"
+#include "TcpClient.h"
 #include <cassert>
 #include <iostream>
 #include <cstring>
@@ -110,14 +111,24 @@ void EventLoop::Loop()
         }
 
         
-        if(!delayChannelsToRemove_.empty())
+        if(!delayServerChannelsToRemove_.empty())
         {
-            for(auto& fd : delayChannelsToRemove_)
+            for(auto& fd : delayServerChannelsToRemove_)
             {
-                this->RemoveChannelInLoop(fd);
+                this->RemoveServerChannelInLoop(fd);
             }
             
-            delayChannelsToRemove_.clear();
+            delayServerChannelsToRemove_.clear();
+        }
+
+        if(!delayRemoveForClientChannel_.empty())
+        {
+            for(auto& pairClient : delayRemoveForClientChannel_)
+            {
+                this->ClientChannelRemoveInLoop(pairClient);
+            }
+            
+            delayRemoveForClientChannel_.clear();
         }
 
         DoPendingFunctors();
@@ -154,10 +165,10 @@ void EventLoop::AddChannel(std::unique_ptr<Channel> channel, std::string strInfo
 
 
 // 移除Channel
-void EventLoop::RemoveChannelInLoop(int fd)
+void EventLoop::RemoveServerChannelInLoop(int fd)
 {
-    AssertInLoopThread("EventLoop::RemoveChannelInLoop");
-
+    AssertInLoopThread("EventLoop::RemoveServerChannelInLoop");
+    assert(tcpServer_);
     EventLoop* mainLoop = tcpServer_->GetMainLoop();
     assert(mainLoop);
     TcpServer* server = tcpServer_;
@@ -201,7 +212,7 @@ bool EventLoop::IsInLoopThread() const
 }
 
 
-void EventLoop::DelayRemoveQueue(int fd)
+void EventLoop::DelayRemoveQueue(int fd, bool bTcpClient /*= false*/, std::function<void()> func /*= nullptr*/)
 {
     AssertInLoopThread("EventLoop::DelayRemoveQueue");
     // 唤醒fd不通过外部移除
@@ -211,18 +222,35 @@ void EventLoop::DelayRemoveQueue(int fd)
     }
 
     auto itr = channels_.find(fd);
-    if(itr != channels_.end())
+    if(itr == channels_.end())
     {
-        auto itrDelay = std::find(delayChannelsToRemove_.begin(), delayChannelsToRemove_.end(), fd);
-        if(itrDelay == delayChannelsToRemove_.end())
+        return;
+    }
+
+    if(false == bTcpClient)
+    {
+        auto itrDelay = std::find(delayServerChannelsToRemove_.begin(), delayServerChannelsToRemove_.end(), fd);
+        if(itrDelay == delayServerChannelsToRemove_.end())
         {
-            delayChannelsToRemove_.push_back(fd);
+            delayServerChannelsToRemove_.push_back(fd);
+        }
+    }
+    else
+    {
+        auto itrDelay = std::find_if(delayRemoveForClientChannel_.begin(), delayRemoveForClientChannel_.end(), [fd](const PairTcpClient& pairClient){
+            return (fd == pairClient.first);
+        });
+        
+
+        if(itrDelay == delayRemoveForClientChannel_.end())
+        {
+            delayRemoveForClientChannel_.emplace_back(std::make_pair(fd, func));
         }
     }
 }
 
 
-
+/*
 bool EventLoop::NowToRemoveChannel(int fd, RemoveChannelNowToken token)
 {
 
@@ -244,12 +272,19 @@ bool EventLoop::NowToRemoveChannel(int fd, RemoveChannelNowToken token)
         return false;
     }
 
-    
+    std::cout << "EventLoop::NowToRemoveChanne fd:=" << fd << std::endl;
+
     epoll_->RemoveFd(fd); 
     channels_.erase(fd);
     return true;
 }
 
+
+void EventLoop::ModifyThreadId(ModifyThreadIdToken token) 
+{ 
+    threadId_ = std::this_thread::get_id(); 
+}
+*/
 
 void EventLoop::AddEventToUpdateChannel(int fd, int event)
 {
@@ -501,5 +536,32 @@ void EventLoop::CheckIdleConnections(int idleSecTimeOut)
             con->Shutdown();
         }
         
+    }
+}
+
+
+void EventLoop::ClientChannelRemoveInLoop(const PairTcpClient& pairTcpClient)
+{
+    int fd = pairTcpClient.first;
+    
+    // 不是tcpClient的channel只能延时删除
+    auto it_connection = mapTcpConnection_.find(fd);
+    if(it_connection != mapTcpConnection_.end())
+    {
+        return ;
+    }
+
+    std::cout << "EventLoop::ClientChannelRemoveInLoop fd:=" << fd << std::endl;
+
+    epoll_->RemoveFd(fd); 
+    channels_.erase(fd);
+
+    auto func = pairTcpClient.second;
+    if(func)
+    {
+        //重新修改thread_id
+        threadId_ = std::this_thread::get_id();
+        //tcpClient->HandleNewConnection();
+        func();
     }
 }

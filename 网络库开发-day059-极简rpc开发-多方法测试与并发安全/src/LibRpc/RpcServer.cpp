@@ -43,7 +43,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
         return;
     }
 
-    std::cout << "RpcServer::OnMessage id:="  << id << " method:"  << strMethod.c_str() << " params:" << strParams.c_str() << std::endl;
+    // std::cout <<  "RpcServer::OnMessage id:="  << id << " method:"  << strMethod.c_str() << " params:" << strParams.c_str() << std::endl;
     auto itr = methods_.find(strMethod);
     if(itr == methods_.end())
     {
@@ -72,7 +72,7 @@ void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con,
     RpcCodec::EncodeResponse(resBuf, id, code, strResult);
 
     std::string strResponse = resBuf.RetrieveAllAsString();
-    std::cout << "Server sending response, size=" << strResponse.size() << " id=" << id << " code=" << code << std::endl;
+    //std::cout << "Server sending response, size=" << strResponse.size() << " id=" << id << " code=" << code << std::endl;
     con->Send(strResponse);
 }
 

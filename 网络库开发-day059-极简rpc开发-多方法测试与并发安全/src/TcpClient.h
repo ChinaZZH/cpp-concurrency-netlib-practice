@@ -29,6 +29,8 @@ public:
 
     void HandleWrite();     // 连接建立完成时的回调
 
+    void HandleNewConnection();
+
 private:
     EventLoop* loop_;
     std::string ip_;

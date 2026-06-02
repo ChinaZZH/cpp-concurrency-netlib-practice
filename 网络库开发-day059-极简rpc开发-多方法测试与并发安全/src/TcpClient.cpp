@@ -14,7 +14,7 @@ TcpClient::TcpClient(EventLoop* loop, const std::string& strIp, int nPort)
 ,fd_(-1)
 ,bConnecting(false)
 {
-    std::cout << "TcpClient::TcpClient thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
+    
 }
 
 TcpClient::~TcpClient()
@@ -24,7 +24,7 @@ TcpClient::~TcpClient()
         if(bConnecting)
         {
             // 尚未连接成功，直接移除等待 Channel 并关闭 socket
-            loop_->NowToRemoveChannel(fd_, EventLoop::RemoveChannelNowToken());
+            loop_->DelayRemoveQueue(fd_, true);
         }
         else if(connection_ && connection_->IsValid())
         {
@@ -64,19 +64,30 @@ void TcpClient::Connect()
     
     channel->EnableWriting();       // 用来检测非阻塞 connect 是否完成。 连接完成后，再注册读事件 (EPOLLIN)
     loop_->AddChannel(std::move(channel), "TcpClient::Connect");
-    //channel.reset();
     bConnecting = true;
-    std::cout << "TcpClient::Connect thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
+    
+    //std::cout << "TcpClient::Connect thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
 }
 
  // 连接建立完成时的回调
 void TcpClient::HandleWrite()
 {
-    std::cout << "first TcpClient::HandleWrite thread_id " << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
-    //loop_->DelEventToUpdateChannel(clientSocket_->GetSocketFd(), EPOLLOUT);
-    loop_->NowToRemoveChannel(fd_, EventLoop::RemoveChannelNowToken());
-    bConnecting = false;
+    //std::cout << "start TcpClient::HandleWrite thread_id " << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
+    // 修改线程id, 之后数据io都走这个线程了
+    std::weak_ptr<TcpClient> weakPtr = shared_from_this();
+    loop_->DelayRemoveQueue(fd_, true, [weakPtr](){
+        auto tcpClient = weakPtr.lock();
+        if(tcpClient)
+        {
+            tcpClient->HandleNewConnection();
+        }
+    });
+}
 
+
+void TcpClient::HandleNewConnection()
+{
+    bConnecting = false;
     connection_ = std::make_shared<TcpConnection>(loop_, fd_, true);
     connection_->SetMessageCallBack(msgCb_);
 
@@ -87,6 +98,5 @@ void TcpClient::HandleWrite()
         connectionCb_(connection_);
     }
 
-    std::cout << "TcpClient::HandleWrite thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
+    //std::cout << "end TcpClient::HandleWrite thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
 }
-

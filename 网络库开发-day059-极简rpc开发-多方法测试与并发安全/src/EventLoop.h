@@ -15,6 +15,7 @@ class ClientSocket;
 class TcpServer;
 class EventLoop;
 class TcpConnection;
+class TcpClient;
 
 class EventLoop
 {
@@ -38,16 +39,17 @@ public:
     void AddChannel(std::unique_ptr<Channel> channel, std::string strInfo = "OtherError");
 
     // 钥匙类：只有 TcpClient 能构造
+    /*
     class RemoveChannelNowToken {
     private:
         RemoveChannelNowToken() = default;          // 私有构造
-        friend class TcpClient;                    // 仅 TcpClient 可访问构造
-        friend class TcpConnection;
+        friend class TcpClient;           // 仅 TcpClient 可访问构造
     };
 
     bool NowToRemoveChannel(int fd, RemoveChannelNowToken token);
+    */
 
-    void DelayRemoveQueue(int fd);
+    void DelayRemoveQueue(int fd, bool bTcpClient = false, std::function<void()> = nullptr);
 
     void AddEventToUpdateChannel(int fd, int event);
 
@@ -71,7 +73,10 @@ private:
      bool IsInLoopThread() const;
 
      // 移除Channel
-     void RemoveChannelInLoop(int fd);
+     void RemoveServerChannelInLoop(int fd);
+
+     using PairTcpClient = std::pair<int, std::function<void()>>;
+     void ClientChannelRemoveInLoop(const PairTcpClient& pairTcpClient);
 
      void DoPendingFunctors();
      void WakeUp();              // 用于唤醒epoll_wait
@@ -101,7 +106,8 @@ private:
     std::map<int, std::unique_ptr<Channel>> channels_;
     bool quit_;
     std::thread::id threadId_;
-    std::vector<int> delayChannelsToRemove_;
+    std::vector<int> delayServerChannelsToRemove_;
+    std::vector<PairTcpClient> delayRemoveForClientChannel_;
 
     std::vector<std::function<void()>> pendingFunctors_;
 	std::mutex mutex_;

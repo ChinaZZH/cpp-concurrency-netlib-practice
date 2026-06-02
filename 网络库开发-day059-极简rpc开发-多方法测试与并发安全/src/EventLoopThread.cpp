@@ -51,7 +51,7 @@ void EventLoopThread::ThreadFunc()
         callback_(&event_loop);
     }
 
-    std::cout << "EventLoopThread::ThreadFunc loop runInLoop thread_id:" << std::this_thread::get_id() << " event_loop thread_id:" << event_loop.GetThreadId() << std::endl;
+    // std::cout << "EventLoopThread::ThreadFunc loop runInLoop thread_id:" << std::this_thread::get_id() << " event_loop thread_id:" << event_loop.GetThreadId() << std::endl;
 
     {
         std::unique_lock<std::mutex> lock(mutex_);

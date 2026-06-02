@@ -204,16 +204,9 @@ void TcpConnection::HandleClose(std::string strCloseInfo)
     //std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
     auto self = shared_from_this();
 
-    if(socket_->IsTcpClient())
-    {
-        loop_->NowToRemoveChannel(fd_, EventLoop::RemoveChannelNowToken());
-    }
-    else
-    {
-        if(fd_ > 0)
-        {    
-            loop_->DelayRemoveQueue(fd_);
-        }
+    if(fd_ > 0)
+    {    
+        loop_->DelayRemoveQueue(fd_, socket_->IsTcpClient());
     }
     
     
@@ -308,8 +301,8 @@ void TcpConnection::ProcessInputBuffer()
     */
     
     std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
-    std::cout << "TcpConnection::ProcessInputBuffer fd:=" << socket_->GetSocketFd() << std::endl;
-    std::cout << "Info:=" << strLineMsg << std::endl;
+    //std::cout << "TcpConnection::ProcessInputBuffer fd:=" << socket_->GetSocketFd() << " thread_id:="<<  std::this_thread::get_id() << " connection_thread_id:="  << loop_->GetThreadId() << std::endl;
+    //std::cout << "Info:=" << strLineMsg.c_str() << std::endl;
 
     messageCallBack_(shared_from_this(), strLineMsg);
 }

@@ -41,15 +41,29 @@ uint64_t RpcClient::SendRequest(const std::string& method, const std::string& pa
         throw std::runtime_error("RpcClient::SendRequest Not connected to server");
     }
 
+    EventLoop* event_loop = con_->GetLoop();
+    if(!event_loop)
+    {
+        throw std::runtime_error("RpcClient::SendRequest connection event_loop is nullptr");
+    }
+
     uint64_t req_id = next_id_.fetch_add(1, std::memory_order_release);
 
     Buffer buf;
     RpcCodec::EncodeRequest(buf, req_id, method, params);
     
     std::string strData = buf.RetrieveAllAsString();
-    std::cout << "before RpcClient::SendRequest thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << con_->GetLoop()->GetThreadId() << std::endl;
-    con_->Send(strData);
-    std::cout << "After RpcClient::SendRequest thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << con_->GetLoop()->GetThreadId() << std::endl;
+    std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
+    event_loop->RunInLoop([event_loop, weakCon, strData = std::move(strData)](){
+        auto conn = weakCon.lock();
+        if(conn)
+        {
+            //std::cout << "RpcClient::SendRequest thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << event_loop->GetThreadId() << std::endl;
+            conn->Send(strData);
+        }
+    });
+
+   
     return req_id;
 }
 
@@ -61,6 +75,7 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
     {
         throw std::runtime_error("RpcClient::Call Not connected to server");
     }
+
 
     uint64_t id = SendRequest(method, params);
     std::promise<std::string> pro;
@@ -85,8 +100,8 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
 // 处理响应(由网络消息回调调用)
 void RpcClient::OnResponse(const std::string& data)
 {
-    std::cout << "RpcClient::OnResponse: received " << data.size() << " bytes" << std::endl;
-
+    //std::cout << "RpcClient::OnResponse: received " << data.size() << " bytes" << std::endl;
+    //std::cout << "RpcClient::OnResponse thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << con_->GetLoop()->GetThreadId() << std::endl;
     Buffer buf;
     buf.Append(data);
 
