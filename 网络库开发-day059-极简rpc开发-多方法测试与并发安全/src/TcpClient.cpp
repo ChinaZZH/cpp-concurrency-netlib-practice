@@ -74,6 +74,7 @@ void TcpClient::HandleWrite()
 {
     //std::cout << "start TcpClient::HandleWrite thread_id " << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
     // 修改线程id, 之后数据io都走这个线程了
+    loop_->DelEventToUpdateChannel(fd_, EPOLLOUT);
     std::weak_ptr<TcpClient> weakPtr = shared_from_this();
     loop_->DelayRemoveQueue(fd_, true, [weakPtr](){
         auto tcpClient = weakPtr.lock();

@@ -250,41 +250,6 @@ void EventLoop::DelayRemoveQueue(int fd, bool bTcpClient /*= false*/, std::funct
 }
 
 
-/*
-bool EventLoop::NowToRemoveChannel(int fd, RemoveChannelNowToken token)
-{
-
-    if(fd == wakeUpFd_ || fd == timerFd_)
-    {
-        return false;
-    }
-
-    auto it_channel = channels_.find(fd);
-    if(it_channel == channels_.end())
-    {
-        return false;
-    }
-
-    // 不是tcpClient的channel只能延时删除
-    auto it_connection = mapTcpConnection_.find(fd);
-    if(it_connection != mapTcpConnection_.end())
-    {
-        return false;
-    }
-
-    std::cout << "EventLoop::NowToRemoveChanne fd:=" << fd << std::endl;
-
-    epoll_->RemoveFd(fd); 
-    channels_.erase(fd);
-    return true;
-}
-
-
-void EventLoop::ModifyThreadId(ModifyThreadIdToken token) 
-{ 
-    threadId_ = std::this_thread::get_id(); 
-}
-*/
 
 void EventLoop::AddEventToUpdateChannel(int fd, int event)
 {
@@ -551,7 +516,7 @@ void EventLoop::ClientChannelRemoveInLoop(const PairTcpClient& pairTcpClient)
         return ;
     }
 
-    std::cout << "EventLoop::ClientChannelRemoveInLoop fd:=" << fd << std::endl;
+    //std::cout << "EventLoop::ClientChannelRemoveInLoop fd:=" << fd << std::endl;
 
     epoll_->RemoveFd(fd); 
     channels_.erase(fd);
@@ -561,7 +526,6 @@ void EventLoop::ClientChannelRemoveInLoop(const PairTcpClient& pairTcpClient)
     {
         //重新修改thread_id
         threadId_ = std::this_thread::get_id();
-        //tcpClient->HandleNewConnection();
         func();
     }
 }

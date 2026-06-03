@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 
+
 class TcpConnection;
 using TcpConnectionPtr = std::shared_ptr<TcpConnection>;
 
@@ -23,11 +24,11 @@ public:
     uint64_t SendRequest(const std::string& method, const std::string& params);
 
     // 同步调用， 阻塞直到收到响应或者超时
-    std::string Call(const std::string& method, const std::string& params, int timeout_ms = 3000);
+    std::string Call(const std::string& method, const std::string& params, int timeout_ms = 5000);
 
     // 模板化call的作用
     template<typename Req, typename Resp>
-    Resp Call(const std::string& method, const Req& req, int timeout_ms = 3000)
+    Resp Call(const std::string& method, const Req& req, int timeout_ms = 5000)
     {
         std::string params = nlohmann::json(req).dump();
         std::string resp_str = Call(method, params, timeout_ms);
@@ -42,10 +43,13 @@ public:
 
 private:
     TcpConnectionPtr        con_;
-    std::atomic<uint64_t>   next_id_ = 1;
+    static std::atomic<uint64_t>   next_id_;
 
     std::unordered_map<uint64_t, std::promise<std::string>> pending_;
     std::mutex mutex_;
 
     std::atomic<bool> bConnected_ = false; // 连接状态标志
+
+    // 测试使用
+    std::unordered_map<uint64_t, std::chrono::time_point<std::chrono::steady_clock>> test_pending_time_;
 };

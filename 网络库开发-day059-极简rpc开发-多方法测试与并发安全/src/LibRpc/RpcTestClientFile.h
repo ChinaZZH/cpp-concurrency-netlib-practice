@@ -59,7 +59,7 @@ struct LoginResponse{
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LoginResponse, code, token, msg);
 
 
-void client_function(int id) {
+void client_work_function(int id, int task_count, std::vector<uint64_t>& latencies) {
     // 创建 EventLoop 对象（将在独立线程中运行）
     EventLoop loop;
 
@@ -77,7 +77,7 @@ void client_function(int id) {
         auto rpcClient = rpcPtr.lock();
         if(rpcClient)
         {
-            std::cout << "Connected to server" << std::endl;
+            //std::cout << "Connected to server" << std::endl;
             rpcClient->SetConnection(conn);
             {
                 std::lock_guard<std::mutex> lock(mtx);
@@ -101,7 +101,7 @@ void client_function(int id) {
 
     // 启动 I/O 线程
     std::thread io_thread([&loop]() {
-        std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
+        //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
         loop.Loop();
     });
     
@@ -155,20 +155,29 @@ void client_function(int id) {
     }
     */
 
-    
-    for(int i = 0; i < 100; ++i)
+    latencies.reserve(task_count);
+
+    int add_num = id * task_count;
+    AddRequest req{add_num, 0};
+    for(int i = 0; i < task_count; ++i)
     {
+
+       auto overall_start = std::chrono::steady_clock::now();
        try {
-            AddRequest req{id, i};
-            AddResponse response = rpcClient->Call<AddRequest, AddResponse>("add", req, 1000);
-            std::cout << "RPC result: " << response.result << std::endl;
-            assert(id + i == response.result);
+            req.b = i;    
+            AddResponse response = rpcClient->Call<AddRequest, AddResponse>("add", req, 5000);
+            //std::cout << "RPC result: " << response.result << std::endl;
+            assert(add_num + i == response.result);
+            auto overall_end = std::chrono::steady_clock::now();
+            auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+            latencies.emplace_back(cost_sec);
         } catch (const std::exception& e) {
             std::cerr << "RPC error: " << e.what() << std::endl;
         }
+
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
     
-
 
     // 停止 I/O 线程（可选，简单退出）
     loop.Quit();

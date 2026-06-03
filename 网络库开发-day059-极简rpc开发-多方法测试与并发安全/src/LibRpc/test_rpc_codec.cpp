@@ -1,5 +1,8 @@
 #include "../Buffer.h"
 #include "RpcCodec.h"
+#include "RpcClient.h"
+#include "../TcpClient.h"
+#include "../Buffer.h"
 #include <cassert>
 #include <iostream>
 #include <chrono>
@@ -14,7 +17,7 @@ void testNormal()
     std::string params = "{\"a\":1,\"b\":2}";
     RpcCodec::EncodeRequest(reqBuf, reqId, method, params);
 
-    uint32_t decodedId;
+    uint64_t decodedId;
     std::string decodedMethod, decodedParams;
     bool ok = RpcCodec::DecodeRequest(reqBuf, decodedId, decodedMethod, decodedParams);
     assert(ok);
@@ -29,7 +32,7 @@ void testNormal()
     std::string result = "{\"result\":3}";
     RpcCodec::EncodeResponse(respBuf, respId, code, result);
 
-    uint32_t decodedRespId;
+    uint64_t decodedRespId;
     int32_t decodedCode;
     std::string decodedResult;
     ok = RpcCodec::DecodeResponse(respBuf, decodedRespId, decodedCode, decodedResult);
@@ -46,7 +49,7 @@ void testEmptyString()
     Buffer buf;
     RpcCodec::EncodeRequest(buf, 1, "", "");
 
-    uint32_t id;
+    uint64_t id;
     std::string strMethod, strParams;
     bool ok = RpcCodec::DecodeRequest(buf, id, strMethod, strParams);
     assert(ok);
@@ -63,7 +66,7 @@ void testLongMethodName()
     std::string longMethod(1024*1024, 'X');
     RpcCodec::EncodeRequest(buf, 1, longMethod, "{}");
 
-    uint32_t id;
+    uint64_t id;
     std::string strMethod, strParams;
     bool ok = RpcCodec::DecodeRequest(buf, id, strMethod, strParams);
     assert(ok);
@@ -78,7 +81,7 @@ void testLargeParam()
     std::string largetParam(10*1024*1024, 'Y');
     RpcCodec::EncodeRequest(buf, 1, "foo", largetParam);
 
-    uint32_t id;
+    uint64_t id;
     std::string strMethod, strParams;
     bool ok = RpcCodec::DecodeRequest(buf, id, strMethod, strParams);
     assert(ok);
@@ -97,7 +100,7 @@ void testIncompleteData()
     buf.Append(reinterpret_cast<const char*>(&netId), sizeof(netId));
 
     // 尝试解码
-    uint32_t outId = 0;
+    uint64_t outId = 0;
     std::string strMethod = "old", strParams = "old";
     bool ok = RpcCodec::DecodeRequest(buf, outId, strMethod, strParams);
     assert(!ok);
@@ -118,7 +121,7 @@ void testNegativeLength()
     buf.Append(reinterpret_cast<const char*>(&netLen), sizeof(netLen));
 
     // 没有方法名，直接尝试解码
-    uint32_t outId = 0;
+    uint64_t outId = 0;
     std::string strMethod, strParams;
     bool ok = RpcCodec::DecodeRequest(buf, outId, strMethod, strParams);
     assert(!ok);
@@ -136,7 +139,7 @@ void testPerformance()
         buf.Clear();
         RpcCodec::EncodeRequest(buf, i, "add", "{\"a\":1,\"b\":2}");
 
-        uint32_t id = 0;
+        uint64_t id = 0;
         std::string strMethod, strParams;
         if(!RpcCodec::DecodeRequest(buf, id, strMethod, strParams))
         {

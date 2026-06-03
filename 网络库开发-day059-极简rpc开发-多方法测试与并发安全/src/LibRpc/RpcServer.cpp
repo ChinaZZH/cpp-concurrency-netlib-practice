@@ -7,13 +7,27 @@
 
 RpcServer::RpcServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
+,file_("rpc_log.txt", std::ios::app)
 {
     server_.SetMessageCallBack(std::bind(&RpcServer::OnMessage, 
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
+
+    if(!file_.is_open()) {                  // 检查是否打开成功
+        std::cerr << "无法打开文件！" << std::endl;
+        exit(1);
+    }
 }
 
+
+ RpcServer::~RpcServer()
+ {
+    if(file_.is_open())
+    {
+        file_.close(); 
+    }
+ }
 
 void RpcServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
@@ -34,7 +48,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
     Buffer buf;
     buf.Append(strMsg.data(), strMsg.size());
 
-    uint32_t id;
+    uint64_t id;
     std::string strMethod, strParams;
     bool ok = RpcCodec::DecodeRequest(buf, id, strMethod, strParams);
     if(!ok)
@@ -43,7 +57,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
         return;
     }
 
-    // std::cout <<  "RpcServer::OnMessage id:="  << id << " method:"  << strMethod.c_str() << " params:" << strParams.c_str() << std::endl;
+    file_ <<  "RpcServer::OnMessage id:="  << id << std::endl;
     auto itr = methods_.find(strMethod);
     if(itr == methods_.end())
     {
@@ -66,7 +80,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
 }
 
 
-void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con, uint32_t id, int32_t code, std::string strResult)
+void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con, uint64_t id, int32_t code, std::string strResult)
 {
     Buffer resBuf;
     RpcCodec::EncodeResponse(resBuf, id, code, strResult);
