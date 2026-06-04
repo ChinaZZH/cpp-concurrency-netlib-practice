@@ -19,6 +19,16 @@ markdown
 
 -- 7. 排查报错通用命令运行客户端程序   valgrind --leak-check=full -s ./rpc_client。 定义到时channel过早移除的原因，则tcpClient跟serverConnection一样也是延时删除。
 
+-- 8. rpcServer和rpcClient 中的rpc服务对延时敏感，则禁用nagle算法，使小的网络包的延时降低。
+
+-- 9. 进行TcpClient多线程多任务进行压测，计算出总的花费时间，总的QPS， 处理的总任务数，以及平均延时和P50,P90,P99,P999各自延时的毫秒数。
+
+-- 10. 进行TcpClient多线程多任务进行压测，除了计算出对应的参数数据，也要极限情况下的服务器和客户端问题排查和修复。
+
+-- 11. rpcClient和rpcServer中的id由原先的uint32修改为uint64,防止溢出。
+
+-- 12. 增加rpcLogFile来记录报错日志。
+
 
 ## 代码
 

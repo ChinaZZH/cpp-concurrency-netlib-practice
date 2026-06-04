@@ -43,7 +43,7 @@ public:
 
 private:
     TcpConnectionPtr        con_;
-    static std::atomic<uint64_t>   next_id_;
+    std::atomic<uint64_t>   next_id_ = 1;
 
     std::unordered_map<uint64_t, std::promise<std::string>> pending_;
     std::mutex mutex_;

@@ -8,7 +8,7 @@
 #include <inttypes.h>
 #include "RpcLogFile.h"
 
-std::atomic<uint64_t>  RpcClient::next_id_ = 1;
+
 RpcClient::RpcClient(TcpConnectionPtr con)
 {
     if(con)
@@ -92,6 +92,8 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
         strRpcLog.append(std::to_string(client_addr));
         strRpcLog.append(" id:=");
         strRpcLog.append(std::to_string(id));
+        strRpcLog.append(" fd:=");
+        strRpcLog.append(std::to_string(con_->GetFd()));
 
         
         RpcLogFile& rpcLog = RpcLogFile::getInstance();
@@ -117,6 +119,8 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
             strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
             strRpcLog.append("find id:=");
             strRpcLog.append(std::to_string(id));
+            strRpcLog.append(" fd:=");
+            strRpcLog.append(std::to_string(con_->GetFd()));
 
             RpcLogFile& rpcLog = RpcLogFile::getInstance();
             rpcLog.AppendContent(strRpcLog);
@@ -126,7 +130,7 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
        
 
         char error_log[32] = {0};
-        snprintf(error_log, 31, "rpc timeout id:=%" PRIu64, id); 
+        snprintf(error_log, 31, "rpc timeout id:=%" PRIu64 " fd:=%d", id, con_->GetFd()); 
         throw std::runtime_error(error_log);
     }
 
@@ -166,10 +170,13 @@ void RpcClient::OnResponse(const std::string& data)
             strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
             strRpcLog.append("find id:=");
             strRpcLog.append(std::to_string(res_id));
+            strRpcLog.append(" fd:=");
+            strRpcLog.append(std::to_string(con_->GetFd()));
+
             RpcLogFile& rpcLog = RpcLogFile::getInstance();
             rpcLog.AppendContent(strRpcLog);
             
-            std::cout << "rpc pending_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " code:=" << code << "keep seconds:=" << keep_seconds << std::endl;
+            std::cout << "rpc pending_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " fd:=" << con_->GetFd() << " code:=" << code << "keep seconds:=" << keep_seconds << std::endl;
             return;
         }
 
@@ -180,6 +187,8 @@ void RpcClient::OnResponse(const std::string& data)
         strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
         strRpcLog.append("find id:=");
         strRpcLog.append(std::to_string(res_id));
+        strRpcLog.append(" fd:=");
+        strRpcLog.append(std::to_string(con_->GetFd()));
 
         RpcLogFile& rpcLog = RpcLogFile::getInstance();
         rpcLog.AppendContent(strRpcLog);
@@ -213,6 +222,8 @@ void RpcClient::OncConnectionClosed()
             strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
             strRpcLog.append("find id:=");
             strRpcLog.append(std::to_string(pair.first));
+            strRpcLog.append(" fd:=");
+            strRpcLog.append(std::to_string(con_->GetFd()));
 
             RpcLogFile& rpcLog = RpcLogFile::getInstance();
             rpcLog.AppendContent(strRpcLog);
