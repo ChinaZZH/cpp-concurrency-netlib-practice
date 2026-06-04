@@ -37,6 +37,8 @@ public:
 
     bool IsTcpClient() const { return bTcpClient_; }
 
+    void DisableNagele();
+    
 private:
     int socket_fd_ = -1;
     bool bTcpClient_ = false;

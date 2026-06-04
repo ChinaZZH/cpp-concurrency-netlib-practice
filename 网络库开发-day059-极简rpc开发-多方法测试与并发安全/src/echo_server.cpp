@@ -136,11 +136,11 @@ int main()
     std::cout << std::endl << std::endl;
     */
 
-    /*
+    
     std::cout << "start 10 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(10, 10000);
     std::cout << std::endl << std::endl;
-    */ 
+     
 
     std::cout << "start 5 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(5, 10000);

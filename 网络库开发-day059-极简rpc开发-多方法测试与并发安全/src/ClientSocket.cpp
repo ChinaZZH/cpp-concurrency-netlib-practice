@@ -4,7 +4,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-
+#include <netinet/tcp.h>
 
 
 ClientSocket::ClientSocket(int fd, bool tcpClient /*= false*/)
@@ -142,4 +142,15 @@ int ClientSocket::Connect(const std::string& strIp, int nPort)
     }
 
     return connectFd;
+}
+
+void ClientSocket::DisableNagele()
+{
+    if(socket_fd_ < 0)
+    {
+        return;
+    }
+    
+    int flag = 1;
+    setsockopt(socket_fd_, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 }

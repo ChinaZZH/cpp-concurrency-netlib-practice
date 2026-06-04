@@ -35,6 +35,8 @@ void TcpConnection::ConnectEstablished()
 
     //std::cout << "connectEstablished: fd=" << fd_ << " on thread " << std::this_thread::get_id() << std::endl;
 
+    socket_->DisableNagele();
+
     auto channel = std::make_unique<Channel>(fd_);
 
     // 使用weak_ptr 避免循环引用
