@@ -20,6 +20,7 @@ class TcpServer
 public:
     using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&)>;
     using CloseCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
+    using ConnectionCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
 
     TcpServer(EventLoop* loop, int nPort);
     
@@ -34,6 +35,8 @@ public:
     void SetMessageCallBack(MessageCallBack cb) { messageCallBack_ = cb; }
     
     void SetCloseCallBack(CloseCallBack cb) { closeCallBack_ = cb; }
+
+    void SetConnectionCallBack(ConnectionCallBack cb) { connectionCallBack_ = cb; }
 
     void HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
 
@@ -57,6 +60,8 @@ private:
     MessageCallBack messageCallBack_;
 
     CloseCallBack closeCallBack_;
+
+    ConnectionCallBack connectionCallBack_;
 
     std::map<int, EventLoop*> mapLightClient; // 轻量化客户端连接
 };

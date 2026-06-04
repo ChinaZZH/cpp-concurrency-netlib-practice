@@ -20,7 +20,6 @@ public:
 
     void SetConnection(const TcpConnectionPtr& con);
 
-    // 异步发送请求，返回请求ID(不等待响应)
     std::pair<uint64_t, std::future<std::string>> SendRequest(const std::string& method, const std::string& params);
 
     // 同步调用， 阻塞直到收到响应或者超时
@@ -51,5 +50,5 @@ private:
     std::atomic<bool> bConnected_ = false; // 连接状态标志
 
     // 测试使用
-    std::unordered_map<uint64_t, std::chrono::time_point<std::chrono::steady_clock>> test_pending_time_;
+    //std::unordered_map<uint64_t, std::chrono::time_point<std::chrono::steady_clock>> test_pending_time_;
 };

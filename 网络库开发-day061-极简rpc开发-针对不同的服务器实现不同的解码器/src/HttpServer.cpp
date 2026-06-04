@@ -2,6 +2,7 @@
 #include "HttpContext.h"
 #include "TcpConnection.h"
 #include "EventLoop.h"
+#include "Decoder/HttpContentDecoder.h"
 #include <sstream>
 #include <cassert>
 
@@ -12,6 +13,11 @@ HttpServer::HttpServer(EventLoop* loop, int nPort)
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
+
+    server_.SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
+        auto http_decoder = std::make_unique<HttpContentDecoder>();
+        con->SetDecoder(std::move(http_decoder));
+    });
 }
 
 void HttpServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)

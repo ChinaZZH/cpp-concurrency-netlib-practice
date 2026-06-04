@@ -6,6 +6,7 @@
 #include "Channel.h"
 #include "EventLoop.h"
 #include "TcpConnection.h"
+#include "Decoder/LineDecoder.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -17,6 +18,7 @@ TcpServer::TcpServer(EventLoop* loop, int nPort)
 ,eventLoopThreadPool_(std::make_unique<EventLoopThreadPool>(loop, "TcpServer"))
 ,messageCallBack_(nullptr)
 ,closeCallBack_(nullptr)
+,connectionCallBack_(nullptr)
 {
     if(mainLoop_)
     {
@@ -50,6 +52,12 @@ TcpServer::TcpServer(EventLoop* loop, int nPort)
         std::cerr << "listen_Socket listen error  " << std::endl;;
          exit(1);
     }
+
+    // 默认使用line分隔，或者默认不设置不分割。这里面先设置默认使用line分隔
+    this->SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
+        auto line_decoder = std::make_unique<LineDecoder>();
+        con->SetDecoder(std::move(line_decoder));
+    });
 }
     
 TcpServer::~TcpServer()
@@ -110,6 +118,11 @@ void TcpServer::HandleNewConnection()
     if(messageCallBack_)
     {
         newConnection->SetMessageCallBack(messageCallBack_);
+    }
+
+    if(connectionCallBack_)
+    {
+        newConnection->SetConnectionCallBack(connectionCallBack_);
     }
 
     loop->RunInLoop([loop, newConnection](){

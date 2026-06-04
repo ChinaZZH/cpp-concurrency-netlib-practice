@@ -5,7 +5,6 @@
 #include <functional>
 #include <string>
 #include <fstream>
-#include <iostream>
 
 
 class EventLoop;
@@ -16,7 +15,7 @@ public:
 
     RpcServer(EventLoop* loop, int nPort);
 
-    ~RpcServer();
+    ~RpcServer() = default;
 
     void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
 
@@ -34,5 +33,4 @@ private:
 private:
     TcpServer server_;
     std::unordered_map<std::string, Handler> methods_;
-    std::ofstream file_;
 };

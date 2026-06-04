@@ -2,9 +2,11 @@
 #include "EventLoop.h"
 #include "ClientSocket.h"
 #include "Channel.h"
+#include "Decoder/Decoder.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
+
 
 TcpConnection::TcpConnection(EventLoop* loop, int fd, bool tcpClient /*= false*/)
 : loop_(loop)
@@ -81,6 +83,11 @@ void TcpConnection::ConnectEstablished()
 
      // 更新tcpConnection的活跃时间
     this->UpdateLastActiveTime();
+
+    if(connectionCallBack_)
+    {
+        connectionCallBack_(shared_from_this());
+    }
 }
 
     
@@ -283,71 +290,26 @@ void TcpConnection::ProcessInputBuffer()
     {
         return;
     }
-
-    // 暂时不处理粘包
-    /*
-    while(true)
-    {
-        const char* crlf = static_cast<const char*>(memchr(inputBuffer_.Peek(), '\n', inputBuffer_.ReadableBytes()));
-        if(!crlf)
-        {
-            break;
-        }
-
-        int len = crlf - inputBuffer_.Peek() + 1;
-        std::string strLineMsg(inputBuffer_.Peek(), len);
-
-        messageCallBack_(shared_from_this(), strLineMsg);
-        inputBuffer_.Retrieve(len);
-    }
-    */
     
-    /*
-    std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
-    messageCallBack_(shared_from_this(), strLineMsg);
-    */
-
-    // 先实现按照前缀解包，后续修改成根据上层服务器的特性和业务需求按照指定的方式解包
+    // 没有解码器的情况下默认全部读取(不同的解码器用不同的方式处理粘包)
+    if(!decoder_)
     {
-        while(true)
+        if(messageCallBack_)
         {
-            // 需要至少4字节读取包头长度
-            if(inputBuffer_.ReadableBytes() < sizeof(uint32_t))
-            {
-                break;
-            }
-
-            // 读取包头长度，并且将网络序转化为主机序
-            uint32_t netLen = 0;
-            ::memcpy(&netLen, inputBuffer_.Peek(), sizeof(uint32_t));
-            uint32_t msg_len = ntohl(netLen);
-
-            // 合法性检查
-            if(0 == msg_len || msg_len > 10*1024*1024)
-            {
-                // 非法连接，关闭
-                HandleClose("Invalid packet length");
-                return;
-            }
-
-            // 检查数据是否足够, 不够则继续等待
-            if(inputBuffer_.ReadableBytes() < (msg_len + sizeof(uint32_t)))
-            {
-                break;
-            }
-
-            // 足够，则进行解包，跳过包头
-            inputBuffer_.Retrieve(sizeof(uint32_t));
-            std::string strMsgContent(inputBuffer_.Peek(), msg_len);
-            inputBuffer_.Retrieve(msg_len);
-
+            std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
+            messageCallBack_(shared_from_this(), strLineMsg);
+        }
+        
+    }
+    else{
+        std::string msg;
+        while(decoder_->Decode(inputBuffer_, msg))
+        {
             if(messageCallBack_)
             {
-                messageCallBack_(shared_from_this(), strMsgContent);
+                messageCallBack_(shared_from_this(), msg);
             }
-           
         }
-
     }
 }
 
@@ -401,4 +363,10 @@ void TcpConnection::WaterFromHighToLow()
         WaitLowWaterToSend_.pop();
         this->Send(strData);
     }
+}
+
+
+void TcpConnection::SetDecoder(std::unique_ptr<Decoder> decoder)
+{
+    decoder_ = std::move(decoder);
 }

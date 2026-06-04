@@ -19,11 +19,14 @@
 #define PORT 8888
 
 
-int server()
+int main()
 {
     
     signal(SIGPIPE, SIG_IGN);
     
+    RpcLogFile& rpcLog = RpcLogFile::getInstance();
+    rpcLog.OpenFile("rpc_server_log.txt");
+
     EventLoop loop;
    
     // tcpServer
@@ -52,6 +55,8 @@ int server()
     //pLoop->RunAfter(std::chrono::seconds(5), client_function);
 
     loop.Loop();
+
+    rpcLog.Release();
     return 0;
 }
 
@@ -120,7 +125,7 @@ int ClientPressTest(int threads, int req_per_threads)
 }
 
 
-int main()
+int test_client_function()
 {
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_client_log.txt");

@@ -52,6 +52,12 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
 
     uint64_t req_id = next_id_.fetch_add(1, std::memory_order_release);
     
+    
+
+    Buffer buf;
+    RpcCodec::EncodeRequest(buf, req_id, method, params);
+    std::string strData = buf.RetrieveAllAsString();
+
     std::promise<std::string> pro;
     std::future<std::string> fut = pro.get_future();
     {
@@ -73,10 +79,6 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
         */
     }
 
-    Buffer buf;
-    RpcCodec::EncodeRequest(buf, req_id, method, params);
-    
-    std::string strData = buf.RetrieveAllAsString();
     std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
     event_loop->RunInLoop([event_loop, weakCon, strData = std::move(strData)](){
         auto conn = weakCon.lock();
@@ -105,7 +107,7 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
     uint64_t id = reqInfo.first;
     std::future<std::string> fut = std::move(reqInfo.second);
    
-    test_pending_time_.insert(std::make_pair(id, std::chrono::steady_clock::now()));
+    //test_pending_time_.insert(std::make_pair(id, std::chrono::steady_clock::now()));
     auto status = fut.wait_for(std::chrono::milliseconds(timeout_ms));
     if(std::future_status::timeout == status)
     {

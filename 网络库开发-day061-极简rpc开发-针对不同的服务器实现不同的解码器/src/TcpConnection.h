@@ -10,6 +10,7 @@
 class EventLoop;
 class ClientSocket;
 class HttpContext;
+class Decoder;
 
 
 class TcpConnection: public std::enable_shared_from_this<TcpConnection>
@@ -27,11 +28,13 @@ public:
 
     using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&)>;
     using CloseCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
+    using ConnectionCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
     using HighWaterMarkCallback = std::function<void(const std::shared_ptr<TcpConnection>&)>;
     using LowWaterMarkCallback = std::function<void(const std::shared_ptr<TcpConnection>&)>;
 
     void SetMessageCallBack(MessageCallBack cb) { messageCallBack_ = cb; }
     void SetCloseCallBack(CloseCallBack cb) { closeCallBack_ = cb; }
+    void SetConnectionCallBack(ConnectionCallBack cb) { connectionCallBack_ = cb; }
     
     // 水位以及其相关变量
     void SetWaterMarkCallbacks(HighWaterMarkCallback highCb, LowWaterMarkCallback lowCb, size_t highMark, size_t lowMark = 0);
@@ -48,6 +51,9 @@ public:
     // 空闲连接超时检测，检测到了就关闭了
     std::chrono::steady_clock::time_point GetLastActiveTime() const { return lastActiveTime_; }
     void UpdateLastActiveTime()  { lastActiveTime_ = std::chrono::steady_clock::now(); }
+
+    // 设置对应的解码器
+    void SetDecoder(std::unique_ptr<Decoder> decoder);
 
 private:
     void HandleRead();
@@ -70,6 +76,7 @@ private:
     
     MessageCallBack messageCallBack_;
     CloseCallBack closeCallBack_;
+    ConnectionCallBack connectionCallBack_;
     
 
     // 发送的时候设置高低水位，outputBuffer_.size() 超过高水位的时候就没法往 outputBuffer_进行Append数据
@@ -87,4 +94,6 @@ private:
 
     // 延迟删除的时候使用
     std::chrono::steady_clock::time_point lastActiveTime_;
+
+    std::unique_ptr<Decoder> decoder_;
 };

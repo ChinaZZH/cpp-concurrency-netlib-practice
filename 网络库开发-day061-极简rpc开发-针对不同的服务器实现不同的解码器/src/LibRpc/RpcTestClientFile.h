@@ -2,6 +2,7 @@
 #include "RpcClient.h"
 #include "../TcpClient.h"
 #include "../TcpConnection.h"
+#include "../Decoder/LengthPrefixDecoder.h"
 
 #include <iostream>
 #include <chrono>
@@ -78,6 +79,8 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
         if(rpcClient)
         {
             //std::cout << "Connected to server" << std::endl;
+            auto length_decoder = std::make_unique<LengthPrefixDecoder>();
+            conn->SetDecoder(std::move(length_decoder));
             rpcClient->SetConnection(conn);
             {
                 std::lock_guard<std::mutex> lock(mtx);
@@ -233,3 +236,5 @@ std::string login(const std::string& params)
 
     return R"({"code":1,"token":"", "msg":"auth failed"})";
 }
+
+

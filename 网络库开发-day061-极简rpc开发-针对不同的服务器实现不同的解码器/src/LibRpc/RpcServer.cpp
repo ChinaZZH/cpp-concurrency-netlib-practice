@@ -3,31 +3,24 @@
 #include "RpcCodec.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
-
+#include "../Decoder/LengthPrefixDecoder.h"
+#include <memory>
 
 RpcServer::RpcServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
-,file_("rpc_log.txt", std::ios::app)
 {
     server_.SetMessageCallBack(std::bind(&RpcServer::OnMessage, 
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
 
-    if(!file_.is_open()) {                  // 检查是否打开成功
-        std::cerr << "无法打开文件！" << std::endl;
-        exit(1);
-    }
+    server_.SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
+        auto length_decoder = std::make_unique<LengthPrefixDecoder>();
+        con->SetDecoder(std::move(length_decoder));
+    });
 }
 
 
- RpcServer::~RpcServer()
- {
-    if(file_.is_open())
-    {
-        file_.close(); 
-    }
- }
 
 void RpcServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
@@ -57,7 +50,8 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
         return;
     }
 
-    file_ <<  "RpcServer::OnMessage id:="  << id << std::endl;
+    // 需要通过走rpcLogFile
+    // file_ <<  "RpcServer::OnMessage id:="  << id << std::endl;
     auto itr = methods_.find(strMethod);
     if(itr == methods_.end())
     {
