@@ -16,7 +16,8 @@ markdown
 
 
 ## 压测性能
- 
+
+-- 1.50个线程每个线程执行10000次add任务
 start 50 thread and req_per_threads 10000: 
 
 all_us vector size(): 500000
@@ -38,7 +39,7 @@ P99 latency: 3470
 P999 latency: 7279
 
 
-
+-- 2.20个线程每个线程执行10000次add任务
 start 20 thread and req_per_threads 10000: 
 
 all_us vector size(): 200000
@@ -60,7 +61,7 @@ P99 latency: 886
 P999 latency: 1599
 
 
-
+-- 3.10个线程每个线程执行10000次add任务
 start 10 thread and req_per_threads 10000: 
 
 all_us vector size(): 100000
@@ -82,7 +83,7 @@ P99 latency: 515
 P999 latency: 923
 
 
-
+-- 4.5个线程每个线程执行10000次add任务
 start 5 thread and req_per_threads 10000: 
 
 all_us vector size(): 50000
@@ -104,7 +105,7 @@ P99 latency: 430
 P999 latency: 871
 
 
-
+-- 5.1个线程每个线程执行10000次add任务
 start 1 thread and req_per_threads 10000: 
 
 all_us vector size(): 10000
