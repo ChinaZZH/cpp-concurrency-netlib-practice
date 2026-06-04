@@ -103,11 +103,17 @@ bool RpcCodec::ReadString(Buffer& buffer, std::string& strValue)
 
 
  // 编码请求
-void RpcCodec::EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params, uint64_t test_client_id)
+void RpcCodec::EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params)
 {
-    RpcCodec::WriteInt64(buffer, id);
-    RpcCodec::WriteString(buffer, method);
-    RpcCodec::WriteString(buffer, params);
+    Buffer tmpBuff;
+    RpcCodec::WriteInt64(tmpBuff, id);
+    RpcCodec::WriteString(tmpBuff, method);
+    RpcCodec::WriteString(tmpBuff, params);
+
+    uint32_t len = tmpBuff.ReadableBytes();
+    uint32_t net_len = htonl(len);
+    buffer.Append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
+    buffer.Append(tmpBuff.Peek(), len);
 }
 
 // 解码请求， 成功则返回true 并且填充 id, method， params; 失败则返回false (数据不足或者格式错误)
@@ -151,9 +157,15 @@ bool RpcCodec::DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, 
 // 编码响应
 void RpcCodec::EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result)
 {
-    RpcCodec::WriteInt64(buffer, id);
-    RpcCodec::WriteInt32(buffer, code);
-    RpcCodec::WriteString(buffer, result);
+    Buffer tmpBuff;
+    RpcCodec::WriteInt64(tmpBuff, id);
+    RpcCodec::WriteInt32(tmpBuff, code);
+    RpcCodec::WriteString(tmpBuff, result);
+
+    uint32_t len = tmpBuff.ReadableBytes();
+    uint32_t net_len = htonl(len);
+    buffer.Append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
+    buffer.Append(tmpBuff.Peek(), len);
 }
 
 // 解码响应  成功返回true; 失败则返回false

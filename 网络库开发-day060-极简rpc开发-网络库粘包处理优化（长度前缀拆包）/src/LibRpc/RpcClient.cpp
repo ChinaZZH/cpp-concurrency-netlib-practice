@@ -37,7 +37,7 @@ void RpcClient::SetConnection(const TcpConnectionPtr& con)
 
 
 // 发送请求，返回请求ID(不等待响应)
-uint64_t RpcClient::SendRequest(const std::string& method, const std::string& params)
+std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::string& method, const std::string& params)
 {
     if(!bConnected_.load(std::memory_order_acquire))
     {
@@ -51,9 +51,30 @@ uint64_t RpcClient::SendRequest(const std::string& method, const std::string& pa
     }
 
     uint64_t req_id = next_id_.fetch_add(1, std::memory_order_release);
+    
+    std::promise<std::string> pro;
+    std::future<std::string> fut = pro.get_future();
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        pending_[req_id] = std::move(pro);
+
+        /*
+        uintptr_t client_addr = reinterpret_cast<uintptr_t>(this);
+        std::string strRpcLog("RpcClient::Call add new client=");
+        strRpcLog.append(std::to_string(client_addr));
+        strRpcLog.append(" id:=");
+        strRpcLog.append(std::to_string(req_id));
+        strRpcLog.append(" fd:=");
+        strRpcLog.append(std::to_string(con_->GetFd()));
+
+        
+        RpcLogFile& rpcLog = RpcLogFile::getInstance();
+        rpcLog.AppendContent(strRpcLog);
+        */
+    }
 
     Buffer buf;
-    RpcCodec::EncodeRequest(buf, req_id, method, params, req_id);
+    RpcCodec::EncodeRequest(buf, req_id, method, params);
     
     std::string strData = buf.RetrieveAllAsString();
     std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
@@ -67,7 +88,7 @@ uint64_t RpcClient::SendRequest(const std::string& method, const std::string& pa
     });
 
    
-    return req_id;
+    return std::pair<uint64_t, std::future<std::string>>(req_id, std::move(fut));
 }
 
 
@@ -80,55 +101,19 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
     }
 
 
-    uint64_t id = SendRequest(method, params);
-    std::promise<std::string> pro;
-    std::future<std::string> fut = pro.get_future();
-    {
-        std::lock_guard<std::mutex> lk(mutex_);
-        pending_[id] = std::move(pro);
-
-        uintptr_t client_addr = reinterpret_cast<uintptr_t>(this);
-        std::string strRpcLog("RpcClient::Call add new client=");
-        strRpcLog.append(std::to_string(client_addr));
-        strRpcLog.append(" id:=");
-        strRpcLog.append(std::to_string(id));
-        strRpcLog.append(" fd:=");
-        strRpcLog.append(std::to_string(con_->GetFd()));
-
-        
-        RpcLogFile& rpcLog = RpcLogFile::getInstance();
-        rpcLog.AppendContent(strRpcLog);
-    }
-
+    auto reqInfo = SendRequest(method, params);
+    uint64_t id = reqInfo.first;
+    std::future<std::string> fut = std::move(reqInfo.second);
+   
     test_pending_time_.insert(std::make_pair(id, std::chrono::steady_clock::now()));
     auto status = fut.wait_for(std::chrono::milliseconds(timeout_ms));
     if(std::future_status::timeout == status)
     {
         {
             std::lock_guard<std::mutex> lk(mutex_);
-            //std::cout << "rpc timeout id=" << id << std::endl;
-            auto itr = pending_.find(id);
-            if(itr == pending_.end())
-            {
-                //std::cout << "rpc timeout no find id=" << id << " rpc_client:=" << reinterpret_cast<uintptr_t>(this) << std::endl;
-            }
-
             pending_.erase(id);
-
-            std::string strRpcLog("RpcClient::Call rpc time_out erase client:=");
-            strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
-            strRpcLog.append("find id:=");
-            strRpcLog.append(std::to_string(id));
-            strRpcLog.append(" fd:=");
-            strRpcLog.append(std::to_string(con_->GetFd()));
-
-            RpcLogFile& rpcLog = RpcLogFile::getInstance();
-            rpcLog.AppendContent(strRpcLog);
         }
         
-
-       
-
         char error_log[32] = {0};
         snprintf(error_log, 31, "rpc timeout id:=%" PRIu64 " fd:=%d", id, con_->GetFd()); 
         throw std::runtime_error(error_log);
@@ -162,6 +147,7 @@ void RpcClient::OnResponse(const std::string& data)
         auto itr = pending_.find(res_id);
         if(itr == pending_.end())
         {
+            /*
             auto start = test_pending_time_[res_id];
             auto end = std::chrono::steady_clock::now();
             auto keep_seconds = std::chrono::duration_cast<std::chrono::seconds>(end-start).count();
@@ -175,14 +161,17 @@ void RpcClient::OnResponse(const std::string& data)
 
             RpcLogFile& rpcLog = RpcLogFile::getInstance();
             rpcLog.AppendContent(strRpcLog);
-            
-            std::cout << "rpc pending_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " fd:=" << con_->GetFd() << " code:=" << code << "keep seconds:=" << keep_seconds << std::endl;
+            */
+
+            //std::cout << "rpc pending_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " fd:=" << con_->GetFd() << " code:=" << code << "keep seconds:=" << keep_seconds << std::endl;
+            std::cout << "rpc pending_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " fd:=" << con_->GetFd() << " code:=" << code << std::endl;
             return;
         }
 
         p = std::move(itr->second);
         pending_.erase(itr);
 
+        /*
         std::string strRpcLog("RpcClient::OnResponse rpc delete client:=");
         strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
         strRpcLog.append("find id:=");
@@ -192,6 +181,7 @@ void RpcClient::OnResponse(const std::string& data)
 
         RpcLogFile& rpcLog = RpcLogFile::getInstance();
         rpcLog.AppendContent(strRpcLog);
+        */
     }
     
     if(eRpcCode_Success == code)
@@ -218,15 +208,17 @@ void RpcClient::OncConnectionClosed()
     bConnected_.store(false, std::memory_order_release);
     for(auto& pair: copy_pending)
     {
+        /*
         std::string strRpcLog("RpcClient::OncConnectionClosed rpc client:=");
-            strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
-            strRpcLog.append("find id:=");
-            strRpcLog.append(std::to_string(pair.first));
-            strRpcLog.append(" fd:=");
-            strRpcLog.append(std::to_string(con_->GetFd()));
+        strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
+        strRpcLog.append("find id:=");
+        strRpcLog.append(std::to_string(pair.first));
+        strRpcLog.append(" fd:=");
+        strRpcLog.append(std::to_string(con_->GetFd()));
 
-            RpcLogFile& rpcLog = RpcLogFile::getInstance();
-            rpcLog.AppendContent(strRpcLog);
+        RpcLogFile& rpcLog = RpcLogFile::getInstance();
+        rpcLog.AppendContent(strRpcLog);
+        */
 
         auto exception_ptr = std::make_exception_ptr(std::runtime_error("connection_closed"));
         pair.second.set_exception(exception_ptr);

@@ -21,7 +21,7 @@ public:
     void SetConnection(const TcpConnectionPtr& con);
 
     // 异步发送请求，返回请求ID(不等待响应)
-    uint64_t SendRequest(const std::string& method, const std::string& params);
+    std::pair<uint64_t, std::future<std::string>> SendRequest(const std::string& method, const std::string& params);
 
     // 同步调用， 阻塞直到收到响应或者超时
     std::string Call(const std::string& method, const std::string& params, int timeout_ms = 5000);

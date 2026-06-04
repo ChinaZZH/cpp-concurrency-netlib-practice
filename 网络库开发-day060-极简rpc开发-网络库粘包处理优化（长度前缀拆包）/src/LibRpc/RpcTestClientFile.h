@@ -175,7 +175,7 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
             std::cerr << "RPC error: " << e.what() << std::endl;
         }
 
-        std::this_thread::sleep_for(std::chrono::microseconds(200));
+        //std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
     
 

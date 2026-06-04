@@ -125,8 +125,6 @@ int main()
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_client_log.txt");
 
-
-    /*
     std::cout << "start 50 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(50, 10000);
     std::cout << std::endl << std::endl;
@@ -134,14 +132,13 @@ int main()
     std::cout << "start 20 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(20, 10000);
     std::cout << std::endl << std::endl;
-    */
 
     
     std::cout << "start 10 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(10, 10000);
     std::cout << std::endl << std::endl;
+    
      
-
     std::cout << "start 5 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(5, 10000);
     std::cout << std::endl << std::endl;
@@ -152,6 +149,7 @@ int main()
     ClientPressTest(1, 10000);
     std::cout << std::endl << std::endl;
     
+
     rpcLog.Release();
     return 0;
 }

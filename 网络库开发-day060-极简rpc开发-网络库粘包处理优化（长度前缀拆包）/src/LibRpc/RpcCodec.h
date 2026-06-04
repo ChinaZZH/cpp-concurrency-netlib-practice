@@ -16,7 +16,7 @@ class RpcCodec
 {
 public:
     // 编码请求
-    static void EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params, uint64_t test_client_id=0);
+    static void EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params);
 
     // 解码请求， 成功则返回true 并且填充 id, method， params; 失败则返回false (数据不足或者格式错误)
     static bool DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, std::string& params);

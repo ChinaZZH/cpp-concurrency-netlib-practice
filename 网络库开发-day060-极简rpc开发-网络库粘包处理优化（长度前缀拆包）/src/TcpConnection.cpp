@@ -279,7 +279,7 @@ void TcpConnection::SendOutput()
 
 void TcpConnection::ProcessInputBuffer()
 {
-    if(!messageCallBack_ || inputBuffer_.ReadableBytes() <= 0)
+    if(inputBuffer_.ReadableBytes() <= 0)
     {
         return;
     }
@@ -302,11 +302,53 @@ void TcpConnection::ProcessInputBuffer()
     }
     */
     
+    /*
     std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
-    //std::cout << "TcpConnection::ProcessInputBuffer fd:=" << socket_->GetSocketFd() << " thread_id:="<<  std::this_thread::get_id() << " connection_thread_id:="  << loop_->GetThreadId() << std::endl;
-    //std::cout << "Info:=" << strLineMsg.c_str() << std::endl;
-
     messageCallBack_(shared_from_this(), strLineMsg);
+    */
+
+    // 先实现按照前缀解包，后续修改成根据上层服务器的特性和业务需求按照指定的方式解包
+    {
+        while(true)
+        {
+            // 需要至少4字节读取包头长度
+            if(inputBuffer_.ReadableBytes() < sizeof(uint32_t))
+            {
+                break;
+            }
+
+            // 读取包头长度，并且将网络序转化为主机序
+            uint32_t netLen = 0;
+            ::memcpy(&netLen, inputBuffer_.Peek(), sizeof(uint32_t));
+            uint32_t msg_len = ntohl(netLen);
+
+            // 合法性检查
+            if(0 == msg_len || msg_len > 10*1024*1024)
+            {
+                // 非法连接，关闭
+                HandleClose("Invalid packet length");
+                return;
+            }
+
+            // 检查数据是否足够, 不够则继续等待
+            if(inputBuffer_.ReadableBytes() < (msg_len + sizeof(uint32_t)))
+            {
+                break;
+            }
+
+            // 足够，则进行解包，跳过包头
+            inputBuffer_.Retrieve(sizeof(uint32_t));
+            std::string strMsgContent(inputBuffer_.Peek(), msg_len);
+            inputBuffer_.Retrieve(msg_len);
+
+            if(messageCallBack_)
+            {
+                messageCallBack_(shared_from_this(), strMsgContent);
+            }
+           
+        }
+
+    }
 }
 
  
