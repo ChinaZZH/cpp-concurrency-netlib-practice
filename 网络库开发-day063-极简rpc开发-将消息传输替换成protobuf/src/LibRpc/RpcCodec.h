@@ -16,14 +16,14 @@ class RpcCodec
 {
 public:
     // 编码请求
-    static void EncodeRequest_Protobuf(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params);
+    static void Protobuf_EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params);
 
-    static bool DecodeRequest_Protobuf(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params);
+    static bool Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params);
 
     // 编码响应
-    static void EncodeResponse_Protobuf(Buffer& buffer, uint64_t id, int32_t code, const std::string& result);
+    static void Protobuf_EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result);
 
-    static bool DecodeResponse_Protobuf(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result);
+    static bool Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result);
 
     // 四个辅助函数
     static void WriteInt64(Buffer& buffer, int64_t value);

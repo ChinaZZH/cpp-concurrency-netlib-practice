@@ -43,7 +43,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
 
     uint64_t id;
     std::string strMethod, strParams;
-    bool ok = RpcCodec::DecodeRequest_Protobuf(strMsg, id, strMethod, strParams);
+    bool ok = RpcCodec::Protobuf_DecodeRequest(strMsg, id, strMethod, strParams);
     if(!ok)
     {
         this->HandlerResultResponse(con, id, eRpcCode_ParamError, "{}");
@@ -77,7 +77,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
 void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con, uint64_t id, int32_t code, std::string strResult)
 {
     Buffer resBuf;
-    RpcCodec::EncodeResponse_Protobuf(resBuf, id, code, strResult);
+    RpcCodec::Protobuf_EncodeResponse(resBuf, id, code, strResult);
 
     std::string strResponse = resBuf.RetrieveAllAsString();
     //std::cout << "Server sending response, size=" << strResponse.size() << " id=" << id << " code=" << code << std::endl;

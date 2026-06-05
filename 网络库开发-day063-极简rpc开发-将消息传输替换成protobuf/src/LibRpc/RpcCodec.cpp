@@ -104,7 +104,7 @@ bool RpcCodec::ReadString(Buffer& buffer, std::string& strValue)
 
 
  // 编码请求
-void RpcCodec::EncodeRequest_Protobuf(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params)
+void RpcCodec::Protobuf_EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params)
 {
     /*
     Buffer tmpBuff;
@@ -133,7 +133,7 @@ void RpcCodec::EncodeRequest_Protobuf(Buffer& buffer, uint64_t id, const std::st
 
 
 
-bool RpcCodec::DecodeRequest_Protobuf(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params)
+bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params)
 {
     RpcRequest request;
     request.ParseFromString(strBuffData);
@@ -144,7 +144,7 @@ bool RpcCodec::DecodeRequest_Protobuf(const std::string& strBuffData, uint64_t& 
 }
 
 // 编码响应
-void RpcCodec::EncodeResponse_Protobuf(Buffer& buffer, uint64_t id, int32_t code, const std::string& result)
+void RpcCodec::Protobuf_EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result)
 {
     /*
     Buffer tmpBuff;
@@ -172,7 +172,7 @@ void RpcCodec::EncodeResponse_Protobuf(Buffer& buffer, uint64_t id, int32_t code
 
 
 // 解码响应  成功返回true; 失败则返回false
-bool RpcCodec::DecodeResponse_Protobuf(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result)
+bool RpcCodec::Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result)
 {
     RpcResponse response;
     response.ParseFromString(strBuffData);

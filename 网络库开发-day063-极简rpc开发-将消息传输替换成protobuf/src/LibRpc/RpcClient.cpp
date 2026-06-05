@@ -55,7 +55,7 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
     
 
     Buffer buf;
-    RpcCodec::EncodeRequest_Protobuf(buf, req_id, method, params);
+    RpcCodec::Protobuf_EncodeRequest(buf, req_id, method, params);
     std::string strData = buf.RetrieveAllAsString();
 
     std::promise<std::string> pro;
@@ -135,7 +135,7 @@ void RpcClient::OnResponse(const std::string& data)
     uint64_t res_id = 0;
     int32_t code = 0;
     std::string result;
-    bool bDecodeReuslt = RpcCodec::DecodeResponse_Protobuf(data, res_id, code, result);
+    bool bDecodeReuslt = RpcCodec::Protobuf_DecodeResponse(data, res_id, code, result);
     if (!bDecodeReuslt)
     {
         // 解析失败，忽略
