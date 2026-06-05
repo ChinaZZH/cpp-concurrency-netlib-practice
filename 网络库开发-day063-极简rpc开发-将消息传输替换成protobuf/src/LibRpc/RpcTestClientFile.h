@@ -1,0 +1,153 @@
+#pragma once
+
+#include "../EventLoop.h"
+#include "RpcClient.h"
+#include "../TcpClient.h"
+#include "../TcpConnection.h"
+#include "../Decoder/LengthPrefixDecoder.h"
+#include "../Common/JsonMethod.h"
+
+#include <iostream>
+#include <chrono>
+#include <iostream>
+
+#include <signal.h>
+#include <thread>
+//#include <nlohmann/json.hpp>
+
+
+
+
+void client_work_function(int id, int task_count, std::vector<uint64_t>& latencies) {
+    // 创建 EventLoop 对象（将在独立线程中运行）
+    EventLoop loop;
+
+    // 创建 TcpClient 和 RpcClient
+    auto client = std::make_shared<TcpClient>(&loop, "127.0.0.1", 8888);
+    auto rpcClient = std::make_shared<RpcClient>(nullptr);
+
+    // 用于等待连接建立的同步
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool connected = false;
+
+    std::weak_ptr<RpcClient> rpcPtr = rpcClient->shared_from_this();
+    client->SetConnectionCallBack([&, rpcPtr](const TcpConnectionPtr& conn) {
+        auto rpcClient = rpcPtr.lock();
+        if(rpcClient)
+        {
+            //std::cout << "Connected to server" << std::endl;
+            auto length_decoder = std::make_unique<LengthPrefixDecoder>();
+            conn->SetDecoder(std::move(length_decoder));
+            rpcClient->SetConnection(conn);
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                connected = true;
+            }
+        }
+        
+
+        cv.notify_one();
+    });
+    
+    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg) {
+        auto rpcClient = rpcPtr.lock();
+        if(rpcClient)
+        {
+             rpcClient->OnResponse(msg);
+        }
+    });
+
+    client->Connect();
+
+    // 启动 I/O 线程
+    std::thread io_thread([&loop]() {
+        //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
+        loop.Loop();
+    });
+    
+    // 等待连接建立
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&] { return connected; });
+    }
+
+    // 主线程发起 add RPC 调用
+    /*
+    try {
+        std::string result = rpcClient->Call("add", R"({"a":10,"b":32})", 1000);
+        std::cout << "RPC result: " << result << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "RPC error: " << e.what() << std::endl;
+    }
+
+    // 主线程发起 add RPC 调用
+    try {
+        AddRequest req{100, 320};
+        AddResponse response = rpcClient->Call<AddRequest, AddResponse>("add", req, 1000);
+        std::cout << "RPC result: " << response.result << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "RPC error: " << e.what() << std::endl;
+    }
+
+    // 主线程发起 echo RPC 调用
+    try {
+        std::string result = rpcClient->Call("echo", "hello kitty", 1000);
+        std::cout << "RPC result: " << result << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "RPC error: " << e.what() << std::endl;
+    }
+
+    // 主线程发起 login RPC 调用
+    try {
+        std::string result = rpcClient->Call("login", R"({"user":"admin","pass":"123"})", 1000);
+        std::cout << "RPC result: " << result << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "RPC error: " << e.what() << std::endl;
+    }
+
+    // 主线程发起 login RPC 调用
+    try {
+        LoginRequest req{"admin", "abc123"};
+        LoginResponse response = rpcClient->Call<LoginRequest, LoginResponse>("login", req, 1000);
+        std::cout << "RPC reuslt code:= " << response.code  << " token:=" << response.token << " msg:=" << response.msg << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "RPC error: " << e.what() << std::endl;
+    }
+    */
+
+    latencies.reserve(task_count);
+
+    int add_num = id * task_count;
+    JsonMethodLib::AddRequest req{add_num, 0};
+    for(int i = 0; i < task_count; ++i)
+    {
+
+       auto overall_start = std::chrono::steady_clock::now();
+       try {
+            req.b = i;    
+            JsonMethodLib::AddResponse response = rpcClient->Call<JsonMethodLib::AddRequest, JsonMethodLib::AddResponse>("add", req, 5000);
+            //std::cout << "RPC result: " << response.result << std::endl;
+            assert(add_num + i == response.result);
+            auto overall_end = std::chrono::steady_clock::now();
+            auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+            latencies.emplace_back(cost_sec);
+        } catch (const std::exception& e) {
+            std::cerr << "RPC error: " << e.what() << std::endl;
+        }
+
+        //std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    
+
+    // 停止 I/O 线程（可选，简单退出）
+    loop.Quit();
+    io_thread.join();
+    //return 0;
+}
+
+
+
+
+
+
