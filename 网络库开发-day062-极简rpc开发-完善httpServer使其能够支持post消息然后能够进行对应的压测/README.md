@@ -6,16 +6,16 @@ markdown
 
 -- 1. 完善httpServer,使它支持post相关的调用
 
--- 2. 进行压力测试和rpcServer进行对比
+-- 2. 进行压力测试和rpcServer进行对比，http客户端压测工具使用readme.md目录下的bench_test_http_server.cpp。里面的各种计算方式和rpcClient的压测工具是一致的，排除其他因素影响个具有对比性。
 
 
 
 ## 具体测试性能数据
 
--- 1. 50线程，每个线程10000个任务对比， rpcServer 除了p99,p999的延时更高之外，其他数据都优于httpServer.
+-- 1. 客户端50线程，每个线程10000个任务对比， rpcServer 除了p99,p999的延时更高之外，其他数据都优于httpServer.
 
 ```cpp
-rpcServer 50线程，每个线程10000个任务
+rpcServer 客户端50线程，每个线程10000个任务
 start 50 thread and req_per_threads 10000:
 all_us vector size(): 500000
 Total request: 500000
@@ -27,7 +27,7 @@ P90 latency: 747
 P99 latency: 2307
 P999 latency: 6114
 
-httpServer 50线程，每个线程10000个任务
+httpServer 客户端50线程，每个线程10000个任务
 start 50 thread and req_per_threads 10000:
 all_us vector size(): 500000
 Total request: 500000
@@ -41,10 +41,10 @@ P999 latency: 2307
 
 ```
 
--- 2. 20线程，每个线程10000个任务对比， rpcServer 除了p99,p999的延时更高之外，其他数据都优于httpServer.但是相比50线程20线程的数据优势降低，但是劣势也降低了。
+-- 2. 客户端20线程，每个线程10000个任务对比， rpcServer 除了p99,p999的延时更高之外，其他数据都优于httpServer.但是相比50线程20线程的数据优势降低，但是劣势也降低了。
 
 ```cpp
-rpcServer 20线程，每个线程10000个任务
+rpcServer 客户端20线程，每个线程10000个任务
 start 20 thread and req_per_threads 10000:
 all_us vector size(): 200000
 Total request: 200000
@@ -56,7 +56,7 @@ P90 latency: 495
 P99 latency: 989
 P999 latency: 1884
 
-httpServer 20线程，每个线程10000个任务
+httpServer 客户端20线程，每个线程10000个任务
 tart 20 thread and req_per_threads 10000:
 all_us vector size(): 200000
 Total request: 200000
@@ -70,10 +70,10 @@ P999 latency: 1311
 
 ```
 
--- 3. 10线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
+-- 3. 客户端10线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
 
 ```cpp
-rpcServer 10线程，每个线程10000个任务
+rpcServer 客户端10线程，每个线程10000个任务
 start 10 thread and req_per_threads 10000:
 all_us vector size(): 100000
 Total request: 100000
@@ -85,7 +85,7 @@ P90 latency: 381
 P99 latency: 605
 P999 latency: 969
 
-httpServer 10线程，每个线程10000个任务
+httpServer 客户端10线程，每个线程10000个任务
 start 10 thread and req_per_threads 10000:
 all_us vector size(): 100000
 Total request: 100000
@@ -99,10 +99,10 @@ P999 latency: 930
 
 ```
 
--- 4. 5线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
+-- 4. 客户端5线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
 
 ```cpp
-rpcServer 5线程，每个线程10000个任务
+rpcServer 客户端5线程，每个线程10000个任务
 start 5 thread and req_per_threads 10000:
 all_us vector size(): 50000
 Total request: 50000
@@ -114,7 +114,7 @@ P90 latency: 263
 P99 latency: 328
 P999 latency: 628
 
-httpServer 5线程，每个线程10000个任务
+httpServer 客户端5线程，每个线程10000个任务
 start 5 thread and req_per_threads 10000:
 all_us vector size(): 50000
 Total request: 50000
@@ -129,10 +129,10 @@ P999 latency: 435
 
 ```
 
--- 5. 1线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
+-- 5. 客户端1线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
 
 ```cpp
-rpcServer 5线程，每个线程10000个任务
+rpcServer 客户端1线程，每个线程10000个任务
 start 1 thread and req_per_threads 10000:
 all_us vector size(): 10000
 Total request: 10000
@@ -144,7 +144,7 @@ P90 latency: 122
 P99 latency: 199
 P999 latency: 867
 
-httpServer 5线程，每个线程10000个任务
+httpServer 客户端1线程，每个线程10000个任务
 start 1 thread and req_per_threads 10000:
 all_us vector size(): 10000
 Total request: 10000
