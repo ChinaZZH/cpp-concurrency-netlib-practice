@@ -4,6 +4,7 @@
 #include "TcpServer.h"
 #include "HttpServer.h"
 #include "Common/JsonMethod.h"
+#include "Common/ProtoMethod.h"
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcClient.h"
 #include "LibRpc/RpcTestClientFile.h"
@@ -50,9 +51,9 @@ int main()
 
     // rpcServer
     RpcServer server(&loop, PORT);
-    server.RegisterMethod("add", JsonMethodLib::add);
-    server.RegisterMethod("echo", JsonMethodLib::echo);
-    server.RegisterMethod("login", JsonMethodLib::login);
+    server.RegisterMethod("add", ProtoMethod::add);
+    //server.RegisterMethod("echo", JsonMethodLib::echo);
+    //server.RegisterMethod("login", JsonMethodLib::login);
     server.Start(0, 6, 0);
 
     

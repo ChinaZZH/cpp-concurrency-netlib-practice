@@ -2,6 +2,7 @@
 #include "EventLoop.h"
 #include "EventLoopThread.h"
 #include <cassert>
+#include <iostream>
 
 EventLoopThreadPool::EventLoopThreadPool(EventLoop* baseLoop, const std::string& nameArg /*=""*/)
 :baseLoop_(baseLoop)
@@ -30,8 +31,10 @@ void EventLoopThreadPool::Start(TcpServer* tcpServer, int idleSecTimeOut, const 
         char buf[32] = {0};
         snprintf(buf, sizeof(buf), "%s%d", name_.c_str(), i+1);
 
+        //std::cout << "EventLoopThreadPool::Start 1111" << std::endl;
         auto event_loop_thread = std::make_unique<EventLoopThread>(cb, buf);
         EventLoop* loop = event_loop_thread->StartLoop();
+        //std::cout << "EventLoopThreadPool::Start 2222" << std::endl;
         if(loop)
         {
             threads_.emplace_back(std::move(event_loop_thread));

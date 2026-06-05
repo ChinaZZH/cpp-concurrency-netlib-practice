@@ -44,14 +44,15 @@ EventLoop* EventLoopThread::StartLoop()
  // 线程入口函数
 void EventLoopThread::ThreadFunc()
 {
-    
+    //std::cout << "EventLoopThread::ThreadFunc::111" << std::endl;
     EventLoop event_loop;
+    //std::cout << "EventLoopThread::ThreadFunc::222" << std::endl;
     if(callback_)
     {
         callback_(&event_loop);
     }
+    //std::cout << "EventLoopThread::ThreadFunc::3333" << std::endl;
 
-    // std::cout << "EventLoopThread::ThreadFunc loop runInLoop thread_id:" << std::this_thread::get_id() << " event_loop thread_id:" << event_loop.GetThreadId() << std::endl;
 
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -59,7 +60,9 @@ void EventLoopThread::ThreadFunc()
         cond_.notify_one();
     }
 
+    //std::cout << "EventLoopThread::ThreadFunc::4444" << std::endl;
     event_loop.Loop();
+    //std::cout << "EventLoopThread::ThreadFunc::5555" << std::endl;
     
     {
         std::unique_lock<std::mutex> lock(mutex_);

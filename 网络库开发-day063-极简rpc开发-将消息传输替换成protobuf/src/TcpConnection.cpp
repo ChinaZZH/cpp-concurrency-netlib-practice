@@ -35,7 +35,7 @@ void TcpConnection::ConnectEstablished()
 {
     loop_->AssertInLoopThread("TcpConnection::ConnectEstablished");
 
-    //std::cout << "connectEstablished: fd=" << fd_ << " on thread " << std::this_thread::get_id() << std::endl;
+    // std::cout << "connectEstablished: fd=" << fd_ << " on thread " << std::this_thread::get_id() << std::endl;
 
     socket_->DisableNagele();
 

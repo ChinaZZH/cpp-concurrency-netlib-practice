@@ -55,7 +55,7 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
     
 
     Buffer buf;
-    RpcCodec::EncodeRequest(buf, req_id, method, params);
+    RpcCodec::EncodeRequest_Protobuf(buf, req_id, method, params);
     std::string strData = buf.RetrieveAllAsString();
 
     std::promise<std::string> pro;
@@ -128,15 +128,14 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
 // 处理响应(由网络消息回调调用)
 void RpcClient::OnResponse(const std::string& data)
 {
-    //std::cout << "RpcClient::OnResponse: received " << data.size() << " bytes" << std::endl;
-    //std::cout << "RpcClient::OnResponse thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << con_->GetLoop()->GetThreadId() << std::endl;
-    Buffer buf;
-    buf.Append(data);
+    
+    //Buffer buf;
+    //buf.Append(data);
 
     uint64_t res_id = 0;
     int32_t code = 0;
     std::string result;
-    bool bDecodeReuslt = RpcCodec::DecodeResponse(buf, res_id, code, result);
+    bool bDecodeReuslt = RpcCodec::DecodeResponse_Protobuf(data, res_id, code, result);
     if (!bDecodeReuslt)
     {
         // 解析失败，忽略

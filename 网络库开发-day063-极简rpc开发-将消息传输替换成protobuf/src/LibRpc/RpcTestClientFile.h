@@ -6,6 +6,7 @@
 #include "../TcpConnection.h"
 #include "../Decoder/LengthPrefixDecoder.h"
 #include "../Common/JsonMethod.h"
+#include "../../build/proto_gen/add.pb.h"
 
 #include <iostream>
 #include <chrono>
@@ -119,16 +120,23 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
     latencies.reserve(task_count);
 
     int add_num = id * task_count;
-    JsonMethodLib::AddRequest req{add_num, 0};
+    AddRequest req;
+    req.set_a(add_num);
+    req.set_b(0);
+    
     for(int i = 0; i < task_count; ++i)
     {
 
        auto overall_start = std::chrono::steady_clock::now();
        try {
-            req.b = i;    
-            JsonMethodLib::AddResponse response = rpcClient->Call<JsonMethodLib::AddRequest, JsonMethodLib::AddResponse>("add", req, 5000);
-            //std::cout << "RPC result: " << response.result << std::endl;
-            assert(add_num + i == response.result);
+            req.set_b(i);   
+            std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
+           
+            AddResponse response;
+            response.ParseFromString(strResult);
+
+             //std::cout << "RPC result: " << response.result << std::endl;
+            assert(add_num + i == response.sum());
             auto overall_end = std::chrono::steady_clock::now();
             auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
             latencies.emplace_back(cost_sec);

@@ -67,13 +67,13 @@ TcpServer::~TcpServer()
 
 void TcpServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
-    
+    //std::cout << "TcpServer::Start 1111" << std::endl;
     {
         nEventLoopThreadCount_ = std::max(0, nEventLoopThread);
         eventLoopThreadPool_->SetThreadNum(nEventLoopThreadCount_);
         eventLoopThreadPool_->Start(this, idleSecTimeOut);
     }
-
+//std::cout << "TcpServer::Start 222" << std::endl;
     {
         nTaskThreadNum = std::max(1, nTaskThreadNum);
         taskThreadPool_->Start(option, nTaskThreadNum);
