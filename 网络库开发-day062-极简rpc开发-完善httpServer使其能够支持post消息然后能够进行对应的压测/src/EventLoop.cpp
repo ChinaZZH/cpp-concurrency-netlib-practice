@@ -429,17 +429,6 @@ void EventLoop::ExecuteExpiredTimers()
 
  void EventLoop::HandleNewConnection(std::shared_ptr<TcpConnection> newConnection)
  {
-     /*
-    std::cout << "New connection fd=" << nClientFd 
-              << " assigned to thread " << std::this_thread::get_id() 
-              << " (ioLoop thread will be " << loop->GetThreadId() << ")" << std::endl;
-    */
-
-    
-    // 将新连接加入epoll  
-   
-
-    
     newConnection->SetCloseCallBack(std::bind(&EventLoop::ClosedConnection, this, std::placeholders::_1));
     newConnection->SetWaterMarkCallbacks(
         [](const std::shared_ptr<TcpConnection>& con){
