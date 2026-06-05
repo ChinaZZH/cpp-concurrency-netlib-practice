@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message LoginRequest {
+    string user = 1;
+    string pass = 2;
+}
+
+message LoginResponse {
+    int32 code = 1;
+    string token = 2;        // 业务响应序列化后的二进制
+    string msg = 3;        // 业务响应序列化后的二进制
+}
