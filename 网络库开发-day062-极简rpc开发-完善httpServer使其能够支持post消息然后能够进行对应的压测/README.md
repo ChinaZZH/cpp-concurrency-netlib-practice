@@ -4,34 +4,203 @@ markdown
 
 ## 核心收获
 
--- 1. TcpClient 是否建立连接需要判断当前是否有可写事件，可写事件发生后需要先移除旧的channel创建新的channel.
+-- 1. 完善httpServer,使它支持post相关的调用
 
--- 2. TcpClient执行移除channel的时候也是走下一帧执行。在HandleWrite移除channel之后应该执行创建新 连接的逻辑 HandleNewConnection.
-
--- 3. RpcClient发送消息的时候应该走eventloop中的loop线程上(和收消息同一个线程同一个channel)，所以通过投递函数RunInLoop让发消息都走在eventloop的loop线程上。
-
--- 4. rpc处理函数除了add方法，还增加login和echo方法，并且依次调用测试，字符串参数和模板化参数都得调用测试。
-
--- 5. 测试rpcClient 10个线程分别调用100次add函数, 发现没有问题运行正常稳定。
-
--- 6. 运行客户端程序 valgrind --leak-check=full ./rpc_client  查看是否有内存泄漏。目前没有内存泄漏，但是有内存错误报错 
--- ERROR SUMMARY: 20 errors from 2 contexts (suppressed: 0 from 0)  
-
--- 7. 排查报错通用命令运行客户端程序   valgrind --leak-check=full -s ./rpc_client。 定义到时channel过早移除的原因，则tcpClient跟serverConnection一样也是延时删除。
-
--- 8. rpcServer和rpcClient 中的rpc服务对延时敏感，则禁用nagle算法，使小的网络包的延时降低。
-
--- 9. 进行TcpClient多线程多任务进行压测，计算出总的花费时间，总的QPS， 处理的总任务数，以及平均延时和P50,P90,P99,P999各自延时的毫秒数。
-
--- 10. 进行TcpClient多线程多任务进行压测，除了计算出对应的参数数据，也要极限情况下的服务器和客户端问题排查和修复。
-
--- 11. rpcClient和rpcServer中的id由原先的uint32修改为uint64,防止溢出。
-
--- 12. 增加rpcLogFile来记录报错日志。
+-- 2. 进行压力测试和rpcServer进行对比
 
 
-## 代码
 
+## 具体测试性能数据
+
+-- 1. 50线程，每个线程10000个任务对比， rpcServer 除了p99,p999的延时更高之外，其他数据都优于httpServer.
+
+```cpp
+rpcServer 50线程，每个线程10000个任务
+start 50 thread and req_per_threads 10000:
+all_us vector size(): 500000
+Total request: 500000
+Total time(second): 4.86057
+QPS: 102869
+Average latency: 414.717
+P50 latency: 304
+P90 latency: 747
+P99 latency: 2307
+P999 latency: 6114
+
+httpServer 50线程，每个线程10000个任务
+start 50 thread and req_per_threads 10000:
+all_us vector size(): 500000
+Total request: 500000
+Total time(second): 6.90958
+QPS: 72363.3
+Average latency: 671.154
+P50 latency: 619
+P90 latency: 1160
+P99 latency: 1753
+P999 latency: 2307
+
+```
+
+-- 2. 20线程，每个线程10000个任务对比， rpcServer 除了p99,p999的延时更高之外，其他数据都优于httpServer.但是相比50线程20线程的数据优势降低，但是劣势也降低了。
+
+```cpp
+rpcServer 20线程，每个线程10000个任务
+start 20 thread and req_per_threads 10000:
+all_us vector size(): 200000
+Total request: 200000
+Total time(second): 3.14661
+QPS: 63560.4
+Average latency: 298.364
+P50 latency: 259
+P90 latency: 495
+P99 latency: 989
+P999 latency: 1884
+
+httpServer 20线程，每个线程10000个任务
+tart 20 thread and req_per_threads 10000:
+all_us vector size(): 200000
+Total request: 200000
+Total time(second): 3.66406
+QPS: 54584.3
+Average latency: 350.045
+P50 latency: 311
+P90 latency: 605
+P99 latency: 941
+P999 latency: 1311
+
+```
+
+-- 3. 10线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
+
+```cpp
+rpcServer 10线程，每个线程10000个任务
+start 10 thread and req_per_threads 10000:
+all_us vector size(): 100000
+Total request: 100000
+Total time(second): 2.60875
+QPS: 38332.5
+Average latency: 255.299
+P50 latency: 236
+P90 latency: 381
+P99 latency: 605
+P999 latency: 969
+
+httpServer 10线程，每个线程10000个任务
+start 10 thread and req_per_threads 10000:
+all_us vector size(): 100000
+Total request: 100000
+Total time(second): 2.15264
+QPS: 46454.7
+Average latency: 207.82
+P50 latency: 187
+P90 latency: 323
+P99 latency: 523
+P999 latency: 930
+
+```
+
+-- 4. 5线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
+
+```cpp
+rpcServer 5线程，每个线程10000个任务
+start 5 thread and req_per_threads 10000:
+all_us vector size(): 50000
+Total request: 50000
+Total time(second): 2.11453
+QPS: 23645.9
+Average latency: 209.712
+P50 latency: 206
+P90 latency: 263
+P99 latency: 328
+P999 latency: 628
+
+httpServer 5线程，每个线程10000个任务
+start 5 thread and req_per_threads 10000:
+all_us vector size(): 50000
+Total request: 50000
+Total time(second): 1.61726
+QPS: 30916.6
+Average latency: 160.63
+P50 latency: 157
+P90 latency: 207
+P99 latency: 261
+P999 latency: 435
+
+
+```
+
+-- 5. 1线程，每个线程10000个任务对比，rpcServer各项数据都比httpServer更差了，但是差距不会太大。
+
+```cpp
+rpcServer 5线程，每个线程10000个任务
+start 1 thread and req_per_threads 10000:
+all_us vector size(): 10000
+Total request: 10000
+Total time(second): 1.13467
+QPS: 8813.17
+Average latency: 112.755
+P50 latency: 107
+P90 latency: 122
+P99 latency: 199
+P999 latency: 867
+
+httpServer 5线程，每个线程10000个任务
+start 1 thread and req_per_threads 10000:
+all_us vector size(): 10000
+Total request: 10000
+Total time(second): 0.929272
+QPS: 10761.1
+Average latency: 92.312
+P50 latency: 84
+P90 latency: 114
+P99 latency: 185
+P999 latency: 565
+
+
+```
+
+## 对比说明
+
+-- 1. RPC 服务在高并发场景下性能明显优于 HTTP 服务，而在低并发时 HTTP 略占优势。详细分析如下：
+
+一、QPS 对比
+
+|线程数	|RPC QPS|	HTTP QPS|	RPC 领先幅度|
+|-------|-------|-----------|--------------|
+|1	|8,813	|10,761	|-18% (HTTP 更高)|
+|5	|23,646	|30,917	|-23% (HTTP 更高)|
+|10	|38,333	|46,455	|-17% (HTTP 更高)|
+|20	|63,560	|54,584	|+16% (RPC 反超)|
+|50	|102,869	|72,363	|+42% (RPC 显著领先)|
+
+-- 低并发（1-10 线程）：HTTP 的 QPS 比 RPC 高 17%~23%。原因可能是 RPC 的二进制编解码（长度前缀+字段解析）在轻负载时开销占比相对较高，
+
+	而 HTTP 的文本解析虽然慢但实现简单（如按行分割、状态机），且连接数少时上下文切换少。
+
+
+-- 高并发（20-50 线程）：RPC 反超并大幅领先。这是因为 RPC 使用二进制协议和长度前缀拆包，减少了数据量和解析复杂度；
+
+	同时 RPC 客户端每个线程独立连接，避免了 HTTP 的头部冗余和复杂解析（如 Content-Length、chunked）。
+
+	50 线程时，RPC QPS 达到 10.3 万，比 HTTP 的 7.2 万高出 42%。
+
+二、延迟对比（以 50 线程为例）
+
+|指标|	RPC	|HTTP|	对比|
+|-------|-------|-----------|--------------|
+|平均延迟	|414.7 µs|	671.2 µs|	RPC 低 38%|
+|P50 延迟|	304 µs|	619 µs|	RPC 低 51%|
+|P90 延迟|	747 µs|	1,160 µs|	RPC 低 36%|
+|P99 延迟|	2,307 µs|	1,753 µs|	HTTP 反而更低？|
+
+注意：50 线程时 RPC 的 P99 延迟（2.3ms）高于 HTTP（1.75ms），这可能是由于 RPC 在极高并发下的资源竞争（如 pending_ 锁、promise/future 唤醒开销）导致尾部延迟略高。但平均和 P50 延迟 RPC 明显占优。
+
+## 结论
+-- 1. RPC 的优势：在高并发（多线程、多连接）下，二进制协议+长度前缀拆包带来显著的吞吐量和平均延迟优势。50 线程时 QPS 高达 10.2 万，比 HTTP 高 42%，平均延迟低 38%。
+
+-- 2. HTTP 的优势：在低并发（1-10 线程）时，实现简单（如按行分割）且无额外编解码开销，QPS 略高于 RPC。
+
+-- 3. 适用场景：如果您的服务需要支撑高并发（如游戏服务器、微服务网关），RPC 是明显更优的选择；如果并发较低且希望通用性好，HTTP 也可以接受。
 
 ## 测试
 -- 一切正常。
