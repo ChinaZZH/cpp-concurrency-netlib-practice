@@ -20,6 +20,7 @@ public:
     enum ParseState{
         kExpectRequestLine,
         kExpectHeaders,
+        kExpectBody,
         kGotAll,
     };
 
@@ -31,13 +32,15 @@ public:
     bool IsComplete() const { return state_ == kGotAll; }
 
     // 解析结果返回
-    std::string GetMethod() const { return method_; }
+    const std::string& GetMethod() const { return method_; }
 
-    std::string GetPath() const { return path_; }
+    const std::string& GetPath() const { return path_; }
 
-    std::string GetVersion() const { return version_; }
+    const std::string& GetVersion() const { return version_; }
 
-    std::string GetHeader(const std::string& key) const;
+    const std::string& GetBody() const { return body_; }
+
+    const std::string& GetHeader(const std::string& key) const;
 
     // 重置状态，用于复用对象(例如 keep_alive)
     void Reset();
@@ -47,9 +50,13 @@ private:
 
     bool ProcessHeader(const std::string_view& line);
 
+private:
     ParseState      state_;
     std::string     method_;
     std::string     path_;
     std::string     version_;
     std::vector<std::pair<std::string, std::string>>  headers_; // 由于这个数量极少，则用std::vector进行优化
+
+    std::string body_;
+    std::string nullptr_header;
 };

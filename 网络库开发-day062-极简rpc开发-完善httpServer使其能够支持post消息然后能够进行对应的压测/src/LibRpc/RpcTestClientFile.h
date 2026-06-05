@@ -1,8 +1,11 @@
+#pragma once
+
 #include "../EventLoop.h"
 #include "RpcClient.h"
 #include "../TcpClient.h"
 #include "../TcpConnection.h"
 #include "../Decoder/LengthPrefixDecoder.h"
+#include "../Common/JsonMethod.h"
 
 #include <iostream>
 #include <chrono>
@@ -10,54 +13,9 @@
 
 #include <signal.h>
 #include <thread>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
+//#include <nlohmann/json.hpp>
 
 
-struct AddRequest{
-    int a;
-    int b;
-};
-
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AddRequest, a, b);
-
-/*
-void to_json(nlohmann::json& j, const AddRequest& req)
-{
-    j = nlohmann::json{{"a", req.a} , {"b", req.b}};
-}
-*/
-
-struct AddResponse{
-    int result;
-};
-
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AddResponse, result);
-
-/*
-void from_json(const nlohmann::json& j, AddResponse& resp)
-{
-    j.at("result").get_to(resp.result);
-}
-*/
-
-
-struct LoginRequest{
-    std::string user;
-    std::string pass;
-};
-
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LoginRequest, user, pass);
-
-
-struct LoginResponse{
-    int code;
-    std::string token;
-    std::string msg;
-};
-
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LoginResponse, code, token, msg);
 
 
 void client_work_function(int id, int task_count, std::vector<uint64_t>& latencies) {
@@ -161,14 +119,14 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
     latencies.reserve(task_count);
 
     int add_num = id * task_count;
-    AddRequest req{add_num, 0};
+    JsonMethodLib::AddRequest req{add_num, 0};
     for(int i = 0; i < task_count; ++i)
     {
 
        auto overall_start = std::chrono::steady_clock::now();
        try {
             req.b = i;    
-            AddResponse response = rpcClient->Call<AddRequest, AddResponse>("add", req, 5000);
+            JsonMethodLib::AddResponse response = rpcClient->Call<JsonMethodLib::AddRequest, JsonMethodLib::AddResponse>("add", req, 5000);
             //std::cout << "RPC result: " << response.result << std::endl;
             assert(add_num + i == response.result);
             auto overall_end = std::chrono::steady_clock::now();
@@ -191,50 +149,5 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
 
 
 
-std::string add(const std::string& params)
-{
-    //std::this_thread::sleep_for(std::chrono::seconds(2));
-    int result = 0;
-    try
-    {
-        auto j = json::parse(params);
-        int a =  j["a"];
-        int b = j["b"];
-        result = a + b;
-    }
-    catch(const std::exception& e)
-    {
-        throw std::runtime_error("call add function error");
-    }
-    
-    json res = {{"result", result}};
-    return res.dump();
-}
-
-
-std::string echo(const std::string& params)
-{
-    return params;
-}
-
-std::string login(const std::string& params)
-{
-    try
-    {
-        auto j = json::parse(params);
-        if("admin" == j["user"] && "123" == j["pass"])
-        {
-            return R"({"code":0,"token":"abc123", "msg":"auth successed"})";
-        }else{
-            return R"({"code":1,"token":"", "msg":"auth failed"})";
-        }
-    }
-    catch(const std::exception& e)
-    {
-        throw std::runtime_error("call login function error");
-    }
-
-    return R"({"code":1,"token":"", "msg":"auth failed"})";
-}
 
 

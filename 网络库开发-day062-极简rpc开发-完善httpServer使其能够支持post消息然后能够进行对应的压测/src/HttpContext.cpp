@@ -13,7 +13,7 @@ HttpContext::HttpContext()
 }
 
 
-std::string HttpContext::GetHeader(const std::string& key) const
+const std::string& HttpContext::GetHeader(const std::string& key) const
 {
     auto itr = std::find_if(headers_.begin(), headers_.end(), 
                             [&key](const std::pair<std::string, std::string>& pairHead){ 
@@ -23,7 +23,7 @@ std::string HttpContext::GetHeader(const std::string& key) const
 
     if(itr == headers_.end())
     {
-        return std::string();
+        return nullptr_header;
     }
 
     return (itr->second);
@@ -53,9 +53,10 @@ Accept: text/html\r\n
 // 解析数据， 返回true表示解析数据完成(可能还有剩余数据未使用)
 bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
 {
-    this->Reset();
+    
     size_t pos = 0;
     // 解析RequestLine  GET /index.html?name=john&age=25 HTTP/1.1\r\n
+    if(kExpectRequestLine == state_)
     {
         size_t request_line = data.find("\r\n", pos);
         if(request_line == std::string::npos)
@@ -64,6 +65,7 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
         }
 
         std::string_view strLine(data.data(), request_line);
+        // << "HttpContext::PraseRequest request_line:=" << request_line << std::endl;
         bool bRequestLine = ProcessRequestLine(strLine);
         if(!bRequestLine)
         {
@@ -84,30 +86,68 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
     \r\n
     */
    
-    int flag = ((state_ != kGotAll && pos < data.size())?1:0);
-    while(state_ != kGotAll && pos < data.size())
+    // header list 没有"\r\n\r\n" 直接返回错误，就不做解析了。
+    size_t header_end_pos = data.find("\r\n\r\n", pos);
+    if(std::string::npos == header_end_pos)
     {
+        return false;
+    }
+
+    header_end_pos += 2;
+    while(state_ == kExpectHeaders)
+    {
+        // 找不到\r\n则出错
         size_t eol = data.find("\r\n", pos);
         if(std::string::npos == eol)
-        {
-            break;
-        }
-
-        std::string_view strHeader(data.data()+pos, eol - pos);
-        if(strHeader.empty())
-        {
-            state_ = kGotAll;
-            consumed = eol + 2;
-            break;
-        }
-        
-        if(!ProcessHeader(strHeader))
         {
             return false;
         }
 
+        
+        std::string_view strHeader(data.data() + pos, eol - pos);
+        if(!strHeader.empty())
+        {
+           if(!ProcessHeader(strHeader))
+           {
+                return false;
+           }
+        }
+        
         pos = eol + 2;
         consumed = pos;
+
+        // pos移动到"\r\n\r\n"中的第2个\r的时候就可以结束整个header解析流程了。
+        if(pos == header_end_pos)
+        {
+            pos += 2; // 移动到header结束，开启body内容
+            consumed = pos;
+            state_ = kExpectBody;
+            break;
+        }
+    }
+
+    if(kExpectBody == state_)
+    {
+        auto itr = std::find_if(headers_.begin(), headers_.end(), [](const auto& header_data){
+            return (0 == header_data.first.compare("Content-Length"));
+        });
+
+        if(itr == headers_.end())
+        {
+            state_ = kGotAll;
+            return true;
+        }
+        
+        const std::string& str_content_len = (itr->second);
+        size_t content_len = std::strtoul(str_content_len.c_str(), nullptr, 10);
+        int remain_len = data.size() - pos;
+        if(remain_len < content_len)
+        {
+            return false;
+        }
+
+        body_.assign(data.data() + pos, content_len);
+        state_ = kGotAll;
     }
 
     return  (kGotAll == state_); 

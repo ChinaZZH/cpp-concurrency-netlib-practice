@@ -3,6 +3,7 @@
 #include "EventLoop.h"
 #include "TcpServer.h"
 #include "HttpServer.h"
+#include "Common/JsonMethod.h"
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcClient.h"
 #include "LibRpc/RpcTestClientFile.h"
@@ -14,7 +15,7 @@
 
 #include <signal.h>
 #include <thread>
-#include <nlohmann/json.hpp>
+
 
 #define PORT 8888
 
@@ -41,21 +42,24 @@ int main()
 
 
     // httpSrver
-    //HttpServer server(&loop, PORT);
-    //server.Start(0, 6, 60); // eventloopThread 6个工作线程为最佳性能
+    /*
+    HttpServer server(&loop, PORT);
+    server.RegisterMethod("add", JsonMethodLib::add);
+    server.Start(0, 6, 0); // eventloopThread 6个工作线程为最佳性能
+    */
 
     // rpcServer
     RpcServer server(&loop, PORT);
-    server.RegisterMethod("add", add);
-    server.RegisterMethod("echo", echo);
-    server.RegisterMethod("login", login);
-
+    server.RegisterMethod("add", JsonMethodLib::add);
+    server.RegisterMethod("echo", JsonMethodLib::echo);
+    server.RegisterMethod("login", JsonMethodLib::login);
     server.Start(0, 6, 0);
+
+    
     //EventLoop* pLoop = server.GetIndexLoop(5);
     //pLoop->RunAfter(std::chrono::seconds(5), client_function);
 
     loop.Loop();
-
     rpcLog.Release();
     return 0;
 }
