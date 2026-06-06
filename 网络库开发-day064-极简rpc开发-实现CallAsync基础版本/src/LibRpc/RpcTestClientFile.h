@@ -7,6 +7,7 @@
 #include "../Decoder/LengthPrefixDecoder.h"
 #include "../Common/JsonMethod.h"
 #include "../../build/proto_gen/add.pb.h"
+#include "RpcLogFile.h"
 
 #include <iostream>
 #include <chrono>
@@ -117,39 +118,75 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
     }
     */
 
+    std::atomic<size_t> pending{0};
     latencies.reserve(task_count);
 
     int add_num = id * task_count;
     AddRequest req;
     req.set_a(add_num);
     req.set_b(0);
-    
+
+    pending = task_count;
     for(int i = 0; i < task_count; ++i)
     {
 
-       auto overall_start = std::chrono::steady_clock::now();
        try {
+            auto overall_start = std::chrono::steady_clock::now();
             req.set_b(i);   
-            std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
-           
-            AddResponse response;
-            response.ParseFromString(strResult);
+            int expected_sum = add_num + i;
 
-             //std::cout << "RPC result: " << response.result << std::endl;
-            assert(add_num + i == response.sum());
-            auto overall_end = std::chrono::steady_clock::now();
-            auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
-            latencies.emplace_back(cost_sec);
+            // 暂时不使用同步回调，使用异步回调进行测试
+            //std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
+            //AddResponse response;
+            //response.ParseFromString(strResult);
+
+            //std::cout << "RPC result: " << response.sum() << std::endl;
+            //assert(expected_sum == response.sum());
+            //auto overall_end = std::chrono::steady_clock::now();
+            //auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+            //latencies.emplace_back(cost_sec);
+
+
+            rpcClient->CallAsync("add", req.SerializeAsString(), [&pending, &loop, expected_sum, overall_start, &latencies](const std::string& strResult, int32_t error){
+                AddResponse response;
+                response.ParseFromString(strResult);
+
+                if(0 == error)
+                {
+                    //std::cout << "RPC result: " << response.sum() << std::endl;
+                    assert(expected_sum == response.sum());
+                    auto overall_end = std::chrono::steady_clock::now();
+                    auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+
+                    latencies.emplace_back(cost_sec);
+                }else{
+                    std::cout << "RPC error: " << error << std::endl;
+                }
+
+                // 异步的时候添加代码
+                --pending;
+                if(0 == pending)
+                {
+                    // 停止 I/O 线程（可选，简单退出）
+                    loop.Quit();
+                }
+            });
+            
         } catch (const std::exception& e) {
             std::cerr << "RPC error: " << e.what() << std::endl;
-        }
-
-        //std::this_thread::sleep_for(std::chrono::microseconds(200));
+            
+            --pending;
+            if(0 == pending)
+            {
+                // 停止 I/O 线程（可选，简单退出）
+                loop.Quit();
+            }
+        }       
     }
     
 
     // 停止 I/O 线程（可选，简单退出）
-    loop.Quit();
+    // loop.Quit(); 同步的时候终止代码
     io_thread.join();
     //return 0;
 }

@@ -104,18 +104,8 @@ bool RpcCodec::ReadString(Buffer& buffer, std::string& strValue)
 
 
  // 编码请求
-void RpcCodec::Protobuf_EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params)
+std::string RpcCodec::Protobuf_EncodeRequest(uint64_t id, const std::string& method, const std::string& params)
 {
-    /*
-    Buffer tmpBuff;
-    RpcCodec::WriteInt64(tmpBuff, id);
-    RpcCodec::WriteString(tmpBuff, method);
-    RpcCodec::WriteString(tmpBuff, params);
-
-
-    uint32_t len = tmpBuff.ReadableBytes();
-    */
-
     RpcRequest request;
     request.set_id(id);
     request.set_method(method);
@@ -126,8 +116,12 @@ void RpcCodec::Protobuf_EncodeRequest(Buffer& buffer, uint64_t id, const std::st
 
     uint32_t len = strData.size();
     uint32_t net_len = htonl(len);
-    buffer.Append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
-    buffer.Append(strData.c_str(), len);
+    
+    std::string strEncodeResult;
+    strEncodeResult.reserve(len + sizeof(net_len));
+    strEncodeResult.append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
+    strEncodeResult.append(strData);
+    return strEncodeResult;
 }
 
 
@@ -144,17 +138,8 @@ bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& 
 }
 
 // 编码响应
-void RpcCodec::Protobuf_EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result)
+std::string RpcCodec::Protobuf_EncodeResponse(uint64_t id, int32_t code, const std::string& result)
 {
-    /*
-    Buffer tmpBuff;
-    RpcCodec::WriteInt64(tmpBuff, id);
-    RpcCodec::WriteInt32(tmpBuff, code);
-    RpcCodec::WriteString(tmpBuff, result);
-
-    uint32_t len = tmpBuff.ReadableBytes();
-    */
-
     RpcResponse response;
     response.set_id(id);
     response.set_code(code);
@@ -165,8 +150,12 @@ void RpcCodec::Protobuf_EncodeResponse(Buffer& buffer, uint64_t id, int32_t code
 
     uint32_t len = strData.size();
     uint32_t net_len = htonl(len);
-    buffer.Append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
-    buffer.Append(strData.c_str(), len);
+
+    std::string strEncodeResult;
+    strEncodeResult.reserve(len + sizeof(net_len));
+    strEncodeResult.append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
+    strEncodeResult.append(strData);
+    return strEncodeResult;
 }
 
 

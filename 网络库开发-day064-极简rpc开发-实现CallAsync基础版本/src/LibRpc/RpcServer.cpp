@@ -76,10 +76,8 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
 
 void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con, uint64_t id, int32_t code, std::string strResult)
 {
-    Buffer resBuf;
-    RpcCodec::Protobuf_EncodeResponse(resBuf, id, code, strResult);
-
-    std::string strResponse = resBuf.RetrieveAllAsString();
+    
+    std::string strResponse = std::move(RpcCodec::Protobuf_EncodeResponse(id, code, strResult));
     //std::cout << "Server sending response, size=" << strResponse.size() << " id=" << id << " code=" << code << std::endl;
     con->Send(strResponse);
 }
