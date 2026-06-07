@@ -10,6 +10,7 @@ enum eRpcCode
     eRpcCode_NotGetMethod   = 1,
     eRpcCode_ParamError     = 2,
     eRpcCode_ServerError    = 3,
+    eRpcCode_TimeOut        = 4,
 };
 
 class RpcCodec

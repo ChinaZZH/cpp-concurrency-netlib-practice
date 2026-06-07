@@ -187,7 +187,7 @@ void RpcClient::OncConnectionClosed()
 
 
 
-void RpcClient::CallAsync(const std::string& method, const std::string& params, AsyncCallback cb)
+void RpcClient::CallAsync(const std::string& method, const std::string& params, AsyncCallback cb, int timeout_ms /*= 5000*/)
 {
     if(!bConnected_.load(std::memory_order_acquire))
     {
@@ -208,6 +208,21 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
         async_callback_pending_func_[req_id] = cb;
     }
 
+
+    if(timeout_ms > 0)
+    {
+        int32_t fd = con_->GetFd();
+        std::weak_ptr<RpcClient> weakRpcClient = shared_from_this();
+        event_loop->RunAfter(std::chrono::milliseconds(timeout_ms), [req_id, fd, weakRpcClient] () {
+            auto rpcClient = weakRpcClient.lock();
+            if(rpcClient)
+            {
+                std::cout << "AsyncCall time_out rpc id:=" << req_id << std::endl;
+                std::string msg_result;
+                rpcClient->ProcessOnResponseByAsyncCall(req_id, eRpcCode_TimeOut, msg_result);
+            }
+        });
+    }
 
     std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
     event_loop->RunInLoop([event_loop, weakCon, strData = std::move(strData)](){
@@ -253,12 +268,6 @@ void RpcClient::ProcessOnResponseByCall(uint64_t res_id, int32_t code, const std
 
 void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, const std::string& result)
 {
-    if(0 != code)
-    {
-
-    }
-
-    bool bEmptyTaskList = true;
     AsyncCallback cb = nullptr;
     {
         std::lock_guard<std::mutex> lk(aync_mutex_);
@@ -271,7 +280,6 @@ void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, cons
 
         cb = (itr->second);
         async_callback_pending_func_.erase(itr);
-        bEmptyTaskList = async_callback_pending_func_.empty();
     }
 
     if(cb)

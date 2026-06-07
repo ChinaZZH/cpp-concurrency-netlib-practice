@@ -42,12 +42,12 @@ public:
     // 连接关闭时调用(由TcpConnection的关闭回调触发)
     void OncConnectionClosed();
 
+    void ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, const std::string& result);
+
 public:
-    void CallAsync(const std::string& method, const std::string& params, AsyncCallback cb);
+    void CallAsync(const std::string& method, const std::string& params, AsyncCallback cb, int timeout_ms = 5000);
 
     void ProcessOnResponseByCall(uint64_t res_id, int32_t code, const std::string& result);
-
-    void ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, const std::string& result);
 
     void WaitAsyncTaskCompleted();
 

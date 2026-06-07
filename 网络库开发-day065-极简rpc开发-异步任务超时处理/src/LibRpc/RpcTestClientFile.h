@@ -131,22 +131,25 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
     {
 
        try {
+            
             auto overall_start = std::chrono::steady_clock::now();
             req.set_b(i);   
             int expected_sum = add_num + i;
 
             // 暂时不使用同步回调，使用异步回调进行测试
-            //std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
-            //AddResponse response;
-            //response.ParseFromString(strResult);
+            /*
+            std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
+            AddResponse response;
+            response.ParseFromString(strResult);
 
             //std::cout << "RPC result: " << response.sum() << std::endl;
-            //assert(expected_sum == response.sum());
-            //auto overall_end = std::chrono::steady_clock::now();
-            //auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
-            //latencies.emplace_back(cost_sec);
+            assert(expected_sum == response.sum());
+            auto overall_end = std::chrono::steady_clock::now();
+            auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+            latencies.emplace_back(cost_sec);
+            */
 
-
+            
             rpcClient->CallAsync("add", req.SerializeAsString(), [&pending, &loop, expected_sum, overall_start, &latencies](const std::string& strResult, int32_t error){
                 AddResponse response;
                 response.ParseFromString(strResult);
@@ -171,6 +174,7 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
                     loop.Quit();
                 }
             });
+
             
         } catch (const std::exception& e) {
             std::cerr << "RPC error: " << e.what() << std::endl;
@@ -186,7 +190,7 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
     
 
     // 停止 I/O 线程（可选，简单退出）
-    // loop.Quit(); 同步的时候终止代码
+    //loop.Quit(); // 同步的时候终止代码,异步的时候屏蔽该代码
     io_thread.join();
     //return 0;
 }

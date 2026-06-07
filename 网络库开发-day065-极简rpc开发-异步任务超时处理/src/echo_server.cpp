@@ -21,7 +21,7 @@
 #define PORT 8888
 
 
-int main()
+int server_func()
 {
     
     signal(SIGPIPE, SIG_IGN);
@@ -88,8 +88,8 @@ int ClientPressTest(int threads, int req_per_threads)
     auto overall_end = std::chrono::steady_clock::now();
     double total_sec = std::chrono::duration<double>(overall_end - overall_start).count();
     size_t total_req = threads * req_per_threads;
-    double total_qps = total_req / total_sec;
-
+    
+   
     // 合并所有延迟
     std::vector<uint64_t> all_us;
     for(auto& latencies : all_latencies)
@@ -97,6 +97,7 @@ int ClientPressTest(int threads, int req_per_threads)
         all_us.insert(all_us.end(), latencies.begin(), latencies.end());
     }
 
+    double total_qps = all_us.size() / total_sec;
     double avg_us = std::accumulate(all_us.begin(), all_us.end(), 0.0) / all_us.size();
 
     std::sort(all_us.begin(), all_us.end());
@@ -126,15 +127,17 @@ int ClientPressTest(int threads, int req_per_threads)
     std::cout << "P99 latency: " << precentile_us_func(0.99) << std::endl;
     std::cout << "P999 latency: " << precentile_us_func(0.999) << std::endl;
 
+    
     return 0;
 }
 
 
-int test_client_function()
+int main()
 {
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_client_log.txt");
 
+    /*
     std::cout << "start 50 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(50, 10000);
     std::cout << std::endl << std::endl;
@@ -153,13 +156,14 @@ int test_client_function()
     ClientPressTest(5, 10000);
     std::cout << std::endl << std::endl;
     
-
-    
     std::cout << "start 1 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(1, 10000);
     std::cout << std::endl << std::endl;
+    */
     
-
+    std::cout << "start 1 thread and req_per_threads 10: " << std::endl;
+    ClientPressTest(1, 10);
+    std::cout << std::endl << std::endl;
     rpcLog.Release();
     return 0;
 }
