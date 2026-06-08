@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
+#include "Common/ConfigManager.h"
 
 EventLoop::EventLoop()
 :epoll_(std::make_unique<Epoll>())
@@ -69,15 +70,24 @@ EventLoop::~EventLoop()
 }
 
 
-bool EventLoop::StartIdleConnectionSecsTimeOut(int idleSecTimeOut)
+bool EventLoop::StartConnIdleTimer()
 {
-    if(idleSecTimeOut <= 0)
+    // 在服务端的event_loop io线程里面跑的。
+    if(threadId_ != std::this_thread::get_id())
+    {
+        std::cout << "EventLoop::StartConnIdleTimer threadId_:" << threadId_ << " current thread_id:=" <<  std::this_thread::get_id() << std::endl;
+        return false;
+    }
+
+    auto& cfg = ConfigManager::getInstance();
+    int idle_ms_timeout = cfg.getInt("Connection", "idle_ms_timeout", 0);
+    if(idle_ms_timeout <= 0)
     {
         return false;
     }
 
 
-    this->RunEvery(std::chrono::seconds(5), [this, idleSecTimeOut](){ this->CheckIdleConnections(idleSecTimeOut); });
+    this->RunEvery(std::chrono::seconds(5), [this, idle_ms_timeout](){ this->CheckIdleConnections(idle_ms_timeout); });
     return true;
 }
 
@@ -339,32 +349,56 @@ void EventLoop::WakeUp()
 
 void EventLoop::RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb)
 {
-    std::chrono::milliseconds now(0);
-    if(delay <= now)
+    auto timer_func = [this, delay, funcCb] () {
+        std::chrono::milliseconds now(0);
+        if(delay <= now)
+        {
+            funcCb();
+        }else{
+            auto expire = std::chrono::steady_clock::now() + delay;
+            timersFunc_.insert(std::make_pair(expire, std::move(funcCb)));
+            UpdateTimerFd();
+        }
+    };
+
+
+    // 如果当前定时的线程是和event_loop中的loop是在同一个线程，则立即执行，否则放入runInLoop中
+    if(threadId_ == std::this_thread::get_id())
     {
-        funcCb();
-    }else{
-        auto expire = std::chrono::steady_clock::now() + delay;
-        timersFunc_.insert(std::make_pair(expire, std::move(funcCb)));
-        UpdateTimerFd();
+        timer_func();
+    }
+    else{
+        this->RunInLoop(timer_func);
     }
 }
 
  // 周期性回调
 void EventLoop::RunEvery(std::chrono::milliseconds interval, std::function<void()> funcCb, bool bImmediatelyFlag /*= false*/)
 {
-    if(bImmediatelyFlag)
-    {
-        funcCb();
-    }
-
-    std::chrono::milliseconds now(0);
-    if(interval > now)
-    {
-        this->RunAfter(interval, [this, interval, funcCb](){
+    auto timer_func = [this, interval, funcCb, bImmediatelyFlag] () {
+        if(bImmediatelyFlag)
+        {
             funcCb();
-            this->RunEvery(interval, funcCb, false);
-        });
+        }
+
+        std::chrono::milliseconds now(0);
+        if(interval > now)
+        {
+            this->RunAfter(interval, [this, interval, funcCb](){
+                funcCb();
+                this->RunEvery(interval, funcCb, false);
+            });
+        }
+    };
+
+    
+    // 如果当前定时的线程是和event_loop中的loop是在同一个线程，则立即执行，否则放入runInLoop中
+    if(threadId_ == std::this_thread::get_id())
+    {
+        timer_func();
+    }
+    else{
+        this->RunInLoop(timer_func);
     }
 }
 

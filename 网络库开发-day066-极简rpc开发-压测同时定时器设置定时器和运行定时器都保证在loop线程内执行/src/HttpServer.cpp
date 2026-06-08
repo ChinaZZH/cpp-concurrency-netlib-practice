@@ -21,9 +21,9 @@ HttpServer::HttpServer(EventLoop* loop, int nPort)
     });
 }
 
-void HttpServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
+void HttpServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
-    server_.Start(option, nEventLoopThread, idleSecTimeOut, nTaskThreadNum);
+    server_.Start(option, nEventLoopThread, nTaskThreadNum);
 }
 
 

@@ -61,6 +61,7 @@ void EventLoopThread::ThreadFunc()
     }
 
     //std::cout << "EventLoopThread::ThreadFunc::4444" << std::endl;
+    event_loop.StartConnIdleTimer();
     event_loop.Loop();
     //std::cout << "EventLoopThread::ThreadFunc::5555" << std::endl;
     

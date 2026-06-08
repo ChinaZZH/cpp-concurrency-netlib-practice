@@ -2,6 +2,7 @@
 
 #include "../EventLoop.h"
 #include "RpcClient.h"
+#include "RpcErrorCodeDef.h"
 #include "../TcpClient.h"
 #include "../TcpConnection.h"
 #include "../Decoder/LengthPrefixDecoder.h"
@@ -15,12 +16,16 @@
 
 #include <signal.h>
 #include <thread>
+#include <atomic>
+#include <chrono>
+#include <numeric>
+#include <algorithm>
 //#include <nlohmann/json.hpp>
 
 
 
 
-void client_work_function(int id, int task_count, std::vector<uint64_t>& latencies) {
+void client_work_function(int id, int task_count, std::vector<uint64_t>& latencies, std::atomic<uint64_t>& timeout_cnt) {
     // 创建 EventLoop 对象（将在独立线程中运行）
     EventLoop loop;
 
@@ -150,7 +155,7 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
             */
 
             
-            rpcClient->CallAsync("add", req.SerializeAsString(), [&pending, &loop, expected_sum, overall_start, &latencies](const std::string& strResult, int32_t error){
+            rpcClient->CallAsync("add", req.SerializeAsString(), [&pending, &loop, expected_sum, overall_start, &latencies, &timeout_cnt](const std::string& strResult, int32_t error){
                 AddResponse response;
                 response.ParseFromString(strResult);
 
@@ -164,6 +169,10 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
                     latencies.emplace_back(cost_sec);
                 }else{
                     std::cout << "RPC error: " << error << std::endl;
+                    if(eRpcCode_TimeOut == error)
+                    {
+                        timeout_cnt.fetch_add(1, std::memory_order_relaxed);
+                    }
                 }
 
                 // 异步的时候添加代码

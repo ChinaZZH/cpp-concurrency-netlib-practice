@@ -19,7 +19,7 @@ public:
     ~EventLoopThreadPool();
 
     void SetThreadNum(int threadCount) { numThreads_ = threadCount; }
-    void Start(TcpServer* tcpServer, int idleSecTimeOut, const ThreadInitallback& cb = ThreadInitallback());
+    void Start(TcpServer* tcpServer, const ThreadInitallback& cb = ThreadInitallback());
 
     // 轮询分配EventLoop(负载均衡)
     EventLoop* getNextLoop();
@@ -29,8 +29,6 @@ public:
 
     bool IsStarted() const { return started_; }
     
-    EventLoop* GetIndexLoop(int index) { return loops_[index]; }
-
 private:
     EventLoop* baseLoop_; // 主线程的eventLoop用于accept
     std::string name_;

@@ -26,7 +26,7 @@ public:
     
     ~TcpServer();
 
-    void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
+    void Start(int option, int nEventLoopThread, int nTaskThreadNum = std::thread::hardware_concurrency());
 
 
     ThreadPool* GetThreadPool() { return taskThreadPool_.get(); }
@@ -42,8 +42,6 @@ public:
 
     void RemoveClinetFd(int fd);
 
-    // 暂时测试使用
-     EventLoop* GetIndexLoop(int index) { return eventLoopThreadPool_->GetIndexLoop(index); }
 private:
     void HandleNewConnection();
 

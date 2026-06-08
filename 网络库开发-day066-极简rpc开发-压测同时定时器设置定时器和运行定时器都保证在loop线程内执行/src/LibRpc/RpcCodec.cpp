@@ -1,4 +1,5 @@
 #include "RpcCodec.h"
+#include "RpcErrorCodeDef.h"
 #include <arpa/inet.h> // htonl, ntohl
 #include <cstring>
 #include <iostream>

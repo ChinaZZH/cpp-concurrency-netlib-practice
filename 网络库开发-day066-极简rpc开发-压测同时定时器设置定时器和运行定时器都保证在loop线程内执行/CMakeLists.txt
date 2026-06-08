@@ -10,6 +10,7 @@ find_package(Threads REQUIRED)
 # 查找 添加 Protobuf 库
 find_package(Protobuf REQUIRED)
 
+
 # 假设 .proto 文件放在项目根目录下的 proto/ 文件夹
 set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 file(GLOB PROTO_FILES "${PROTO_DIR}/*.proto")
@@ -66,3 +67,14 @@ target_link_libraries(echo_server
 
 # 可选：如果需要调试，可以设置编译选项
 target_compile_options(echo_server PRIVATE -g -O0)
+
+# 运行 cmake 后（甚至在编译前）就在 build 目录下看到配置文件 config
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config/
+    DESTINATION ${CMAKE_BINARY_DIR}/config
+)
+
+# 复制 config 目录下的所有 .ini 文件到 build 根目录
+#file(GLOB CONFIG_FILES ${CMAKE_CURRENT_SOURCE_DIR}/config/*.ini)
+#foreach(CONFIG_FILE ${CONFIG_FILES})
+#    file(COPY ${CONFIG_FILE} DESTINATION ${CMAKE_BINARY_DIR})
+#endforeach()

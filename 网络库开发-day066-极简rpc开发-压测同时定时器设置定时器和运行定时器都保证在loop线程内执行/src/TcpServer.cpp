@@ -65,13 +65,13 @@ TcpServer::~TcpServer()
     
 }
 
-void TcpServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
+void TcpServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
     //std::cout << "TcpServer::Start 1111" << std::endl;
     {
         nEventLoopThreadCount_ = std::max(0, nEventLoopThread);
         eventLoopThreadPool_->SetThreadNum(nEventLoopThreadCount_);
-        eventLoopThreadPool_->Start(this, idleSecTimeOut);
+        eventLoopThreadPool_->Start(this);
     }
 //std::cout << "TcpServer::Start 222" << std::endl;
     {
@@ -154,19 +154,6 @@ void TcpServer::HandleOnMessage(const std::shared_ptr<TcpConnection>& con, std::
     taskThreadPool_->AddTask([con, strMsg](){
             // 模拟耗时业务（例如解析、数据库查询）
             //  测试定时器的使用使用
-            
-            auto micros = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-            std::cout << "Start Delay start:=" <<  micros << std::endl;
-            std::chrono::seconds delay(5);
-
-
-            con->GetLoop()->RunAfter(delay, [con, strMsg]() {
-                auto micros = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-                std::cout << "End Delay end:=" << micros << std::endl; 
-
-                con->GetLoop()->RunInLoop([con, strMsg](){ con->Send(strMsg); });
-            
-
             // 模拟耗时业务（例如解析、数据库查询）
             std::this_thread::sleep_for(std::chrono::seconds(5));
 

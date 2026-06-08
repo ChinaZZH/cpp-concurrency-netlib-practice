@@ -1,5 +1,6 @@
 #include "RpcClient.h"
 #include "RpcCodec.h"
+#include "RpcErrorCodeDef.h"
 #include "../TcpConnection.h"
 #include "../Buffer.h"
 #include "../EventLoop.h"
@@ -219,7 +220,7 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
             {
                 std::cout << "AsyncCall time_out rpc id:=" << req_id << std::endl;
                 std::string msg_result;
-                rpcClient->ProcessOnResponseByAsyncCall(req_id, eRpcCode_TimeOut, msg_result);
+                rpcClient->ProcessOnResponseByAsyncCall(req_id, eRpcCode_TimeOut, msg_result, true);
             }
         });
     }
@@ -266,7 +267,7 @@ void RpcClient::ProcessOnResponseByCall(uint64_t res_id, int32_t code, const std
 }
 
 
-void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, const std::string& result)
+void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, const std::string& result, bool bTimeOut /*= false*/)
 {
     AsyncCallback cb = nullptr;
     {
@@ -274,7 +275,11 @@ void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, cons
         auto itr = async_callback_pending_func_.find(res_id);
         if(itr == async_callback_pending_func_.end())
         {
-             std::cout << "rpc AsyncCall Response aync_callback_pending_func_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " fd:=" << con_->GetFd() << " code:=" << code << std::endl;
+            if(!bTimeOut)
+            {
+                std::cout << "rpc AsyncCall Response aync_callback_pending_func_ no client:=" << reinterpret_cast<uintptr_t>(this) << "find id:=" << res_id << " fd:=" << con_->GetFd() << " code:=" << code << std::endl;
+            }
+             
             return;
         }
 

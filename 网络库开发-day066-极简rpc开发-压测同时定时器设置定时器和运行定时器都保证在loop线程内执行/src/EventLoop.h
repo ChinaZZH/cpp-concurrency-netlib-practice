@@ -60,7 +60,7 @@ public:
 
     void ClosedConnection(const std::shared_ptr<TcpConnection>& conn);
 
-    bool StartIdleConnectionSecsTimeOut(int idleSecTimeOut);
+    bool StartConnIdleTimer();
 
 public:
     // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
@@ -94,7 +94,7 @@ private:
     void UpdateTimerFd();
     void ExecuteExpiredTimers();
 
-
+    
 private:
     // 将connection_list移植到event_loop中来
     void RemoveConnectionByFd(int fd);

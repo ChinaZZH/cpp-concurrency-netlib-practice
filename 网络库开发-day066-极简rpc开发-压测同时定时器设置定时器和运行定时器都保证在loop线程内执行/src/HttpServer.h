@@ -14,7 +14,7 @@ public:
 
     HttpServer(EventLoop* loop, int nPort);
 
-    void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
+    void Start(int option, int nEventLoopThread, int nTaskThreadNum = std::thread::hardware_concurrency());
 
     void RegisterMethod(const std::string& strMethod, Handler handler);
 

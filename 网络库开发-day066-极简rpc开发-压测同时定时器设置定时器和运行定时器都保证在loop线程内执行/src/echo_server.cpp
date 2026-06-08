@@ -5,6 +5,7 @@
 #include "HttpServer.h"
 #include "Common/JsonMethod.h"
 #include "Common/ProtoMethod.h"
+#include "Common/ConfigManager.h"
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcClient.h"
 #include "LibRpc/RpcTestClientFile.h"
@@ -18,14 +19,21 @@
 #include <thread>
 
 
-#define PORT 8888
-
 
 int server_func()
 {
     
     signal(SIGPIPE, SIG_IGN);
     
+    auto& cfg = ConfigManager::getInstance();
+    if (!cfg.loadConfig("./config/server.ini")) {
+        std::cerr << "Failed to load config\n";
+        return -1;
+    }
+
+    int port = cfg.getInt("Network", "port", 8888);
+    int idle_ms_timeout = cfg.getInt("Connection", "idle_ms_timeout", 0);
+
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_server_log.txt");
 
@@ -38,7 +46,7 @@ int server_func()
         &server, std::placeholders::_1, 
         std::placeholders::_2)
     );
-    server.Start(0, 6, 5);
+    server.Start(0, 6);
     */
 
 
@@ -46,19 +54,16 @@ int server_func()
     /*
     HttpServer server(&loop, PORT);
     server.RegisterMethod("add", JsonMethodLib::add);
-    server.Start(0, 6, 0); // eventloopThread 6个工作线程为最佳性能
+    server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
     */
 
     // rpcServer
-    RpcServer server(&loop, PORT);
+    RpcServer server(&loop, port);
     server.RegisterMethod("add", ProtoMethod::add);
     //server.RegisterMethod("echo", JsonMethodLib::echo);
     //server.RegisterMethod("login", JsonMethodLib::login);
-    server.Start(0, 6, 0);
+    server.Start(0, 6);
 
-    
-    //EventLoop* pLoop = server.GetIndexLoop(5);
-    //pLoop->RunAfter(std::chrono::seconds(5), client_function);
 
     loop.Loop();
     rpcLog.Release();
@@ -73,10 +78,11 @@ int ClientPressTest(int threads, int req_per_threads)
     std::vector<std::thread> thread_pool;
     std::vector<std::vector<uint64_t>> all_latencies(threads);
 
+    std::atomic<uint64_t> timeout_cnt;
     auto overall_start = std::chrono::steady_clock::now();
     for(int i = 0; i < threads; ++i)
     {
-        thread_pool.emplace_back(client_work_function, i, req_per_threads, std::ref(all_latencies[i]));
+        thread_pool.emplace_back(client_work_function, i, req_per_threads, std::ref(all_latencies[i]), std::ref(timeout_cnt));
     }
 
 
@@ -116,8 +122,12 @@ int ClientPressTest(int threads, int req_per_threads)
         return all_us[idx];
     };
 
-    std::cout << "all_us vector size(): " << all_us.size() << std::endl;
+    
     std::cout << "Total request: " << total_req << std::endl;
+    std::cout << "Success: " << all_us.size();
+    std::cout << " , Timeout: " << timeout_cnt.load(std::memory_order_relaxed);
+    std::cout << " , Fail:" << (total_req - all_us.size() - timeout_cnt)  << std::endl;
+
     std::cout << "Total time(second): " << total_sec << std::endl;
     std::cout << "QPS: " << total_qps << std::endl;
     std::cout << "Average latency: " << avg_us << std::endl;
@@ -134,10 +144,16 @@ int ClientPressTest(int threads, int req_per_threads)
 
 int main()
 {
+    auto& cfg = ConfigManager::getInstance();
+    if (!cfg.loadConfig("./config/client.ini")) {
+        std::cerr << "Failed to load config\n";
+        return -1;
+    }
+
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_client_log.txt");
 
-    /*
+    
     std::cout << "start 50 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(50, 10000);
     std::cout << std::endl << std::endl;
@@ -159,11 +175,15 @@ int main()
     std::cout << "start 1 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(1, 10000);
     std::cout << std::endl << std::endl;
-    */
     
+
+
+    /*
     std::cout << "start 1 thread and req_per_threads 10: " << std::endl;
-    ClientPressTest(1, 10);
+    ClientPressTest(2, 10);
     std::cout << std::endl << std::endl;
+    */
+   
     rpcLog.Release();
     return 0;
 }

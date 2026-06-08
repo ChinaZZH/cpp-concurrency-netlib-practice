@@ -1,6 +1,7 @@
 
 #include "RpcServer.h"
 #include "RpcCodec.h"
+#include "RpcErrorCodeDef.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/LengthPrefixDecoder.h"
@@ -22,9 +23,9 @@ RpcServer::RpcServer(EventLoop* loop, int nPort)
 
 
 
-void RpcServer::Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
+void RpcServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
-    server_.Start(option, nEventLoopThread, idleSecTimeOut, nTaskThreadNum);
+    server_.Start(option, nEventLoopThread, nTaskThreadNum);
 }
 
 

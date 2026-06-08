@@ -17,12 +17,9 @@ public:
 
     ~RpcServer() = default;
 
-    void Start(int option, int nEventLoopThread, int idleSecTimeOut, int nTaskThreadNum = std::thread::hardware_concurrency());
+    void Start(int option, int nEventLoopThread, int nTaskThreadNum = std::thread::hardware_concurrency());
 
     void RegisterMethod(const std::string& strMethod, Handler handler);
-
-    // 暂时测试使用
-    EventLoop* GetIndexLoop(int index) { return server_.GetIndexLoop(index); }
 
 private:
     // 同步处理，不走任务线程池
