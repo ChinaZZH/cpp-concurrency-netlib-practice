@@ -40,6 +40,7 @@ void EventLoopThreadPool::Start(TcpServer* tcpServer, const ThreadInitallback& c
             threads_.emplace_back(std::move(event_loop_thread));
             
             loop->InitServer(tcpServer);
+            loop->StartConnIdleTimer();
             loops_.emplace_back(loop);
         }
     }

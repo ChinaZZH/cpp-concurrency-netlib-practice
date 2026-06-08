@@ -10,6 +10,7 @@
 #include "LibRpc/RpcClient.h"
 #include "LibRpc/RpcTestClientFile.h"
 #include "LibRpc/RpcLogFile.h"
+#include "LibRpc/RpcConnectionPool.h"
 #include "TcpClient.h"
 #include <iostream>
 #include <chrono>
@@ -78,17 +79,42 @@ int ClientPressTest(int threads, int req_per_threads)
     std::vector<std::thread> thread_pool;
     std::vector<std::vector<uint64_t>> all_latencies(threads);
 
+
+    RpcConnectionPool connection_pool;
     std::atomic<uint64_t> timeout_cnt;
+
+    uint64_t total_tasks = threads * req_per_threads;
+    std::atomic<uint64_t> pending_count{total_tasks};
+    
+    std::condition_variable cv;
+
     auto overall_start = std::chrono::steady_clock::now();
     for(int i = 0; i < threads; ++i)
     {
-        thread_pool.emplace_back(client_work_function, i, req_per_threads, std::ref(all_latencies[i]), std::ref(timeout_cnt));
+        thread_pool.emplace_back(
+            client_work_function, 
+            i, 
+            req_per_threads, 
+            std::ref(all_latencies[i]), 
+            std::ref(timeout_cnt), 
+            std::ref(connection_pool),
+            std::ref(cv),
+            std::ref(pending_count)
+        );
     }
 
 
     for(auto& th : thread_pool)
     {
         th.join();
+    }
+
+    {
+        std::mutex mutex;
+        std::unique_lock<std::mutex> lk(mutex);
+        cv.wait(lk, [&pending_count] () {
+            return 0 == pending_count.load();
+        });
     }
 
     auto overall_end = std::chrono::steady_clock::now();

@@ -12,7 +12,11 @@
 
 
 class TcpConnection;
+class TcpClient;
+class EventLoopThread;
+class EventLoop;
 using TcpConnectionPtr = std::shared_ptr<TcpConnection>;
+//using TcpClientPtr = std::shared_ptr<TcpClient>;
 
 class RpcClient: public std::enable_shared_from_this<RpcClient>
 {
@@ -21,8 +25,13 @@ public:
 
     explicit RpcClient(TcpConnectionPtr con);
 
+    explicit RpcClient(const std::string& strIp, int nPort);
+
+    ~RpcClient();
+
     void SetConnection(const TcpConnectionPtr& con);
 
+    bool AutoConnect();  // 连接池自动连接 
 
     // 同步调用， 阻塞直到收到响应或者超时
     std::string Call(const std::string& method, const std::string& params, int timeout_ms = 5000);
@@ -49,13 +58,21 @@ public:
 
     void ProcessOnResponseByCall(uint64_t res_id, int32_t code, const std::string& result);
 
-    void WaitAsyncTaskCompleted();
+    // 连接状态查询
+    bool IsConnected() const { return bConnected_.load(std::memory_order_acquire); }
+
+    //void LoopQuit(); { if(loop_) {loop_->Quit();}  io_thread.join(); }
 
 private:
     std::pair<uint64_t, std::future<std::string>> SendRequest(const std::string& method, const std::string& params);
 
 private:
-    TcpConnectionPtr        con_;
+    TcpConnectionPtr con_;
+    std::shared_ptr<TcpClient>          tcp_client_;     // 用连接池自动连接时这个变量有效，手动连接时这个变量无效
+    std::unique_ptr<EventLoopThread>    loop_thread_;    // 自动连接时候持有独立的线程进行io
+    EventLoop* loop_ = nullptr;                 // 方便访问
+
+
     std::atomic<uint64_t>   next_id_ = 1; // 奇数的id让同步Call使用
 
     std::unordered_map<uint64_t, std::promise<std::string>> pending_;
@@ -69,4 +86,6 @@ private:
     std::atomic<uint64_t>   async_call_next_id_ = 2; // 偶数的id让异步AsyncCall使用
     std::map<uint64_t, AsyncCallback> async_callback_pending_func_;
     std::mutex aync_mutex_;
+
+    //std::shared_ptr<TcpClient> tcp_client_;
 };

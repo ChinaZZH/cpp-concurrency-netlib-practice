@@ -31,6 +31,8 @@ public:
 
     void HandleNewConnection();
 
+    TcpConnectionPtr GetTcpConnection() { return connection_; }
+
 private:
     EventLoop* loop_;
     std::string ip_;

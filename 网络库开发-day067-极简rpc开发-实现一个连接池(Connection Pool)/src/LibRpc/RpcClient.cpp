@@ -4,19 +4,76 @@
 #include "../TcpConnection.h"
 #include "../Buffer.h"
 #include "../EventLoop.h"
+#include "../EventLoopThread.h"
 #include <stdexcept>
 #include <iostream>
 #include <inttypes.h>
 #include "RpcLogFile.h"
+#include "../Decoder/LengthPrefixDecoder.h"
+#include "../TcpClient.h"
 
 
 RpcClient::RpcClient(TcpConnectionPtr con)
 {
     if(con)
     {
+        loop_ = con->GetLoop();
         SetConnection(con);
     }
 }
+
+
+RpcClient::RpcClient(const std::string& strIp, int nPort)
+{
+    loop_thread_ = std::make_unique<EventLoopThread>();
+    loop_ = loop_thread_->StartLoop();
+    if(!loop_)
+    {
+        std::cerr << "RpcClient::RpcClient" << std::endl;
+        exit(1);
+    }
+    
+    tcp_client_ = std::make_shared<TcpClient>(loop_, strIp, nPort);
+}
+
+
+RpcClient::~RpcClient() = default;
+
+// 连接池自动连接
+bool RpcClient::AutoConnect()
+{
+    std::promise<void> con_promise;
+    std::future<void> fut = con_promise.get_future();
+
+    std::weak_ptr<RpcClient> weakRpcPtr = shared_from_this();
+    tcp_client_->SetConnectionCallBack([&con_promise, weakRpcPtr](const TcpConnectionPtr& conn) {
+        auto rpcClient = weakRpcPtr.lock();
+        if(rpcClient)
+        {
+            //std::cout << "Connected to server" << std::endl;
+            auto length_decoder = std::make_unique<LengthPrefixDecoder>();
+            conn->SetDecoder(std::move(length_decoder));
+            rpcClient->SetConnection(conn);
+        }
+        
+
+        con_promise.set_value();
+    });
+
+    tcp_client_->SetMessageCallBack([weakRpcPtr](const TcpConnectionPtr&, std::string& msg) {
+        auto rpcClient = weakRpcPtr.lock();
+        if(rpcClient)
+        {
+             rpcClient->OnResponse(msg);
+        }
+    });
+
+
+    tcp_client_->Connect();
+    fut.wait();             // 等待建立连接， std::promise和std::future搭配使用，异步唤醒阻塞。
+    return true;
+}
+
 
 void RpcClient::SetConnection(const TcpConnectionPtr& con)
 {
@@ -24,6 +81,7 @@ void RpcClient::SetConnection(const TcpConnectionPtr& con)
     bConnected_.store(nullptr != con, std::memory_order_release);
     if (con_)
     {
+        loop_ = con_->GetLoop();
         std::weak_ptr<RpcClient> weakClient = this->shared_from_this();
         con->SetCloseCallBack([weakClient](const TcpConnectionPtr&){
             auto rpcClient = weakClient.lock();
@@ -45,8 +103,7 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
         throw std::runtime_error("RpcClient::SendRequest Not connected to server");
     }
 
-    EventLoop* event_loop = con_->GetLoop();
-    if(!event_loop)
+    if(!loop_)
     {
         throw std::runtime_error("RpcClient::SendRequest connection event_loop is nullptr");
     }
@@ -81,7 +138,7 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
     }
 
     std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
-    event_loop->RunInLoop([event_loop, weakCon, strData = std::move(strData)](){
+    loop_->RunInLoop([weakCon, strData = std::move(strData)](){
         auto conn = weakCon.lock();
         if(conn)
         {
@@ -195,8 +252,7 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
         throw std::runtime_error("RpcClient::CallAsync Not connected to server");
     }
 
-    EventLoop* event_loop = con_->GetLoop();
-    if(!event_loop)
+    if(!loop_)
     {
         throw std::runtime_error("RpcClient::SendRequest connection event_loop is nullptr");
     }
@@ -214,7 +270,7 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
     {
         int32_t fd = con_->GetFd();
         std::weak_ptr<RpcClient> weakRpcClient = shared_from_this();
-        event_loop->RunAfter(std::chrono::milliseconds(timeout_ms), [req_id, fd, weakRpcClient] () {
+        loop_->RunAfter(std::chrono::milliseconds(timeout_ms), [req_id, fd, weakRpcClient] () {
             auto rpcClient = weakRpcClient.lock();
             if(rpcClient)
             {
@@ -226,7 +282,7 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
     }
 
     std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
-    event_loop->RunInLoop([event_loop, weakCon, strData = std::move(strData)](){
+    loop_->RunInLoop([weakCon, strData = std::move(strData)](){
         auto conn = weakCon.lock();
         if(conn)
         {
