@@ -17,19 +17,13 @@ Accept: text/html\r\n
 
 class HttpContext{
 public:
-    enum ParseState{
-        kExpectRequestLine,
-        kExpectHeaders,
-        kExpectBody,
-        kGotAll,
-    };
-
+   
     HttpContext();
 
     // 解析数据， 返回true表示解析数据完成(可能还有剩余数据未使用)
-    bool PraseRequest(const std::string& data, size_t& consumed);
+    bool ParseRequest(const std::string& data);
 
-    bool IsComplete() const { return state_ == kGotAll; }
+    bool ParseResponse(const std::string& data);
 
     // 解析结果返回
     const std::string& GetMethod() const { return method_; }
@@ -45,13 +39,18 @@ public:
     // 重置状态，用于复用对象(例如 keep_alive)
     void Reset();
 
+    // response相关
+    int GetStatusCode() const { return status_code_; }
+
+    const std::string& GetResponseBody() const { return response_body_; }
+    
 private:
     bool ProcessRequestLine(const std::string_view& line);
 
     bool ProcessHeader(const std::string_view& line);
 
 private:
-    ParseState      state_;
+    // request内容
     std::string     method_;
     std::string     path_;
     std::string     version_;
@@ -59,4 +58,10 @@ private:
 
     std::string body_;
     std::string nullptr_header;
+
+
+    // response内容
+    int status_code_;
+    //std::string code_msg_;
+    std::string response_body_;
 };

@@ -39,6 +39,12 @@ public:
 
     void DisableNagele();
     
+    void SetTimeout(int sec);
+
+    bool BlockedWriteAll(const std::string& request);
+    
+    std::string BlockedReadAll();
+
 private:
     int socket_fd_ = -1;
     bool bTcpClient_ = false;

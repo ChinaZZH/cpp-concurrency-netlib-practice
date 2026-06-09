@@ -4,10 +4,13 @@
 
 
 HttpContext::HttpContext()
-:state_(kExpectRequestLine)
-,method_()
+:method_()
 ,path_()
 ,version_()
+,body_()
+,nullptr_header()
+,status_code_(0)
+,response_body_()
 {
 
 }
@@ -33,11 +36,15 @@ const std::string& HttpContext::GetHeader(const std::string& key) const
 // 重置状态，用于复用对象(例如 keep_alive)
 void HttpContext::Reset()
 {
-    state_ = (kExpectRequestLine);
     method_.clear();
     path_.clear();
     version_.clear();
     headers_.clear();
+    body_.clear();
+    nullptr_header.clear();
+
+    status_code_ = 0;
+    response_body_.clear();
 }
 
 
@@ -51,12 +58,19 @@ Accept: text/html\r\n
 */
 
 // 解析数据， 返回true表示解析数据完成(可能还有剩余数据未使用)
-bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
+bool HttpContext::ParseRequest(const std::string& data)
 {
-    
+     enum ParseRequestState{
+        kExpectRequestLine,
+        kExpectHeaders,
+        kExpectBody,
+        kGotAll,
+    };
+
     size_t pos = 0;
+    ParseRequestState request_state = kExpectRequestLine;
     // 解析RequestLine  GET /index.html?name=john&age=25 HTTP/1.1\r\n
-    if(kExpectRequestLine == state_)
+    if(kExpectRequestLine == request_state)
     {
         size_t request_line = data.find("\r\n", pos);
         if(request_line == std::string::npos)
@@ -73,8 +87,7 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
         }
         
         pos = request_line + 2;
-        consumed = pos;
-        state_ = kExpectHeaders;
+        request_state = kExpectHeaders;
     }
     
 
@@ -94,7 +107,7 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
     }
 
     header_end_pos += 2;
-    while(state_ == kExpectHeaders)
+    while(request_state == kExpectHeaders)
     {
         // 找不到\r\n则出错
         size_t eol = data.find("\r\n", pos);
@@ -114,19 +127,17 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
         }
         
         pos = eol + 2;
-        consumed = pos;
 
         // pos移动到"\r\n\r\n"中的第2个\r的时候就可以结束整个header解析流程了。
         if(pos == header_end_pos)
         {
             pos += 2; // 移动到header结束，开启body内容
-            consumed = pos;
-            state_ = kExpectBody;
+            request_state = kExpectBody;
             break;
         }
     }
 
-    if(kExpectBody == state_)
+    if(kExpectBody == request_state)
     {
         auto itr = std::find_if(headers_.begin(), headers_.end(), [](const auto& header_data){
             return (0 == header_data.first.compare("Content-Length"));
@@ -134,7 +145,7 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
 
         if(itr == headers_.end())
         {
-            state_ = kGotAll;
+            request_state = kGotAll;
             return true;
         }
         
@@ -147,10 +158,10 @@ bool HttpContext::PraseRequest(const std::string& data, size_t& consumed)
         }
 
         body_.assign(data.data() + pos, content_len);
-        state_ = kGotAll;
+        request_state = kGotAll;
     }
 
-    return  (kGotAll == state_); 
+    return  (kGotAll == request_state); 
 }
 
 
@@ -201,3 +212,64 @@ bool HttpContext::ProcessHeader(const std::string_view& line)
     return true;
 }
 
+/*
+std::string strCode = std::move(GetStatusCodeMsg(nStatusCode));
+    std::ostringstream response;
+    response << "HTTP/1.1 " << nStatusCode << " " << strCode.c_str() << " \r\n"
+             << "Content-Length: " << strContent.size() << "\r\n"
+             << "Content-Type: text/html\r\n"
+             << "\r\n"
+             << strContent;
+*/
+
+bool HttpContext::ParseResponse(const std::string& data)
+{
+    size_t header_end_pos = data.find("\r\n\r\n");
+    if(std::string::npos == header_end_pos)
+    {
+        return false;
+    }
+
+    size_t space = data.find(' ');
+    if(std::string::npos == space) {
+        return false;
+    }
+
+    const char* status_code_start = data.data() + space + 1;
+    while(' ' == (*status_code_start) || '\t' == (*status_code_start))
+    {
+        status_code_start += 1;
+    }
+
+    // 得到status_code,并且走完code部分
+    int tmp_status_code = std::strtoul(status_code_start, nullptr, 10);
+    // 没有必要解析这个
+    /*
+    status_code_start += 1;
+    while(' ' != (*status_code_start))
+    {
+        status_code_start += 1;
+    }
+
+    // 到达空格，继续过滤空格
+    while(' ' == (*status_code_start) || '\t' == (*status_code_start))
+    {
+        status_code_start += 1;
+    }
+
+    const char*  code_msg_start = status_code_start;
+    const char*  code_msg_end = code_msg_start;
+    int msg_char_num = 0;
+    while(' ' != (*code_msg_end))
+    {
+        msg_char_num   += 1;
+        code_msg_end   += 1;
+    }
+
+    std::string code_msg(code_msg_start, msg_char_num);
+    */
+
+    status_code_ = tmp_status_code;
+    response_body_ = std::move(data.substr(header_end_pos + 4));
+    return true;
+}

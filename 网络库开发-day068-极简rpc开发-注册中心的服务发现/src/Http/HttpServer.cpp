@@ -1,8 +1,8 @@
 #include "HttpServer.h"
 #include "HttpContext.h"
-#include "TcpConnection.h"
-#include "EventLoop.h"
-#include "Decoder/HttpContentDecoder.h"
+#include "../TcpConnection.h"
+#include "../EventLoop.h"
+#include "../Decoder/HttpContentDecoder.h"
 #include <sstream>
 #include <cassert>
 #include <functional>
@@ -48,11 +48,9 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
         //if(con)
         {
             // 模拟耗时业务（例如解析、数据库查询）
-            size_t consumed = 0;
-            
             thread_local HttpContext async_thread_context;
             async_thread_context.Reset();
-            bool bOk = async_thread_context.PraseRequest(strMsg, consumed);
+            bool bOk = async_thread_context.ParseRequest(strMsg);
             if(!bOk)
             {
                 // 解析失败或需要更多数据，这里简单返回 400
@@ -142,9 +140,8 @@ void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpC
 // 同步实现版本
 void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
-    size_t consumed = 0;
     http_server_context_.Reset();
-    bool bOk = http_server_context_.PraseRequest(strMsg, consumed);
+    bool bOk = http_server_context_.ParseRequest(strMsg);
     if(!bOk)
     {
         // 解析失败或需要更多数据，这里简单返回 400
