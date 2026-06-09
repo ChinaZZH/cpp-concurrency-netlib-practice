@@ -9,6 +9,7 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <iostream>
 
 
 // 同步post
@@ -29,13 +30,18 @@ SimpleHttpClient::Response SimpleHttpClient::Post(const std::string& host, int p
     std::string req = std::move(SimpleHttpClient::BuildHttpRequest("POST", path, host, port, body));
     for(int i = 0; i < retry_times; ++i)
     {
-        auto res = SimpleHttpClient::SendRequest(host, port, req, timeout_sec);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        auto res = SimpleHttpClient::BlockedSendRequest(host, port, req, timeout_sec);
         if(res.success)
         {
             return res;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+         std::cout << "SimpleHttpClient::Post  success:" <<  res.success;
+         std::cout << " status_code:" <<  res.status_code;
+         std::cout << " body:" <<  res.body;
+         std::cout << " error_msg:" <<  res.error_msg;
+         std::cout << std::endl;
     }
 
     SimpleHttpClient::Response response;
@@ -62,13 +68,18 @@ SimpleHttpClient::Response SimpleHttpClient::Get(const std::string& host, int po
     std::string req = std::move(SimpleHttpClient::BuildHttpRequest("GET", path, host, port));
     for(int i = 0; i < retry_times; ++i)
     {
-        auto res = SimpleHttpClient::SendRequest(host, port, req, timeout_sec);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        auto res = SimpleHttpClient::BlockedSendRequest(host, port, req, timeout_sec);
         if(res.success)
         {
             return res;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+         std::cout << "SimpleHttpClient::Get  success:" <<  res.success;
+         std::cout << " status_code:" <<  res.status_code;
+         std::cout << " body:" <<  res.body;
+         std::cout << " error_msg:" <<  res.error_msg;
+         std::cout << std::endl;
     }
 
     SimpleHttpClient::Response response;
@@ -107,13 +118,13 @@ std::string SimpleHttpClient::BuildHttpRequest(const std::string& method, const 
 
 
 
-SimpleHttpClient::Response SimpleHttpClient::SendRequest(const std::string& host, int port, const std::string& request, int timeout_sec)
+SimpleHttpClient::Response SimpleHttpClient::BlockedSendRequest(const std::string& host, int port, const std::string& request, int timeout_sec)
 {
     SimpleHttpClient::Response res;
     res.success = false;
     res.status_code = 0;
 
-    int sock_fd = ClientSocket::Connect(host, port);
+    int sock_fd = ClientSocket::Connect(host, port, false);
     if(sock_fd < 0)
     {
         res.error_msg = "connect failed"+std::string(strerror(errno));

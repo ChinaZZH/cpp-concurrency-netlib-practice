@@ -1,9 +1,9 @@
+
 #include "EventLoopThread.h"
 #include "EventLoopThreadPool.h"
 #include "EventLoop.h"
 #include "TcpServer.h"
 #include "Http/HttpServer.h"
-#include "Common/JsonMethod.h"
 #include "Common/ProtoMethod.h"
 #include "Common/ConfigManager.h"
 #include "LibRpc/RpcServer.h"
@@ -11,6 +11,7 @@
 #include "LibRpc/RpcTestClientFile.h"
 #include "LibRpc/RpcLogFile.h"
 #include "LibRpc/RpcConnectionPool.h"
+#include "Http/SimpleHttpClient.h"
 #include "TcpClient.h"
 #include <iostream>
 #include <chrono>
@@ -18,6 +19,7 @@
 
 #include <signal.h>
 #include <thread>
+
 
 
 int ClientPressTest(int threads, int req_per_threads)
@@ -116,6 +118,37 @@ int ClientPressTest(int threads, int req_per_threads)
 }
 
 
+int test_http_client()
+{
+    auto& cfg = ConfigManager::getInstance();
+    std::string strIp = cfg.getString("Network", "ip", "127.0.0.1");
+    int port = cfg.getInt("Network", "port", 8888);
+
+    std::string path = "/add";
+    std::string body = R"({"a":10,"b":32})";
+    
+    for(int i = 0 ; i < 10; ++i)
+    {
+         SimpleHttpClient::Response response = SimpleHttpClient::Post(strIp, port, path, body);
+
+         response = SimpleHttpClient::Get(strIp, port, path);
+    }
+   
+   
+/*
+   response = SimpleHttpClient::Post(strIp, port, path, body);
+    {
+         std::cout << "SimpleHttpClient::Response_222  success:" <<  response.success;
+         std::cout << " status_code:" <<  response.status_code;
+         std::cout << " body:" <<  response.body;
+         std::cout << " error_msg:" <<  response.error_msg;
+         std::cout << std::endl;
+    }
+         */
+
+    return 0;
+}
+
 int main()
 {
     auto& cfg = ConfigManager::getInstance();
@@ -127,7 +160,9 @@ int main()
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_client_log.txt");
 
-    
+    test_http_client();
+
+    /*
     std::cout << "start 50 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(50, 10000);
     std::cout << std::endl << std::endl;
@@ -148,13 +183,6 @@ int main()
     
     std::cout << "start 1 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(1, 10000);
-    std::cout << std::endl << std::endl;
-    
-
-
-    /*
-    std::cout << "start 1 thread and req_per_threads 10: " << std::endl;
-    ClientPressTest(2, 10);
     std::cout << std::endl << std::endl;
     */
    

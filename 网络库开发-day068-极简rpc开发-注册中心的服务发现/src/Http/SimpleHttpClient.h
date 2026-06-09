@@ -28,5 +28,5 @@ private:
         const std::string& host, int port, const std::string& body = "");
 
 
-    static Response SendRequest(const std::string& host, int port, const std::string& request, int timeout_sec);
+    static Response BlockedSendRequest(const std::string& host, int port, const std::string& request, int timeout_sec);
 };

@@ -114,7 +114,7 @@ void ClientSocket::Close()
 }
 
 
-int ClientSocket::Connect(const std::string& strIp, int nPort)
+int ClientSocket::Connect(const std::string& strIp, int nPort, bool bNonBlocked /*= true*/)
 {
     int connectFd = -1;
     connectFd = socket(AF_INET, SOCK_STREAM, 0);
@@ -124,13 +124,13 @@ int ClientSocket::Connect(const std::string& strIp, int nPort)
         return -1;
     }
     
-    // SetNonBlock
+    // 默认使用非阻塞
+    if(bNonBlocked)
     {
         int flags = ::fcntl(connectFd, F_GETFL, 0);
         flags |= O_NONBLOCK;
         ::fcntl(connectFd, F_SETFL, flags);
     }
-    
 
     InetAddress addr(strIp, nPort);
     int result = ::connect(connectFd, (struct sockaddr*)addr.GetSockAddr(), sizeof(addr));
@@ -139,7 +139,7 @@ int ClientSocket::Connect(const std::string& strIp, int nPort)
         ::close(connectFd);
         std::cerr << "ClientSocket connect error \n";
         return -1;
-    }
+    }   
 
     return connectFd;
 }
@@ -180,10 +180,11 @@ bool ClientSocket::BlockedWriteAll(const std::string& request)
     int flag_result = (flags & O_NONBLOCK);
     if(flag_result > 0)
     {
-        std::cerr << "ClientSocket::BlockedReadAll nonBlcok" << std::endl;
+        std::cerr << "ClientSocket::BlockedWriteAll nonBlcok" << std::endl;
         return false;
     }
 
+    //std::cout << "Sending request:\n" << request << std::endl;
     ssize_t sent = write(socket_fd_, request.c_str(), request.size());
     if(sent != request.size())
     {
@@ -191,6 +192,7 @@ bool ClientSocket::BlockedWriteAll(const std::string& request)
         return false;
     }
 
+    //std::cout << "Sent " << sent << " bytes" << std::endl;
     return true;
 }
     
@@ -206,15 +208,17 @@ std::string ClientSocket::BlockedReadAll()
     int flag_result = (flags & O_NONBLOCK);
     if(flag_result > 0)
     {
-        std::cerr << "ClientSocket::BlockedWriteAll nonBlcok" << std::endl;
+        std::cerr << "ClientSocket::BlockedReadAll nonBlcok" << std::endl;
         return response;
     }
 
-    char buf[4096];
+    char buf[4096] = {0};
     ssize_t n;
     while ((n = read(socket_fd_, buf, sizeof(buf))) > 0) {
         response.append(buf, n);
+        // std::cout << "Read " << n << " bytes, total now " << response.size() << std::endl;
     }
 
+    //std::cout << "Read finished, errno=" << errno << std::endl;
     return response;
 }

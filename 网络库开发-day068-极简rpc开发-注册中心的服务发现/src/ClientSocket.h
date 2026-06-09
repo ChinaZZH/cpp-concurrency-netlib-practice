@@ -31,7 +31,7 @@ public:
 
     void SetNonBlock();
 
-    static int Connect(const std::string& strIp, int nPort);
+    static int Connect(const std::string& strIp, int nPort, bool bNonBlocked = true);
 
     int GetSocketFd() const { return socket_fd_; }
 
