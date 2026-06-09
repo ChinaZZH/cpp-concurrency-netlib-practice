@@ -1,4 +1,5 @@
 #include "ListenSocket.h"
+#include "Common/ConfigManager.h"
 #include <iostream>
 #include <cstring>
 #include <netinet/in.h>
@@ -110,7 +111,10 @@ bool ListenSocket::Listen()
         return false;
     }
 
-    std::cout << "Listening on port 8888 ....\n";
+    auto& cfg = ConfigManager::getInstance();
+    int port = cfg.getInt("RegisterCenter", "port", 8080);
+
+    std::cout << "Listening on port:" << port << " ....\n";
     return true;
 }
 

@@ -19,7 +19,7 @@
 
 
 
-int http_server_func()
+int main()
 {
     
     signal(SIGPIPE, SIG_IGN);
@@ -30,9 +30,8 @@ int http_server_func()
         return -1;
     }
 
-    int port = cfg.getInt("Network", "port", 8888);
-    int idle_ms_timeout = cfg.getInt("Connection", "idle_ms_timeout", 0);
-
+    int port = cfg.getInt("RegisterCenter", "port", 8080);
+    
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_server_log.txt");
 
@@ -52,6 +51,7 @@ int http_server_func()
     // httpSrver
     HttpServer server(&loop, port);
     server.RegisterMethod("add", JsonMethodLib::add);
+    server.InitServicesRegisterCenter();
     server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
 
     loop.Loop();
