@@ -69,6 +69,9 @@ public:
     //void LoopQuit(); { if(loop_) {loop_->Quit();}  io_thread.join(); }
 
 private:
+    static std::string GenerateTraceId();
+
+private:
     std::pair<uint64_t, std::future<std::string>> SendRequest(const std::string& method, const std::string& params);
 
 private:

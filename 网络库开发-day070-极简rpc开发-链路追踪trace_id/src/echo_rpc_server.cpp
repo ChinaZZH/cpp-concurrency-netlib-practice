@@ -8,7 +8,6 @@
 #include "Common/JsonMethod.h"
 #include "Common/ProtoMethod.h"
 #include "LibRpc/RpcServer.h"
-#include "LibRpc/RpcLogFile.h"
 #include "LibRpc/RpcConnectionPool.h"
 #include "TcpClient.h"
 #include <iostream>
@@ -30,10 +29,6 @@ int rpc_server_func()
         std::cerr << "Failed to load config\n";
         return -1;
     }
-
-
-    RpcLogFile& rpcLog = RpcLogFile::getInstance();
-    rpcLog.OpenFile("rpc_server_log.txt");
 
     EventLoop loop;
    
@@ -66,7 +61,6 @@ int rpc_server_func()
     server.EnableServiceDiscovery(registry_host, registry_port, "rpc_server", my_ip, my_port, ttl_sec);
 
     loop.Loop();
-    rpcLog.Release();
     return 0;
 }
 

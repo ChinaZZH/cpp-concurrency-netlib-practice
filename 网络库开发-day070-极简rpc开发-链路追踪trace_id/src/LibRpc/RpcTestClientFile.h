@@ -9,7 +9,6 @@
 #include "../Common/JsonMethod.h"
 #include "../LibRpc/RpcConnectionPool.h"
 #include "../../build/proto_gen/add.pb.h"
-#include "RpcLogFile.h"
 
 #include <iostream>
 #include <chrono>

@@ -10,14 +10,14 @@ class RpcCodec
 {
 public:
     // 编码请求
-    static std::string Protobuf_EncodeRequest(uint64_t id, const std::string& method, const std::string& params);
+    static std::string Protobuf_EncodeRequest(uint64_t id, const std::string& method, const std::string& params, const std::string& trace_id);
 
-    static bool Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params);
+    static bool Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params, std::string& trace_id);
 
     // 编码响应
-    static std::string Protobuf_EncodeResponse(uint64_t id, int32_t code, const std::string& result);
+    static std::string Protobuf_EncodeResponse(uint64_t id, int32_t code, const std::string& result, const std::string& trace_id);
 
-    static bool Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result);
+    static bool Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result, std::string& trace_id);
 
     // 四个辅助函数
     static void WriteInt64(Buffer& buffer, int64_t value);
@@ -35,12 +35,12 @@ public:
 // 传统的方式禁用，后面统一使用protobuf来做rpc的传输方式
 private:
     // 暂时禁用，不用传统的方式统一走protobuf
-    static void EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params);
+    static void EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params, const std::string& trace_id);
 
      // 解码响应  成功返回true; 失败则返回false
-    static void EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result);
+    static void EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result, const std::string& trace_id);
 
-    static bool DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, std::string& params);
+    static bool DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, std::string& params, std::string& trace_id);
 
-    static bool DecodeResponse(Buffer& buffer, uint64_t& id, int32_t& code, std::string& result);
+    static bool DecodeResponse(Buffer& buffer, uint64_t& id, int32_t& code, std::string& result, std::string& trace_id);
 };

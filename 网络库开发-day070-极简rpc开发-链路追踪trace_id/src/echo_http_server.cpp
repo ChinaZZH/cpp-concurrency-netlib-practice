@@ -7,7 +7,6 @@
 #include "Common/ConfigManager.h"
 #include "Common/JsonMethod.h"
 #include "LibRpc/RpcServer.h"
-#include "LibRpc/RpcLogFile.h"
 #include "LibRpc/RpcConnectionPool.h"
 #include "ServiceDiscovery/ServiceRegisterCenter.h"
 #include "TcpClient.h"
@@ -32,10 +31,6 @@ int test_http_server()
     }
 
     int port = cfg.getInt("RegisterCenter", "port", 8080);
-    
-    RpcLogFile& rpcLog = RpcLogFile::getInstance();
-    rpcLog.OpenFile("rpc_server_log.txt");
-
     EventLoop loop;
    
     // tcpServer
@@ -56,7 +51,6 @@ int test_http_server()
     ServiceRegisterCenter register_center(&server); // 注册中心 不需要的时候可以移除
 
     loop.Loop();
-    rpcLog.Release();
     return 0;
 }
 

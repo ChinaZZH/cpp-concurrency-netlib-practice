@@ -9,7 +9,6 @@
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcClient.h"
 #include "LibRpc/RpcTestClientFile.h"
-#include "LibRpc/RpcLogFile.h"
 #include "LibRpc/RpcConnectionPool.h"
 #include "Http/SimpleHttpClient.h"
 #include "TcpClient.h"
@@ -157,9 +156,6 @@ int client_test()
         return -1;
     }
 
-    RpcLogFile& rpcLog = RpcLogFile::getInstance();
-    rpcLog.OpenFile("rpc_client_log.txt");
-
     test_http_client();
 
     /*
@@ -186,6 +182,5 @@ int client_test()
     std::cout << std::endl << std::endl;
     */
    
-    rpcLog.Release();
     return 0;
 }

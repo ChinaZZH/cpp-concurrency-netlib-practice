@@ -3,7 +3,10 @@
 #include <arpa/inet.h> // htonl, ntohl
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include "../../build/proto_gen/rpc.pb.h"
+#include "../Common/ConfigManager.h"
+#include "../Common/LogFile.h"
 
 const size_t MAX_METHOD_SIZE = 1024 * 1024; // 1MB
 const size_t MAX_PARAM_SIZE = 10 * 1024 * 1024; // 10MB
@@ -105,12 +108,26 @@ bool RpcCodec::ReadString(Buffer& buffer, std::string& strValue)
 
 
  // 编码请求
-std::string RpcCodec::Protobuf_EncodeRequest(uint64_t id, const std::string& method, const std::string& params)
+std::string RpcCodec::Protobuf_EncodeRequest(uint64_t id, const std::string& method, const std::string& params, const std::string& trace_id)
 {
+    // 开启日志链路追踪
+    {
+        std::ostringstream file_stream;
+        file_stream << "[trace_id=" << trace_id << "] Seq_id=" << id << " RpcClient Send method=" << method << std::endl;
+
+        auto& cfg = ConfigManager::getInstance();
+        std::string log_file_name = cfg.getString("Trace", "trace_log_name", "trace_log");
+    
+        auto& logfile = LogFile::getInstance();
+        logfile.AppendContent(log_file_name, file_stream.str());
+    }
+    
+
     RpcRequest request;
     request.set_id(id);
     request.set_method(method);
     request.set_args(params);
+    request.set_trace_id(trace_id);
 
     std::string strData;
     request.SerializeToString(&strData);
@@ -128,23 +145,49 @@ std::string RpcCodec::Protobuf_EncodeRequest(uint64_t id, const std::string& met
 
 
 
-bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params)
+bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& id, std::string& method, std::string& params,  std::string& trace_id)
 {
     RpcRequest request;
     request.ParseFromString(strBuffData);
     id = request.id();
     method = std::move(request.method());
     params = std::move(request.args());
+    trace_id = std::move(request.trace_id());
+
+     // 开启日志链路追踪
+    {
+        std::ostringstream file_stream;
+        file_stream << "[trace_id=" << trace_id << "] Seq_id=" << id << " RpcServer receive method=" << method << std::endl;
+
+        auto& cfg = ConfigManager::getInstance();
+        std::string log_file_name = cfg.getString("Trace", "trace_log_name", "trace_log");
+    
+        auto& logfile = LogFile::getInstance();
+        logfile.AppendContent(log_file_name, file_stream.str());
+    }
     return true;
 }
 
 // 编码响应
-std::string RpcCodec::Protobuf_EncodeResponse(uint64_t id, int32_t code, const std::string& result)
+std::string RpcCodec::Protobuf_EncodeResponse(uint64_t id, int32_t code, const std::string& result, const std::string& trace_id)
 {
+    // 开启日志链路追踪
+    {
+        std::ostringstream file_stream;
+        file_stream << "[trace_id=" << trace_id << "]  Seq_id=" << id << " RpcServer Send code= " << code << std::endl;
+
+        auto& cfg = ConfigManager::getInstance();
+        std::string log_file_name = cfg.getString("Trace", "trace_log_name", "trace_log");
+    
+        auto& logfile = LogFile::getInstance();
+        logfile.AppendContent(log_file_name, file_stream.str());
+    }
+
     RpcResponse response;
     response.set_id(id);
     response.set_code(code);
     response.set_result(result);
+    response.set_trace_id(trace_id);
 
     std::string strData;
     response.SerializeToString(&strData);
@@ -162,25 +205,39 @@ std::string RpcCodec::Protobuf_EncodeResponse(uint64_t id, int32_t code, const s
 
 
 // 解码响应  成功返回true; 失败则返回false
-bool RpcCodec::Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result)
+bool RpcCodec::Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t& id, int32_t& code, std::string& result, std::string& trace_id)
 {
     RpcResponse response;
     response.ParseFromString(strBuffData);
     id = response.id();
     code = response.code();
     result = std::move(response.result());
+    trace_id = std::move(response.trace_id());
+
+     // 开启日志链路追踪
+    {
+        std::ostringstream file_stream;
+        file_stream << "[trace_id=" << trace_id << "]  Seq_id=" << id << " RpcClient receive code= " << code << std::endl;
+
+        auto& cfg = ConfigManager::getInstance();
+        std::string log_file_name = cfg.getString("Trace", "trace_log_name", "trace_log");
+    
+        auto& logfile = LogFile::getInstance();
+        logfile.AppendContent(log_file_name, file_stream.str());
+    }
     return true;
 }
 
 
  // 编码请求
-void RpcCodec::EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params)
+void RpcCodec::EncodeRequest(Buffer& buffer, uint64_t id, const std::string& method, const std::string& params, const std::string& trace_id)
 {
     
     Buffer tmpBuff;
     RpcCodec::WriteInt64(tmpBuff, id);
     RpcCodec::WriteString(tmpBuff, method);
     RpcCodec::WriteString(tmpBuff, params);
+    RpcCodec::WriteString(tmpBuff, trace_id);
 
     uint32_t len = tmpBuff.ReadableBytes();
     
@@ -202,13 +259,14 @@ void RpcCodec::EncodeRequest(Buffer& buffer, uint64_t id, const std::string& met
 }
 
 // 编码响应
-void RpcCodec::EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result)
+void RpcCodec::EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const std::string& result, const std::string& trace_id)
 {
     
     Buffer tmpBuff;
     RpcCodec::WriteInt64(tmpBuff, id);
     RpcCodec::WriteInt32(tmpBuff, code);
     RpcCodec::WriteString(tmpBuff, result);
+    RpcCodec::WriteString(tmpBuff, trace_id);
 
     uint32_t len = tmpBuff.ReadableBytes();
     
@@ -231,7 +289,7 @@ void RpcCodec::EncodeResponse(Buffer& buffer, uint64_t id, int32_t code, const s
 
 
 // 解码响应  成功返回true; 失败则返回false
-bool RpcCodec::DecodeResponse(Buffer& buffer, uint64_t& id, int32_t& code, std::string& result)
+bool RpcCodec::DecodeResponse(Buffer& buffer, uint64_t& id, int32_t& code, std::string& result, std::string& trace_id)
 {
     int64_t tmpId = 0;
     if(!RpcCodec::ReadInt64(buffer, tmpId))
@@ -252,15 +310,23 @@ bool RpcCodec::DecodeResponse(Buffer& buffer, uint64_t& id, int32_t& code, std::
         return false;
     }
 
+    std::string strTmpTraceId;
+    if(!RpcCodec::ReadString(buffer, strTmpTraceId))
+    {
+        return false;
+    }
+
+
     id = tmpId;
     code = tmpCode;
     result = std::move(strTmpResult);
+    trace_id = std::move(strTmpTraceId);
     return true;
 }
 
 
 // 解码请求， 成功则返回true 并且填充 id, method， params; 失败则返回false (数据不足或者格式错误)
-bool RpcCodec::DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, std::string& params)
+bool RpcCodec::DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, std::string& params, std::string& trace_id)
 {
     
     int64_t tmpId = 0;
@@ -291,8 +357,16 @@ bool RpcCodec::DecodeRequest(Buffer& buffer, uint64_t& id, std::string& method, 
         return false;
     }
 
+    std::string strTmpTraceId;
+    if(!RpcCodec::ReadString(buffer, strTmpTraceId))
+    {
+        return false;
+    }
+
+
     id = tmpId;
     method = std::move(strTmpMethod);
     params = std::move(strTmpParam);
+    trace_id = std::move(strTmpTraceId);
     return true;
 }

@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <iostream>
 #include <inttypes.h>
-#include "RpcLogFile.h"
 #include "../Decoder/LengthPrefixDecoder.h"
 #include "../TcpClient.h"
 
@@ -111,11 +110,13 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
     }
 
     uint64_t req_id = next_id_.fetch_add(2, std::memory_order_release);
+    std::string trace_id = RpcClient::GenerateTraceId();
     
+    // 测试 链路追踪
     
 
     //Buffer buf;
-     std::string strData = std::move(RpcCodec::Protobuf_EncodeRequest(req_id, method, params));
+    std::string strData = std::move(RpcCodec::Protobuf_EncodeRequest(req_id, method, params, trace_id));
    //buf.RetrieveAllAsString();
 
     std::promise<std::string> pro;
@@ -123,20 +124,6 @@ std::pair<uint64_t, std::future<std::string>> RpcClient::SendRequest(const std::
     {
         std::lock_guard<std::mutex> lk(mutex_);
         pending_[req_id] = std::move(pro);
-
-        /*
-        uintptr_t client_addr = reinterpret_cast<uintptr_t>(this);
-        std::string strRpcLog("RpcClient::Call add new client=");
-        strRpcLog.append(std::to_string(client_addr));
-        strRpcLog.append(" id:=");
-        strRpcLog.append(std::to_string(req_id));
-        strRpcLog.append(" fd:=");
-        strRpcLog.append(std::to_string(con_->GetFd()));
-
-        
-        RpcLogFile& rpcLog = RpcLogFile::getInstance();
-        rpcLog.AppendContent(strRpcLog);
-        */
     }
 
     std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
@@ -195,7 +182,8 @@ void RpcClient::OnResponse(const std::string& data)
     uint64_t res_id = 0;
     int32_t code = 0;
     std::string result;
-    bool bDecodeReuslt = RpcCodec::Protobuf_DecodeResponse(data, res_id, code, result);
+    std::string trace_id;
+    bool bDecodeReuslt = RpcCodec::Protobuf_DecodeResponse(data, res_id, code, result, trace_id);
     if (!bDecodeReuslt)
     {
         // 解析失败，忽略
@@ -228,18 +216,6 @@ void RpcClient::OncConnectionClosed()
     bConnected_.store(false, std::memory_order_release);
     for(auto& pair: copy_pending)
     {
-        /*
-        std::string strRpcLog("RpcClient::OncConnectionClosed rpc client:=");
-        strRpcLog.append(std::to_string(reinterpret_cast<uintptr_t>(this)));
-        strRpcLog.append("find id:=");
-        strRpcLog.append(std::to_string(pair.first));
-        strRpcLog.append(" fd:=");
-        strRpcLog.append(std::to_string(con_->GetFd()));
-
-        RpcLogFile& rpcLog = RpcLogFile::getInstance();
-        rpcLog.AppendContent(strRpcLog);
-        */
-
         auto exception_ptr = std::make_exception_ptr(std::runtime_error("connection_closed"));
         pair.second.set_exception(exception_ptr);
     }
@@ -260,7 +236,8 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
     }
 
     uint64_t req_id = async_call_next_id_.fetch_add(2, std::memory_order_release);
-    std::string strData = std::move(RpcCodec::Protobuf_EncodeRequest(req_id, method, params));
+    std::string trace_id = RpcClient::GenerateTraceId();
+    std::string strData = std::move(RpcCodec::Protobuf_EncodeRequest(req_id, method, params, trace_id));
     
     {
         std::lock_guard<std::mutex> lk(aync_mutex_);
@@ -351,4 +328,20 @@ void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, cons
     }
 }
 
+// 时间戳+现成标识+序列号
+std::string RpcClient::GenerateTraceId()
+{
+    static std::atomic<uint64_t> seq{0};
+    uint64_t seq_no = seq.fetch_add(1, std::memory_order_relaxed);
 
+     // 使用 system_clock 获取毫秒级时间戳，便于跨进程排序
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
+    // 线程 ID 的哈希值（可直接转为字符串）
+    std::stringstream ss;
+    ss << std::this_thread::get_id();
+    std::string tid_str = ss.str();  // 例如 "140234567890123"
+
+    return std::to_string(now_ms) + "-" + tid_str + "-" + std::to_string(seq_no);
+}
