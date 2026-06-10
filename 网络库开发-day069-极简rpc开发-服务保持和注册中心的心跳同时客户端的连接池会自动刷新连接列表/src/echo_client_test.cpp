@@ -121,8 +121,8 @@ int ClientPressTest(int threads, int req_per_threads)
 int test_http_client()
 {
     auto& cfg = ConfigManager::getInstance();
-    std::string strIp = cfg.getString("Network", "ip", "127.0.0.1");
-    int port = cfg.getInt("Network", "port", 8888);
+    std::string strIp = cfg.getString("RegisterCenter", "ip", "127.0.0.1");
+    int port = cfg.getInt("RegisterCenter", "port", 8888);
 
     std::string path = "/add";
     std::string body = R"({"a":10,"b":32})";

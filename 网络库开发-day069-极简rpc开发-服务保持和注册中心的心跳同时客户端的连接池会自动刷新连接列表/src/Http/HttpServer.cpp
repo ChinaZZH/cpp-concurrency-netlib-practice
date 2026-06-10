@@ -254,9 +254,15 @@ std::string HttpServer::GetStatusCodeMsg(int nStatusCode)
             std::lock_guard<std::mutex> lk(register_center_mutex_);
             for(auto& instance : services_register_center_)
             {
+                const std::string& service_name = instance.first;
                 auto& vecInstance = (instance.second);
-                auto itr_delete = std::remove_if(vecInstance.begin(), vecInstance.end(), [now](const ServerInstance& instance){
+                auto itr_delete = std::remove_if(vecInstance.begin(), vecInstance.end(), [&service_name, now](const ServerInstance& instance){
                     auto keep_second = std::chrono::duration_cast<std::chrono::seconds>(now - instance.last_heartbeat).count();
+                    if(keep_second > instance.ttl_secs)
+                    {
+                        //测试使用
+                        //std::cout << "auto remove instance service_name:" << service_name << " ip:" << instance.ip << " port:" << instance.port << std::endl;
+                    }
                     return keep_second > instance.ttl_secs;
                 });
 

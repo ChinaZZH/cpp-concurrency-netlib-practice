@@ -19,7 +19,7 @@
 
 
 
-int main()
+int test_http_server()
 {
     
     signal(SIGPIPE, SIG_IGN);

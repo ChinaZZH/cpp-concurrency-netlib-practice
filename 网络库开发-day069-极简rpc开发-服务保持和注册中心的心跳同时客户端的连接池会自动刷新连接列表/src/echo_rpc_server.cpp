@@ -20,7 +20,7 @@
 
 
 
-int rpc_server_func()
+int main()
 {
     
     signal(SIGPIPE, SIG_IGN);
@@ -31,8 +31,6 @@ int rpc_server_func()
         return -1;
     }
 
-    int port = cfg.getInt("Network", "port", 8888);
-    int idle_ms_timeout = cfg.getInt("Connection", "idle_ms_timeout", 0);
 
     RpcLogFile& rpcLog = RpcLogFile::getInstance();
     rpcLog.OpenFile("rpc_server_log.txt");
@@ -53,12 +51,19 @@ int rpc_server_func()
    
 
     // rpcServer
-    
-    RpcServer server(&loop, port);
+    int my_port = cfg.getInt("Rpc", "listen_port", 8888);
+    RpcServer server(&loop, my_port);
     server.RegisterMethod("add", ProtoMethod::add);
     //server.RegisterMethod("echo", JsonMethodLib::echo);
     //server.RegisterMethod("login", JsonMethodLib::login);
     server.Start(0, 6);
+
+    std::string my_ip = cfg.getString("Rpc", "server_ip", "127.0.0.1");
+    std::string registry_host = cfg.getString("RegisterCenter", "ip", "127.0.0.1");
+    int registry_port = cfg.getInt("RegisterCenter", "port", 8888);
+    int ttl_sec = cfg.getInt("RegisterCenter", "ttl_sec", 30);
+
+    server.EnableServiceDiscovery(registry_host, registry_port, "rpc_server", my_ip, my_port, ttl_sec);
 
     loop.Loop();
     rpcLog.Release();

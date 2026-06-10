@@ -7,8 +7,8 @@ RpcConnectionPool::RpcConnectionPool()
 {
     auto& cfg = ConfigManager::getInstance();
 
-    std::string strIp = cfg.getString("Network", "ip", "127.0.0.1");
-    int port = cfg.getInt("Network", "port", 8888);
+    std::string strIp = cfg.getString("RegisterCenter", "ip", "127.0.0.1");
+    int port = cfg.getInt("RegisterCenter", "port", 8080);
     int pool_count = cfg.getInt("ConnectionPool", "count", 0);
 
     rpc_client_list_.reserve(pool_count);
