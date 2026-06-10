@@ -10,6 +10,7 @@
 #include <atomic>
 
 class EventLoop;
+class ServiceRegistry;
 class RpcServer
 {
 public:
@@ -36,7 +37,5 @@ private:
     TcpServer server_;
     std::unordered_map<std::string, Handler> methods_;
 
-    // 发送心跳消息到服务注册中心，由于现在的httpClient实现的post和get是同步阻塞的，所以必须新开一个线程去做发送。
-    std::atomic<bool> stop_heartbeat_ = false;
-    std::unique_ptr<std::thread>  heartbeat_thread_;
+    std::unique_ptr<ServiceRegistry> service_registry_;
 };

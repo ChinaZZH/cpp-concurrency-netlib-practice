@@ -20,7 +20,7 @@
 
 
 
-int main()
+int rpc_server_func()
 {
     
     signal(SIGPIPE, SIG_IGN);

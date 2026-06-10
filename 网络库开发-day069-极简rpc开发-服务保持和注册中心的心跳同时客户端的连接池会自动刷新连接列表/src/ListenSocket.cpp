@@ -92,6 +92,7 @@ bool ListenSocket::Bind(const InetAddress& addr)
         return false;
     }
 
+    port_ = addr.toPort();
     return true;
 }
 
@@ -111,10 +112,7 @@ bool ListenSocket::Listen()
         return false;
     }
 
-    auto& cfg = ConfigManager::getInstance();
-    int port = cfg.getInt("RegisterCenter", "port", 8080);
-
-    std::cout << "Listening on port:" << port << " ....\n";
+    std::cout << "listen_socket_fd:= " << socket_fd_ << "Listening on port:" << port_ << " ....\n";
     return true;
 }
 

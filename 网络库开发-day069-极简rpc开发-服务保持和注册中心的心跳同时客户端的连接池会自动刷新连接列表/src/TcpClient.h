@@ -33,6 +33,10 @@ public:
 
     TcpConnectionPtr GetTcpConnection() { return connection_; }
 
+    const std::string& GetIp() const { return ip_; }
+
+    int GetPort() const { return port_; }
+    
 private:
     EventLoop* loop_;
     std::string ip_;

@@ -33,6 +33,11 @@ public:
 
     bool AutoConnect();  // 连接池自动连接 
 
+    // 自动连接的时候调用
+    const std::string& GetIp() const { return ip_; }
+
+    int GetPort() const { return port_; }
+
     // 同步调用， 阻塞直到收到响应或者超时
     std::string Call(const std::string& method, const std::string& params, int timeout_ms = 5000);
 
@@ -87,5 +92,6 @@ private:
     std::map<uint64_t, AsyncCallback> async_callback_pending_func_;
     std::mutex aync_mutex_;
 
-    //std::shared_ptr<TcpClient> tcp_client_;
+    std::string ip_;
+    int port_;
 };

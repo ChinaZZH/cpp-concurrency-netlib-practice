@@ -50,23 +50,23 @@ file(GLOB_RECURSE OTHER_SOURCES "src/*.cpp")
 set(ALL_SOURCES ${OTHER_SOURCES} ${PROTO_SRCS})
 
 # 生成可执行文件
-add_executable(echo_rpc_server ${ALL_SOURCES})
+add_executable(echo_rpc_client_test ${ALL_SOURCES})
 
 # 包含生成的头文件目录（.pb.h 所在位置）
-target_include_directories(echo_rpc_server PRIVATE
+target_include_directories(echo_rpc_client_test PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
     ${Protobuf_INCLUDE_DIRS}
 )
 
 
 # 链接线程库
-target_link_libraries(echo_rpc_server
+target_link_libraries(echo_rpc_client_test
 	Threads::Threads
 	${Protobuf_LIBRARIES}
 )
 
 # 可选：如果需要调试，可以设置编译选项
-target_compile_options(echo_rpc_server PRIVATE -g -O0)
+target_compile_options(echo_rpc_client_test PRIVATE -g -O0)
 
 # 运行 cmake 后（甚至在编译前）就在 build 目录下看到配置文件 config
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config/

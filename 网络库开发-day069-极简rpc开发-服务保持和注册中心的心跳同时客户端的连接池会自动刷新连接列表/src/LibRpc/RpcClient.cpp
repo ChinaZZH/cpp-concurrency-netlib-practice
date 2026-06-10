@@ -24,6 +24,8 @@ RpcClient::RpcClient(TcpConnectionPtr con)
 
 
 RpcClient::RpcClient(const std::string& strIp, int nPort)
+:ip_(strIp)
+,port_(nPort)
 {
     loop_thread_ = std::make_unique<EventLoopThread>();
     loop_ = loop_thread_->StartLoop();

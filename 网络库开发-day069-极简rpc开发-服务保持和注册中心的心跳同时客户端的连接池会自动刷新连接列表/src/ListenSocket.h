@@ -40,5 +40,6 @@ public:
 
 private:
     int socket_fd_ = -1;
+    int port_ = -1;
 };
 

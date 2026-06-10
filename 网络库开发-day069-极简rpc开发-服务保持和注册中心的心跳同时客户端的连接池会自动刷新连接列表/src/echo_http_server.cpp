@@ -9,6 +9,7 @@
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcLogFile.h"
 #include "LibRpc/RpcConnectionPool.h"
+#include "ServiceDiscovery/ServiceRegisterCenter.h"
 #include "TcpClient.h"
 #include <iostream>
 #include <chrono>
@@ -51,8 +52,8 @@ int test_http_server()
     // httpSrver
     HttpServer server(&loop, port);
     server.RegisterMethod("add", JsonMethodLib::add);
-    server.InitServicesRegisterCenter();
     server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
+    ServiceRegisterCenter register_center(&server); // 注册中心 不需要的时候可以移除
 
     loop.Loop();
     rpcLog.Release();

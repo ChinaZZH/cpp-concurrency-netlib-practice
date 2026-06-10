@@ -19,8 +19,6 @@ public:
 
     void RegisterMethod(const std::string& strMethod, Handler handler);
 
-    void InitServicesRegisterCenter();
-
 private:
     // 同步 
     void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
@@ -41,16 +39,5 @@ private:
     HttpContext http_server_context_;
     std::unordered_map<std::string, Handler> method_handlers_;
 
-    // 可能是一个服务注册中心
-    struct ServerInstance
-    {
-        std::string ip;
-        int port;
-        std::chrono::steady_clock::time_point last_heartbeat;
-        int ttl_secs;
-    };
-
-    bool is_services_center = false;
-    std::unordered_map<std::string, std::vector<ServerInstance>> services_register_center_;
-    std::mutex register_center_mutex_;
+    friend class ServiceRegisterCenter;
 };
