@@ -8,6 +8,13 @@
 #include <stdexcept>
 #include <iostream>
 #include <inttypes.h>
+#include <string>         // std::string
+#include <fstream>        // std::ifstream
+#include <functional>     // std::hash
+#include <random>         // std::random_device
+#include <unistd.h>       // gethostname, getpid
+#include <cstdint>        // uint64_t
+#include <sstream>        // std::ostringstream (如果用在其他函数)
 #include "../Decoder/LengthPrefixDecoder.h"
 #include "../TcpClient.h"
 
@@ -344,4 +351,54 @@ std::string RpcClient::GenerateTraceId()
     std::string tid_str = ss.str();  // 例如 "140234567890123"
 
     return std::to_string(now_ms) + "-" + tid_str + "-" + std::to_string(seq_no);
+}
+
+
+std::string RpcClient::GenerateGlobalTraceId() {
+    static std::atomic<uint64_t> seq{0};
+    uint64_t seq_no = seq.fetch_add(1, std::memory_order_relaxed);
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    uint64_t machine = GetMachineId();
+
+    std::ostringstream oss;
+    oss << std::hex << machine << "-" << std::dec << now_ms << "-" << seq_no;
+    return oss.str();
+}
+
+
+// 获取一个全局唯一的机器标识符（64位无符号整数）
+uint64_t RpcClient::GetMachineId() {
+    // 静态局部变量：函数首次调用时初始化，之后直接返回缓存值（线程安全，C++11起）
+    static uint64_t machine_id = []() -> uint64_t {
+        // 方案1：读取 Linux 系统机器ID文件（/etc/machine-id，通常由 systemd 生成，全球唯一）
+        std::ifstream f("/etc/machine-id");  // 打开文件流
+        std::string id;                     // 存储读取到的ID字符串
+        // 如果文件状态良好、成功读取一行、且长度≥8（保证至少64位），则使用
+        if (f.good() && std::getline(f, id) && id.size() >= 8) {
+            // 计算字符串的哈希值，转换为64位整数（std::hash 对 string 的返回值是 size_t，足够64位）
+            return std::hash<std::string>{}(id);
+        }
+
+
+        // 方案2（备选）：使用主机名 + 当前进程ID的组合作为机器标识
+        char hostname[256];                // 存储主机名的缓冲区
+        // gethostname 成功返回0，失败返回-1（需要包含 <unistd.h>）
+        if (gethostname(hostname, sizeof(hostname)) == 0) {
+            // 计算主机名的哈希值
+            uint64_t h = std::hash<std::string>{}(hostname);
+            // 将进程ID（通常32位）左移32位后异或到高位，避免与主机名哈希冲突
+            h ^= static_cast<uint64_t>(getpid()) << 32;
+            return h;
+        }
+
+
+        // 方案3（最终保底）：使用随机数生成器（std::random_device 提供真随机数）
+        static std::random_device rd;       // 静态随机设备（线程安全，但可能阻塞）
+        // 组合两个32位随机数构成64位值（一个随机数只有32位，组合后覆盖全部64位）
+        return static_cast<uint64_t>(rd()) | (static_cast<uint64_t>(rd()) << 32);
+    }();    // 注意：末尾的 () 表示立即执行 lambda 表达式
+
+    
+    return machine_id;
 }

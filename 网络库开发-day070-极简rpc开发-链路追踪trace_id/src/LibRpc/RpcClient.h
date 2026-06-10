@@ -71,6 +71,11 @@ public:
 private:
     static std::string GenerateTraceId();
 
+    // 用于分布式系统中
+    static std::string GenerateGlobalTraceId();
+
+    static uint64_t GetMachineId();
+
 private:
     std::pair<uint64_t, std::future<std::string>> SendRequest(const std::string& method, const std::string& params);
 
