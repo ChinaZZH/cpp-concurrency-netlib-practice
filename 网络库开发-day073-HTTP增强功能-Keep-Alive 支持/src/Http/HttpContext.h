@@ -44,10 +44,14 @@ public:
 
     const std::string& GetResponseBody() const { return response_body_; }
     
+    bool KeepAlive() const { return keep_alive_; }
+    
 private:
     bool ProcessRequestLine(const std::string_view& line);
 
     bool ProcessHeader(const std::string_view& line);
+
+    void ProcessSpecficHeader();
 
 private:
     // request内容
@@ -55,6 +59,7 @@ private:
     std::string     path_;
     std::string     version_;
     std::vector<std::pair<std::string, std::string>>  headers_; // 由于这个数量极少，则用std::vector进行优化
+    bool keep_alive_ = true;
 
     std::string body_;
     std::string nullptr_header;

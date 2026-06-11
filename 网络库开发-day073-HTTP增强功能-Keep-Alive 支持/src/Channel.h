@@ -33,6 +33,7 @@ public:
     
     void EnableEvent(int et);
     void DisableEvent(int et);
+    bool CheckEvent(int et) { return events_ & et; }
 
 private:
     int fd_;

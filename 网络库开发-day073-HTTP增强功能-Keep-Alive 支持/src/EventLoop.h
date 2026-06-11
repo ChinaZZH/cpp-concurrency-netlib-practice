@@ -55,6 +55,8 @@ public:
 
     void DelEventToUpdateChannel(int fd, int event);
 
+    bool CheckEvetFromChannel(int fd, int event);
+
     // 将connection_list移植到event_loop中来
     void HandleNewConnection(std::shared_ptr<TcpConnection> newConnection);
 

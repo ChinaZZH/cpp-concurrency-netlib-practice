@@ -55,6 +55,9 @@ public:
     // 设置对应的解码器
     void SetDecoder(std::unique_ptr<Decoder> decoder);
 
+    // http client 发送短连接 connection:close 的时候需要等数据全部发送完的时候进行shutdown
+    void CloseWhenWriteFinish();   // 主动关闭接口
+
 private:
     void HandleRead();
     void HandleWrite();
@@ -88,6 +91,7 @@ private:
     LowWaterMarkCallback  lowWaterMarkCallback_;
     bool pause_ = false;
     std::queue<std::string>  WaitLowWaterToSend_;
+    bool close_when_write_finish_ = false;
     
     bool closed = false;
     bool closedWrite_ = false;

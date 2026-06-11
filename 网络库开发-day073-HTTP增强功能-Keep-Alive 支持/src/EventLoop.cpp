@@ -290,6 +290,18 @@ void EventLoop::DelEventToUpdateChannel(int fd, int event)
     epoll_->ModifyFd(channel.get());
 }
 
+bool EventLoop::CheckEvetFromChannel(int fd, int event)
+{
+    AssertInLoopThread("EventLoop::CheckEvetFromChannel");
+    auto itr = channels_.find(fd);
+    if(itr == channels_.end())
+    {
+        return false;
+    }
+
+    auto& channel = (itr->second);
+    return channel->CheckEvent(event);
+}
 
  // 跨线程调度: 如果当前是IO线程则直接执行，否则放入队列
 void EventLoop::RunInLoop(std::function<void()> cb)

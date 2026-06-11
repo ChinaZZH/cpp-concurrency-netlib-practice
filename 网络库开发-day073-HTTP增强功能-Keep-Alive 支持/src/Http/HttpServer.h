@@ -26,12 +26,12 @@ private:
     // 同步 
     void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
 
-    void SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode = 200);
+    void SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode, bool bKeepAlive);
 
     // 通过线程池异步执行
     void AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
 
-    void AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode);
+    void AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode, bool bKeepAlive);
 
     Handler GetHadlerByMethod(const std::string& strMethod);
 

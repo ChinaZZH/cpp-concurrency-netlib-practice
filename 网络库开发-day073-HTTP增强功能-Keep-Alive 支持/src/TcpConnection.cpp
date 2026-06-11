@@ -5,6 +5,7 @@
 #include "Decoder/Decoder.h"
 #include <iostream>
 #include <cstring>
+#include <sstream>
 #include <unistd.h>
 
 
@@ -280,6 +281,13 @@ void TcpConnection::SendOutput()
     {
         // 关闭写事件
         loop_->DelEventToUpdateChannel(fd_, EPOLLOUT);
+
+        // 数据写完后 http conneciton:close 需要主动关闭连接
+        if(close_when_write_finish_ && WaitLowWaterToSend_.empty())
+        {
+            std::cout << "TcpConnection::SendOutput close_when_write_finish_ to Shutdown\n";
+            Shutdown();
+        }
     }
 }
 
@@ -369,4 +377,31 @@ void TcpConnection::WaterFromHighToLow()
 void TcpConnection::SetDecoder(std::unique_ptr<Decoder> decoder)
 {
     decoder_ = std::move(decoder);
+}
+
+// 主动关闭接口
+// http client 发送短连接 connection:close 的时候需要等数据全部发送完的时候进行shutdown
+void TcpConnection::CloseWhenWriteFinish()
+{
+    loop_->AssertInLoopThread("TcpConnection::SendOutput");
+    if(outputBuffer_.ReadableBytes() <= 0 && WaitLowWaterToSend_.empty())
+    {
+        Shutdown();
+        std::cout << "TcpConnection::CloseWhenWriteFinish Shutdown\n";
+    }
+    else
+    {
+        close_when_write_finish_ = true;
+        // 确保写事件是开启的（否则不会触发 SendOutput）
+        bool bCheck = loop_->CheckEvetFromChannel(fd_, EPOLLOUT);
+        if(!bCheck) 
+        {
+            // 写入的时候有开启epoll_out写事件，一般不错到这里。打个日志吧。
+            std::cout << "Warning Error!!! TcpConnection::CloseWhenWriteFinish" << std::endl;
+            loop_->AddEventToUpdateChannel(fd_, EPOLLOUT);
+        }
+
+        std::cout << "TcpConnection::CloseWhenWriteFinish close_when_write_finish_ true\n";
+    }
+
 }

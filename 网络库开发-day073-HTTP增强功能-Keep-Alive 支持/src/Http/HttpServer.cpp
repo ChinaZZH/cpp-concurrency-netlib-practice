@@ -14,12 +14,18 @@ HttpServer::HttpServer(EventLoop* loop, int nPort)
 ,web_service_(std::make_unique<HttpWebService>())
 {
     
-    // 由于httpServer 计算很少，以读写io为主，则不让计算和消息都在io线程处理。
+    // 由于httpServer 计算很少，以读写io为主，则让计算和消息都在io线程处理(不要放入任务线程池反而性能更低)。
     server_.SetMessageCallBack(std::bind(&HttpServer::OnMessage, 
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
-    
+
+    /*
+    server_.SetMessageCallBack(std::bind(&HttpServer::AsyncOnMessage, 
+        this, std::placeholders::_1, 
+        std::placeholders::_2)
+    );
+    */
 
     server_.SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
         auto http_decoder = std::make_unique<HttpContentDecoder>();
@@ -65,29 +71,46 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
             {
                 // 解析失败或需要更多数据，这里简单返回 400
                 std::string body = "Bad Request";
-                AsyncSendHttpResponse(loop, conWeakPtr, body, 400);
-                return;
-            }
-
-            
-            const std::string& strMethod = async_thread_context.GetMethod();
-            if("POST" != strMethod)
-            {
-                // 注意安全检查，避免出目录
-                // 简单路由：返回 "Hello, World!"
-                std::string body = "<h1>Hello, World!</h1>";
-                AsyncSendHttpResponse(loop, conWeakPtr, body, 200);
+                AsyncSendHttpResponse(loop, conWeakPtr, body, 400, async_thread_context.KeepAlive());
                 return;
             }
 
             const std::string& strPath = async_thread_context.GetPath();
+            const std::string& strMethod = async_thread_context.GetMethod();
+            bool bKeepAlive = async_thread_context.KeepAlive();
+            std::cout << "HttpServer::AsyncOnMessage keepalive:=" << (bKeepAlive ? 1:0) << std::endl; 
+            if("POST" != strMethod)
+            {
+                // 注意安全检查，避免出目录
+                // 简单路由：返回 "Hello, World!"
+                if("/" == strPath)
+                {
+                    std::string body = "<h1>Hello, World!</h1>";
+                    AsyncSendHttpResponse(loop, conWeakPtr, body, 200, bKeepAlive);
+                }
+                else
+                {
+                    std::string filepath = std::move(web_service_->GetSystemFilePath(strPath));
+                    if('/' == filepath.back())
+                    {
+                        filepath += "index.html";
+                    }
+
+                    web_service_->AysncSendStaticFile(filepath, loop, conWeakPtr, bKeepAlive);
+                }
+
+
+                return;
+            }
+
+            
             std::string strHandleKey(strPath.data() + 1, strPath.size()-1);  
             auto func = this->GetHadlerByMethod(strHandleKey);
             if(!func)
             {
                 // 简单路由：返回 "Hello, World!"
                 std::string body = "Not Found";
-                AsyncSendHttpResponse(loop, conWeakPtr, body, 404);
+                AsyncSendHttpResponse(loop, conWeakPtr, body, 404, bKeepAlive);
                 return;
             }
 
@@ -103,18 +126,24 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
                     std::cerr << "HttpServer func error: " << e.what() << std::endl;
                 }
                         
-                AsyncSendHttpResponse(loop, conWeakPtr, result, 200);
+                AsyncSendHttpResponse(loop, conWeakPtr, result, 200, bKeepAlive);
             }
         }
         
     }, loop, weakConPtr, std::move(strMsg));
 }
 
-void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode)
+void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode, bool bKeepAlive)
 {
     if(!loop)
     {
         return;
+    }
+
+    std::string strKeepAlive = "Connection: close\r\n";
+    if(bKeepAlive)
+    {
+        strKeepAlive.assign("Connection: keep-alive\r\n");
     }
 
     std::string strCode = std::move(GetStatusCodeMsg(nStatusCode));
@@ -122,6 +151,7 @@ void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpC
     response << "HTTP/1.1 " << nStatusCode << " " << strCode.c_str() << " \r\n"
              << "Content-Length: " << strContent.size() << "\r\n"
              << "Content-Type: text/html\r\n"
+             << strKeepAlive.c_str()
              << "\r\n"
              << strContent;
 
@@ -130,16 +160,15 @@ void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpC
     //std::weak_ptr<TcpConnection> weakConPtr = con;
     
     {
-        loop->RunInLoop([this, conWeakPtr, strResponse = std::move(strResponse)](){ 
+        loop->RunInLoop([this, bKeepAlive, conWeakPtr, strResponse = std::move(strResponse)](){ 
             //if(weakConPtr.lock()) weakConPtr.lock()->Send(strResponse);
                 std::shared_ptr<TcpConnection> con = conWeakPtr.lock(); 
                 if(con && !con->IsWriteClosed())
                 {
-                    if(con->IsPause())
+                    con->Send(strResponse);
+                    if(!bKeepAlive)
                     {
-                        con->WaitForWaterToLowMask(strResponse);
-                    }else{
-                        con->Send(strResponse);
+                        con->CloseWhenWriteFinish();
                     }
                 } 
         });
@@ -157,7 +186,7 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
     {
         // 解析失败或需要更多数据，这里简单返回 400
         std::string body = "Bad Request";
-        SendHttpResponse(con, body, 400);
+        SendHttpResponse(con, body, 400, http_server_context_.KeepAlive());
         return;
     }
 
@@ -172,7 +201,7 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
             // 注意安全检查，避免出目录
             // 简单路由：返回 "Hello, World!"
             std::string body = "<h1>Hello, World!</h1>";
-            SendHttpResponse(con, body, 200);
+            SendHttpResponse(con, body, 200, http_server_context_.KeepAlive());
         }
         else
         {
@@ -182,7 +211,7 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
                 filepath += "index.html";
             }
 
-            web_service_->SendStaticFile(filepath, con);
+            web_service_->SendStaticFile(filepath, con, http_server_context_.KeepAlive());
         }
 
         return;
@@ -195,31 +224,42 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
     {
         const std::string& strBody = http_server_context_.GetBody();
         std::string result = func(strBody);
-        SendHttpResponse(con, result, 200);
+        SendHttpResponse(con, result, 200, http_server_context_.KeepAlive());
     }
     else
     {     
         // 简单路由：返回 "Hello, World!"
         std::string body = "Not Found";
-        SendHttpResponse(con, body, 404);
+        SendHttpResponse(con, body, 404, http_server_context_.KeepAlive());
     }
 }
 
-void HttpServer::SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode)
+void HttpServer::SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode, bool bKeepAlive)
 {
     std::string strCode = std::move(GetStatusCodeMsg(nStatusCode));
+    std::string strKeepAlive;
+    if(bKeepAlive)
+    {
+        strKeepAlive.assign("Connection: keep-alive\r\n");
+    }
+    else
+    {
+        strKeepAlive.assign("Connection: close\r\n");
+    }
+
     std::ostringstream response;
     response << "HTTP/1.1 " << nStatusCode << " " << strCode.c_str() << " \r\n"
              << "Content-Length: " << strContent.size() << "\r\n"
              << "Content-Type: text/html\r\n"
+             << strKeepAlive.c_str()
              << "\r\n"
              << strContent;
 
-    if(con->IsPause())
+    
+    con->Send(response.str());
+    if(!bKeepAlive)
     {
-        con->WaitForWaterToLowMask(response.str());
-    }else{
-        con->Send(response.str());
+        con->CloseWhenWriteFinish();
     }
 }
 

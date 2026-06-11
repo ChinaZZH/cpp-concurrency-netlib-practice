@@ -35,11 +35,11 @@ void HttpWebService::ServerStatic(const std::string& url_prefix, const std::stri
 
 
 // 发送静态文件(在业务回调中调用)
-void HttpWebService::SendStaticFile(const std::string& filepath, const std::shared_ptr<TcpConnection>& con)
+void HttpWebService::SendStaticFile(const std::string& filepath, const std::shared_ptr<TcpConnection>& con, bool bKeepAlive)
 {
     // 检查文件是否存在
     if (!std::filesystem::exists(filepath)) {
-        SendError(con, 404, "File Not Found");
+        SendError(con, 404, "File Not Found", bKeepAlive);
         return;
     }
 
@@ -48,20 +48,20 @@ void HttpWebService::SendStaticFile(const std::string& filepath, const std::shar
     try {
         real_path = std::filesystem::canonical(filepath).string();
     } catch (const std::filesystem::filesystem_error& e) {
-        SendError(con, 404, "Not Found");
+        SendError(con, 404, "Not Found", bKeepAlive);
         return;
     }
 
     if((0 != real_path.find(static_root_abs_))) // 仅仅允许指定目录
     {
-        SendError(con, 403, "Forbidden");
+        SendError(con, 403, "Forbidden", bKeepAlive);
         return;
     }
 
     int fd = ::open(real_path.c_str(), O_RDONLY);
     if(fd < 0)
     {
-        SendError(con, 404, "Not Found");
+        SendError(con, 404, "Not Found", bKeepAlive);
         return;
     }
 
@@ -89,17 +89,23 @@ void HttpWebService::SendStaticFile(const std::string& filepath, const std::shar
     if(0 != ::fstat(fd, &st) || !S_ISREG(st.st_mode))
     {
         ::close(fd);
-        SendError(con, 405, "file mode Forbidden");
+        SendError(con, 405, "file mode Forbidden", bKeepAlive);
         return;
     }
 
-    // 构造响应头
+    // 构造响应头 web服务默认短连接，统一connection close
     std::string mime = GetMimeType(real_path);
+    std::string strKeepAlive = "Connection: close\r\n";
+    if(bKeepAlive)
+    {
+        strKeepAlive.assign("Connection: keep-alive\r\n");
+    }
+
     std::ostringstream header;
     header << "HTTP/1.1 200 OK\r\n"
            << "Content-Type: " << mime << "\r\n"
            << "Content-Length: " << st.st_size << "\r\n"
-           << "Connection: close\r\n"
+           << strKeepAlive.c_str()
            << "\r\n";
 
     con->Send(header.str());
@@ -122,6 +128,10 @@ void HttpWebService::SendStaticFile(const std::string& filepath, const std::shar
     }
 
     ::close(fd);
+    if(!bKeepAlive)
+    {
+        con->CloseWhenWriteFinish();
+    }
 }
 
 
@@ -153,12 +163,13 @@ void HttpWebService::SendStaticFile(const std::string& filepath, const std::shar
 
 
 // 发送静态文件(在业务回调中调用)
-void HttpWebService::AysncSendStaticFile(const std::string& filepath, EventLoop* loop, const std::weak_ptr<TcpConnection>& weak_con)
+void HttpWebService::AysncSendStaticFile(const std::string& filepath, EventLoop* loop, 
+    const std::weak_ptr<TcpConnection>& weak_con, bool bKeepAlive)
 {
     assert(loop);
     // 检查文件是否存在
     if (!std::filesystem::exists(filepath)) {
-        AysncSendError(loop, weak_con, 404, "File Not Found");
+        AysncSendError(loop, weak_con, 404, "File Not Found", bKeepAlive);
         return;
     }
 
@@ -167,20 +178,20 @@ void HttpWebService::AysncSendStaticFile(const std::string& filepath, EventLoop*
     try {
         real_path = std::filesystem::canonical(filepath).string();
     } catch (const std::filesystem::filesystem_error& e) {
-        AysncSendError(loop, weak_con, 404, "Not Found");
+        AysncSendError(loop, weak_con, 404, "Not Found", bKeepAlive);
         return;
     }
 
     if((0 != real_path.find(static_root_abs_))) // 仅仅允许指定目录
     {
-        AysncSendError(loop, weak_con, 403, "Forbidden");
+        AysncSendError(loop, weak_con, 403, "Forbidden", bKeepAlive);
         return;
     }
 
     int fd = ::open(real_path.c_str(), O_RDONLY);
     if(fd < 0)
     {
-        AysncSendError(loop, weak_con, 404, "Not Found");
+        AysncSendError(loop, weak_con, 404, "Not Found", bKeepAlive);
         return;
     }
 
@@ -208,24 +219,30 @@ void HttpWebService::AysncSendStaticFile(const std::string& filepath, EventLoop*
     if(0 != ::fstat(fd, &st) || !S_ISREG(st.st_mode))
     {
         ::close(fd);
-        AysncSendError(loop, weak_con, 403, "Forbidden");
+        AysncSendError(loop, weak_con, 403, "Forbidden", bKeepAlive);
         return;
     }
 
     // 构造响应头
     std::string mime = GetMimeType(real_path);
+    std::string strKeepAlive = "Connection: close\r\n";
+    if(bKeepAlive)
+    {
+        strKeepAlive.assign("Connection: keep-alive\r\n");
+    }
+
     std::ostringstream header;
     header << "HTTP/1.1 200 OK\r\n"
            << "Content-Type: " << mime << "\r\n"
            << "Content-Length: " << st.st_size << "\r\n"
-           << "Connection: close\r\n"
+           << strKeepAlive
            << "\r\n";
 
     
     // 发送header
     std::string msg_header = header.str();
 
-    loop->RunInLoop([fd, st, weak_con, msg_header=std::move(msg_header)](){
+    loop->RunInLoop([bKeepAlive, fd, st, weak_con, msg_header=std::move(msg_header)](){
         auto con = weak_con.lock();
         if(!con)
         {
@@ -251,6 +268,11 @@ void HttpWebService::AysncSendStaticFile(const std::string& filepath, EventLoop*
             // 错误处理， 可记录日志
         }
 
+        if(!bKeepAlive)
+        {
+            con->CloseWhenWriteFinish();
+        }
+        
         ::close(fd);
     });
 }
@@ -268,41 +290,61 @@ std::string HttpWebService::GetMimeType(const std::string& path)
 }
 
 // 辅助 发送错误响应
-void HttpWebService::SendError(const std::shared_ptr<TcpConnection>& con, int code, const std::string& msg)
+void HttpWebService::SendError(const std::shared_ptr<TcpConnection>& con, int code, 
+    const std::string& msg, bool bKeepAlive)
 {
     std::string body = "<h1>" + std::to_string(code) + " " + msg + "</h1>";
+    std::string strKeepAlive = "Connection: close\r\n";
+    if(bKeepAlive)
+    {
+        strKeepAlive.assign("Connection: keep-alive\r\n");
+    }
+
     std::ostringstream response;
     response << "HTTP/1.1 " << code << " " << msg << "\r\n"
              << "Content-Type: text/html\r\n"
              << "Content-Length: " << body.size() << "\r\n"
-             << "Connection: close\r\n"
+             << strKeepAlive
              << "\r\n"
              << body;
+
     con->Send(response.str());
-    con->Shutdown();  // 错误响应后关闭连接
+    if(!bKeepAlive)
+    {
+        con->CloseWhenWriteFinish();
+    }
 }
 
 
-void HttpWebService::AysncSendError(EventLoop* loop, const std::weak_ptr<TcpConnection>& weak_con, int code, const std::string& msg)
+void HttpWebService::AysncSendError(EventLoop* loop, const std::weak_ptr<TcpConnection>& weak_con, int code, const std::string& msg, bool bKeepAlive)
 {
     assert(loop);
     std::string body = "<h1>" + std::to_string(code) + " " + msg + "</h1>";
+    std::string strKeepAlive = "Connection: close\r\n";
+    if(bKeepAlive)
+    {
+        strKeepAlive.assign("Connection: keep-alive\r\n");
+    }
+
     std::ostringstream response;
     response << "HTTP/1.1 " << code << " " << msg << "\r\n"
              << "Content-Type: text/html\r\n"
              << "Content-Length: " << body.size() << "\r\n"
-             << "Connection: close\r\n"
+             << strKeepAlive
              << "\r\n"
              << body;
 
 
     std::string result_msg = response.str();
-    loop->RunInLoop([weak_con, result_msg = std::move(result_msg)](){
+    loop->RunInLoop([bKeepAlive, weak_con, result_msg = std::move(result_msg)](){
         auto con = weak_con.lock();
         if(con)
         {
             con->Send(result_msg);
-            con->Shutdown();  // 错误响应后关闭连接
+            if(!bKeepAlive)
+            {
+                con->CloseWhenWriteFinish();
+            }
         }
     });
 }

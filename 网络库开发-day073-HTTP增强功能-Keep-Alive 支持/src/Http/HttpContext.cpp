@@ -137,6 +137,10 @@ bool HttpContext::ParseRequest(const std::string& data)
         }
     }
 
+
+    // 处理特殊的头部字段
+    this->ProcessSpecficHeader();
+
     if(kExpectBody == request_state)
     {
         auto itr = std::find_if(headers_.begin(), headers_.end(), [](const auto& header_data){
@@ -272,4 +276,31 @@ bool HttpContext::ParseResponse(const std::string& data)
     status_code_ = tmp_status_code;
     response_body_ = std::move(data.substr(header_end_pos + 4));
     return true;
+}
+
+
+void HttpContext::ProcessSpecficHeader()
+{
+    // std::vector<std::pair<std::string, std::string>>  headers_;
+    //std::string str_connection = "Connection";
+    auto itr = std::find_if(headers_.begin(), headers_.end(), [](const auto& header_info){
+        return (header_info.first == "Connection");
+    });
+
+    if(itr != headers_.end())
+    {
+        const auto& header_value = (itr->second);
+        if(header_value == "keep-alive")
+        {
+            keep_alive_ = true;
+        }
+        else if(header_value == "close"){
+            keep_alive_ = false;
+        }
+    }
+    else
+    {
+        // HTTP/1.1 默认 keep-alive，HTTP/1.0 默认 close
+        keep_alive_ = (version_ == "HTTP/1.1");
+    }
 }
