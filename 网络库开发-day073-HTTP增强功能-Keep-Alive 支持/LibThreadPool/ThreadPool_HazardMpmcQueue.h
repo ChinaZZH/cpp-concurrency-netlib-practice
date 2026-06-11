@@ -8,7 +8,7 @@
 #include <functional>
 #include <memory>
 #include <type_traits>
-#include "MpmcHazardQueue.h"
+#include "../Common/MpmcHazardQueue.h"
 
 
 class ThreadPool_HazardMpmcQueue

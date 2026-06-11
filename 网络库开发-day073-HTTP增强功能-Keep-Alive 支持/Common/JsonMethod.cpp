@@ -50,4 +50,5 @@ namespace JsonMethodLib
 
         return R"({"code":1,"token":"", "msg":"auth failed"})";
     }
+
 }
