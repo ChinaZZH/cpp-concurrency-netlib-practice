@@ -116,7 +116,7 @@ ssize_t Buffer::ReadFd(int fd, int* nSaveErrno)
    vec[1].iov_len = sizeof(extrabuf);
 
    const int iovcnt = (writable < sizeof(extrabuf))?2:1;
-   ssize_t n = readv(fd, vec, iovcnt);
+   ssize_t n = ::readv(fd, vec, iovcnt);
    if(n < 0){
         *nSaveErrno = errno;
    }else if(static_cast<size_t>(n) <= writable){

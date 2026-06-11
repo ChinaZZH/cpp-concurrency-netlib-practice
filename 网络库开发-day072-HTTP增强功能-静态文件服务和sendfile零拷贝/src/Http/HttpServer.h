@@ -7,6 +7,7 @@
 
 
 class EventLoop;
+class HttpWebService;
 
 class HttpServer
 {
@@ -14,6 +15,8 @@ public:
     using Handler = std::function<std::string(const std::string&)>;
 
     HttpServer(EventLoop* loop, int nPort);
+
+    ~HttpServer();
 
     void Start(int option, int nEventLoopThread, int nTaskThreadNum = std::thread::hardware_concurrency());
 
@@ -38,6 +41,7 @@ private:
     TcpServer server_;
     HttpContext http_server_context_;
     std::unordered_map<std::string, Handler> method_handlers_;
+    std::unique_ptr<HttpWebService> web_service_;
 
     friend class ServiceRegisterCenter;
 };

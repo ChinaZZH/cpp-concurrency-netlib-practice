@@ -21,9 +21,10 @@ public:
     ClientSocket& operator=(ClientSocket&& socket)   noexcept;
 
 public:
-    ssize_t Read(char* buf, size_t len);
+    // 现在已经没用了屏蔽掉
+    //ssize_t Read(char* buf, size_t len);
 
-    bool Write(const char* buf, size_t len);
+    //bool Write(const char* buf, size_t len);
 
     void Close();
 

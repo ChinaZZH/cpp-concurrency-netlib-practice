@@ -1,5 +1,6 @@
 #include "HttpServer.h"
 #include "HttpContext.h"
+#include "HttpWebService.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/HttpContentDecoder.h"
@@ -10,17 +11,25 @@
 
 HttpServer::HttpServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
+,web_service_(std::make_unique<HttpWebService>())
 {
-    server_.SetMessageCallBack(std::bind(&HttpServer::AsyncOnMessage, 
+    
+    // 由于httpServer 计算很少，以读写io为主，则不让计算和消息都在io线程处理。
+    server_.SetMessageCallBack(std::bind(&HttpServer::OnMessage, 
         this, std::placeholders::_1, 
         std::placeholders::_2)
     );
+    
 
     server_.SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
         auto http_decoder = std::make_unique<HttpContentDecoder>();
         con->SetDecoder(std::move(http_decoder));
     });
+
+    web_service_->ServerStatic("/", "../www");   // 映射 URL 根路径到 ../www 目录
 }
+
+HttpServer::~HttpServer() = default;
 
 void HttpServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
 {
@@ -64,6 +73,7 @@ void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::
             const std::string& strMethod = async_thread_context.GetMethod();
             if("POST" != strMethod)
             {
+                // 注意安全检查，避免出目录
                 // 简单路由：返回 "Hello, World!"
                 std::string body = "<h1>Hello, World!</h1>";
                 AsyncSendHttpResponse(loop, conWeakPtr, body, 200);
@@ -154,9 +164,28 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
     const std::string& strMethod = http_server_context_.GetMethod();
     if("POST" != strMethod)
     {
-        // 简单路由：返回 "Hello, World!"
-        std::string body = "<h1>Hello, World!</h1>";
-        SendHttpResponse(con, body, 200);
+        // 非post 统一当做get来处理. 
+        // 假设静态文件根目录为 "./www"，且所有 GET 请求都尝试作为静态文件处理
+        const std::string& strPath = http_server_context_.GetPath();
+        if(strPath == "/")
+        {
+            // 注意安全检查，避免出目录
+            // 简单路由：返回 "Hello, World!"
+            std::string body = "<h1>Hello, World!</h1>";
+            SendHttpResponse(con, body, 200);
+        }
+        else
+        {
+            std::string filepath = std::move(web_service_->GetSystemFilePath(strPath));
+            if('/' == filepath.back())
+            {
+                filepath += "index.html";
+            }
+
+            web_service_->SendStaticFile(filepath, con);
+        }
+
+        return;
     }
 
     const std::string& strPath = http_server_context_.GetPath();

@@ -8,7 +8,7 @@
 #include "Common/ProtoMethod.h"
 #include "Common/ConfigManager.h"
 
-int main() 
+int echo_rpc_client_test() 
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {

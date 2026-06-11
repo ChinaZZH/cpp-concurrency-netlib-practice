@@ -19,7 +19,7 @@
 
 
 
-int test_http_server()
+int main()
 {
     
     signal(SIGPIPE, SIG_IGN);
@@ -48,7 +48,7 @@ int test_http_server()
     HttpServer server(&loop, port);
     server.RegisterMethod("add", JsonMethodLib::add);
     server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
-    ServiceRegisterCenter register_center(&server); // 注册中心 不需要的时候可以移除
+    //ServiceRegisterCenter register_center(&server); // 注册中心 不需要的时候直接注释这一行就是普通的httpServer了
 
     loop.Loop();
     return 0;

@@ -63,6 +63,8 @@ void ClientSocket::SetNonBlock()
     ::fcntl(socket_fd_, F_SETFL, flags);
 }
 
+// 现在已经没用了屏蔽掉
+/*
 ssize_t ClientSocket::Read(char* buf, size_t len)
 {
     if(false == IsValid() || !buf)
@@ -105,7 +107,7 @@ bool ClientSocket::Write(const char* buf, size_t len)
 
     return true;
 }
-
+*/
 
 void ClientSocket::Close()
 {
@@ -214,7 +216,7 @@ std::string ClientSocket::BlockedReadAll()
 
     char buf[4096] = {0};
     ssize_t n;
-    while ((n = read(socket_fd_, buf, sizeof(buf))) > 0) {
+    while ((n = ::read(socket_fd_, buf, sizeof(buf))) > 0) {
         response.append(buf, n);
         // std::cout << "Read " << n << " bytes, total now " << response.size() << std::endl;
     }
