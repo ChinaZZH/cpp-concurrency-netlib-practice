@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message RpcRequest {
+    uint64 id = 1;
+    string method = 2;
+    string args = 3;          // 业务请求序列化后的二进制
+    string trace_id = 4;      // 新增trace_id
+}
+
+message RpcResponse {
+    uint64 id = 1;
+    int32 code = 2;
+    string result = 3;        // 业务响应序列化后的二进制
+    string trace_id = 4;      // 新增trace_id
+}
