@@ -1,6 +1,8 @@
 #include "HttpWebService.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
+#include "HttpContext.h"
+#include "HttpServer.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/sendfile.h>
@@ -95,20 +97,8 @@ void HttpWebService::SendStaticFile(const std::string& filepath, const std::shar
 
     // 构造响应头 web服务默认短连接，统一connection close
     std::string mime = GetMimeType(real_path);
-    std::string strKeepAlive = "Connection: close\r\n";
-    if(bKeepAlive)
-    {
-        strKeepAlive.assign("Connection: keep-alive\r\n");
-    }
-
-    std::ostringstream header;
-    header << "HTTP/1.1 200 OK\r\n"
-           << "Content-Type: " << mime << "\r\n"
-           << "Content-Length: " << st.st_size << "\r\n"
-           << strKeepAlive.c_str()
-           << "\r\n";
-
-    con->Send(header.str());
+    auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, 200, "",  mime, st.st_size);
+    con->Send(response.first);
 
     // 再通过sendfile发送文件内容(零拷贝)
     off_t offset = 0;
@@ -225,24 +215,10 @@ void HttpWebService::AysncSendStaticFile(const std::string& filepath, EventLoop*
 
     // 构造响应头
     std::string mime = GetMimeType(real_path);
-    std::string strKeepAlive = "Connection: close\r\n";
-    if(bKeepAlive)
-    {
-        strKeepAlive.assign("Connection: keep-alive\r\n");
-    }
+    auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, 200, "",  mime, st.st_size);
 
-    std::ostringstream header;
-    header << "HTTP/1.1 200 OK\r\n"
-           << "Content-Type: " << mime << "\r\n"
-           << "Content-Length: " << st.st_size << "\r\n"
-           << strKeepAlive
-           << "\r\n";
-
-    
     // 发送header
-    std::string msg_header = header.str();
-
-    loop->RunInLoop([bKeepAlive, fd, st, weak_con, msg_header=std::move(msg_header)](){
+    loop->RunInLoop([bKeepAlive, fd, st, weak_con, msg_header=std::move(response.first)](){
         auto con = weak_con.lock();
         if(!con)
         {
@@ -294,21 +270,13 @@ void HttpWebService::SendError(const std::shared_ptr<TcpConnection>& con, int co
     const std::string& msg, bool bKeepAlive)
 {
     std::string body = "<h1>" + std::to_string(code) + " " + msg + "</h1>";
-    std::string strKeepAlive = "Connection: close\r\n";
-    if(bKeepAlive)
+    auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, code, body);
+    con->Send(response.first);
+    if(response.second)
     {
-        strKeepAlive.assign("Connection: keep-alive\r\n");
+        HttpServer::SendChunkedData(con, body);
     }
 
-    std::ostringstream response;
-    response << "HTTP/1.1 " << code << " " << msg << "\r\n"
-             << "Content-Type: text/html\r\n"
-             << "Content-Length: " << body.size() << "\r\n"
-             << strKeepAlive
-             << "\r\n"
-             << body;
-
-    con->Send(response.str());
     if(!bKeepAlive)
     {
         con->CloseWhenWriteFinish();
@@ -320,27 +288,18 @@ void HttpWebService::AysncSendError(EventLoop* loop, const std::weak_ptr<TcpConn
 {
     assert(loop);
     std::string body = "<h1>" + std::to_string(code) + " " + msg + "</h1>";
-    std::string strKeepAlive = "Connection: close\r\n";
-    if(bKeepAlive)
-    {
-        strKeepAlive.assign("Connection: keep-alive\r\n");
-    }
+    auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, code, body);
 
-    std::ostringstream response;
-    response << "HTTP/1.1 " << code << " " << msg << "\r\n"
-             << "Content-Type: text/html\r\n"
-             << "Content-Length: " << body.size() << "\r\n"
-             << strKeepAlive
-             << "\r\n"
-             << body;
-
-
-    std::string result_msg = response.str();
-    loop->RunInLoop([bKeepAlive, weak_con, result_msg = std::move(result_msg)](){
+    loop->RunInLoop([bKeepAlive, weak_con, response = std::move(response), content = std::move(body)](){
         auto con = weak_con.lock();
         if(con)
         {
-            con->Send(result_msg);
+            con->Send(response.first);
+            if(response.second)
+            {
+                HttpServer::SendChunkedData(con, content);
+            }
+
             if(!bKeepAlive)
             {
                 con->CloseWhenWriteFinish();

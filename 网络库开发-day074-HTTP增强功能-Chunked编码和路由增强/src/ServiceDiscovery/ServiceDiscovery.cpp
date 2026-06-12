@@ -42,8 +42,8 @@ void ServiceDiscovery::RefreshLoop()
         auto res = SimpleHttpClient::Post(registry_host_, registry_port_, "/discover", str_discover_req, 3, 1);
         if(res.success && !res.body.empty())
         {
-            std::cout << "ServiceDiscovery::RefreshLoop post success !!!" << std::endl;
-            std::cout << "ServiceDiscovery::RefreshLoop body:=" << res.body << std::endl;
+            // std::cout << "ServiceDiscovery::RefreshLoop post success !!!" << std::endl;
+            // std::cout << "ServiceDiscovery::RefreshLoop body:=" << res.body << std::endl;
             try
             {
                 auto json_res = json::parse(res.body);
@@ -63,13 +63,13 @@ void ServiceDiscovery::RefreshLoop()
                 for(auto& inst  : instances)
                 {
                     endpoints.push_back({inst["ip"], inst["port"]});
-                    std::cout << "ServiceDiscovery::RefreshLoop end_point ip:=" << inst["ip"] << " port:=" << inst["port"] << " success !!!" << std::endl;
+                    // std::cout << "ServiceDiscovery::RefreshLoop end_point ip:=" << inst["ip"] << " port:=" << inst["port"] << " success !!!" << std::endl;
                 }
 
                 if(callback_)
                 {
                     callback_(endpoints);
-                    std::cout << "callback_ success !!!" << std::endl;
+                    // std::cout << "callback_ success !!!" << std::endl;
                 }
             }
             catch(const std::exception& e)

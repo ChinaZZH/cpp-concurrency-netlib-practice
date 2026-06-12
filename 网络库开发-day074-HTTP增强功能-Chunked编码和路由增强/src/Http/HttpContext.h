@@ -46,12 +46,18 @@ public:
     
     bool KeepAlive() const { return keep_alive_; }
     
+    // 将服务端回包统一整成一个统一的函数。 bChunk为true的时候， context传空串进来
+    static std::pair<std::string, bool> GenerateResponseBySolveRequest(bool keep_alive, int status_code, 
+        const std::string& context, const std::string& context_type = "text/html", int send_file_size = 0); 
+
 private:
     bool ProcessRequestLine(const std::string_view& line);
 
     bool ProcessHeader(const std::string_view& line);
 
     void ProcessSpecficHeader();
+
+    static std::string GetStatusCodeMsg(int status_code);
 
 private:
     // request内容

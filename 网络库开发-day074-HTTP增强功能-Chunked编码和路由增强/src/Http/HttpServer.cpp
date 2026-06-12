@@ -4,6 +4,7 @@
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/HttpContentDecoder.h"
+#include "../Common/ConfigManager.h"
 #include <sstream>
 #include <cassert>
 #include <functional>
@@ -140,32 +141,24 @@ void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpC
         return;
     }
 
-    std::string strKeepAlive = "Connection: close\r\n";
-    if(bKeepAlive)
-    {
-        strKeepAlive.assign("Connection: keep-alive\r\n");
-    }
-
-    std::string strCode = std::move(GetStatusCodeMsg(nStatusCode));
-    std::ostringstream response;
-    response << "HTTP/1.1 " << nStatusCode << " " << strCode.c_str() << " \r\n"
-             << "Content-Length: " << strContent.size() << "\r\n"
-             << "Content-Type: text/html\r\n"
-             << strKeepAlive.c_str()
-             << "\r\n"
-             << strContent;
+    auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, nStatusCode, strContent);
 
 
-    std::string strResponse = response.str();
+    //std::string strResponse = response.str();
     //std::weak_ptr<TcpConnection> weakConPtr = con;
     
     {
-        loop->RunInLoop([this, bKeepAlive, conWeakPtr, strResponse = std::move(strResponse)](){ 
+        loop->RunInLoop([this, bKeepAlive, conWeakPtr, response = std::move(response), strContent = std::move(strContent)](){ 
             //if(weakConPtr.lock()) weakConPtr.lock()->Send(strResponse);
                 std::shared_ptr<TcpConnection> con = conWeakPtr.lock(); 
                 if(con && !con->IsWriteClosed())
                 {
-                    con->Send(strResponse);
+                    con->Send(response.first);
+                    if(response.second)
+                    {
+                        HttpServer::SendChunkedData(con, strContent);
+                    }
+
                     if(!bKeepAlive)
                     {
                         con->CloseWhenWriteFinish();
@@ -196,6 +189,12 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
         // 非post 统一当做get来处理. 
         // 假设静态文件根目录为 "./www"，且所有 GET 请求都尝试作为静态文件处理
         const std::string& strPath = http_server_context_.GetPath();
+        // 注意安全检查，避免出目录
+            // 简单路由：返回 "Hello, World!"
+            std::string body = "<h1>Hello, World!</h1>";
+            SendHttpResponse(con, body, 200, http_server_context_.KeepAlive());
+
+            /*
         if(strPath == "/")
         {
             // 注意安全检查，避免出目录
@@ -213,6 +212,7 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
 
             web_service_->SendStaticFile(filepath, con, http_server_context_.KeepAlive());
         }
+            */
 
         return;
     }
@@ -236,27 +236,13 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
 
 void HttpServer::SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode, bool bKeepAlive)
 {
-    std::string strCode = std::move(GetStatusCodeMsg(nStatusCode));
-    std::string strKeepAlive;
-    if(bKeepAlive)
+    auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, nStatusCode, strContent);
+    con->Send(response.first);
+    if(response.second)
     {
-        strKeepAlive.assign("Connection: keep-alive\r\n");
-    }
-    else
-    {
-        strKeepAlive.assign("Connection: close\r\n");
+         HttpServer::SendChunkedData(con, strContent);
     }
 
-    std::ostringstream response;
-    response << "HTTP/1.1 " << nStatusCode << " " << strCode.c_str() << " \r\n"
-             << "Content-Length: " << strContent.size() << "\r\n"
-             << "Content-Type: text/html\r\n"
-             << strKeepAlive.c_str()
-             << "\r\n"
-             << strContent;
-
-    
-    con->Send(response.str());
     if(!bKeepAlive)
     {
         con->CloseWhenWriteFinish();
@@ -282,27 +268,27 @@ HttpServer::Handler HttpServer::GetHadlerByMethod(const std::string& strMethod)
 }
 
 
-std::string HttpServer::GetStatusCodeMsg(int nStatusCode)
+void HttpServer::SendChunkedData(const std::shared_ptr<TcpConnection>& con, const std::string& strContent)
 {
-    std::string strCode;
-    if(200 == nStatusCode)
-    {
-        strCode.assign("OK");
-    }
-    else if(400 == nStatusCode)
-    {
-        strCode.assign("Bad Request");
-    }
-    else if(404 == nStatusCode)
-    {
-        strCode.assign("Not Found");
+    
+    auto& cfg = ConfigManager::getInstance();
+    int chunk_length = cfg.getInt("Http", "chunked_length", 10);
+     
 
-    }
-    else
+    int content_length = strContent.length(); 
+    for(int i = 0; i < content_length; i += chunk_length)
     {
-        strCode.assign("ERROR");
+        int remain_length = content_length - i;
+        int real_length = (remain_length < chunk_length)? remain_length : chunk_length;
+        std::string tmp_chunk_data = strContent.substr(i, real_length);
+
+        std::ostringstream ss;
+        ss << std::hex << real_length << "\r\n" << tmp_chunk_data << "\r\n";
+        con->Send(ss.str());
     }
 
-    return strCode;
+    std::cout << std::endl;
+    con->Send("0\r\n\r\n");
 }
+
 

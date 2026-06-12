@@ -1,6 +1,9 @@
 #include "HttpContext.h"
+#include "../Common/ConfigManager.h"
 #include <iostream>
 #include <algorithm>
+#include <sstream>
+
 
 
 HttpContext::HttpContext()
@@ -216,15 +219,7 @@ bool HttpContext::ProcessHeader(const std::string_view& line)
     return true;
 }
 
-/*
-std::string strCode = std::move(GetStatusCodeMsg(nStatusCode));
-    std::ostringstream response;
-    response << "HTTP/1.1 " << nStatusCode << " " << strCode.c_str() << " \r\n"
-             << "Content-Length: " << strContent.size() << "\r\n"
-             << "Content-Type: text/html\r\n"
-             << "\r\n"
-             << strContent;
-*/
+
 
 bool HttpContext::ParseResponse(const std::string& data)
 {
@@ -303,4 +298,78 @@ void HttpContext::ProcessSpecficHeader()
         // HTTP/1.1 默认 keep-alive，HTTP/1.0 默认 close
         keep_alive_ = (version_ == "HTTP/1.1");
     }
+}
+
+
+std::pair<std::string, bool> HttpContext::GenerateResponseBySolveRequest(bool keep_alive, int status_code, 
+    const std::string& context, const std::string& context_type /*= "text/html"*/, int send_file_size /*= 0*/)
+{
+    // send_file_size > 0 代表了http在这个消息里面是先发的消息头，然后再发send_file 零拷贝
+
+    bool bChunk = false;
+    auto& cfg = ConfigManager::getInstance();
+    int chunk_flag = cfg.getInt("Http", "chunked", 1);
+    int chunk_length = cfg.getInt("Http", "chunked_length", 10);
+    if(chunk_flag > 0 && chunk_length > 0 && context.length() > chunk_length) 
+    {
+        bChunk = true;
+    }
+
+    if(send_file_size > 0) // 零拷贝流程不参与chunk
+    {
+        bChunk = false;
+    }
+
+    std::string strKeepAlive = (keep_alive? ("Connection: keep-alive\r\n") : ("Connection: close\r\n"));
+    std::string once_or_chunk;
+    if(bChunk)
+    {
+        once_or_chunk.assign("Transfer-Encoding: chunked\r\n");
+    }else{
+        std::ostringstream content_length;
+        content_length << "Content-Length: ";
+        (send_file_size > 0) ? (content_length << send_file_size) : (content_length << context.size());  // 0 == send_file_size 不处于零拷贝执行流程， send_file_size > 0后面要执行零拷贝
+        content_length << "\r\n";
+
+        once_or_chunk.assign(content_length.str());
+    }
+    
+
+    std::string strCode = std::move(HttpContext::GetStatusCodeMsg(status_code));
+    std::ostringstream response;
+    response << "HTTP/1.1 " << status_code << " " << strCode.c_str() << " \r\n"
+             << once_or_chunk.c_str()
+             << "Content-Type: " << context_type.c_str() << "\r\n"
+             << strKeepAlive.c_str()
+             << "\r\n";
+
+    if(!bChunk && !context.empty())
+    {
+        response << context;
+    }
+            
+    std::cout << "HttpContext::GenerateResponseBySolveRequest" << std::endl;
+    std::cout << response.str() << std::endl; 
+    return std::pair<std::string, bool>(response.str(), bChunk);
+}
+
+
+std::string HttpContext::GetStatusCodeMsg(int nStatusCode)
+{
+    if(200 == nStatusCode)
+    {
+        return "OK";
+    }
+
+    if(400 == nStatusCode)
+    {
+        return "Bad Request";
+    }
+
+    if(404 == nStatusCode)
+    {
+        return "Not Found";
+    }
+    
+    return "Unknow Error";
 }

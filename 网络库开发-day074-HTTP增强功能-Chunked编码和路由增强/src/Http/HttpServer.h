@@ -22,6 +22,8 @@ public:
 
     void RegisterMethod(const std::string& strMethod, Handler handler);
 
+    static void SendChunkedData(const std::shared_ptr<TcpConnection>& con, const std::string& strContent);
+
 private:
     // 同步 
     void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
@@ -34,8 +36,6 @@ private:
     void AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode, bool bKeepAlive);
 
     Handler GetHadlerByMethod(const std::string& strMethod);
-
-    std::string GetStatusCodeMsg(int nStatusCode);
 
 private:
     TcpServer server_;

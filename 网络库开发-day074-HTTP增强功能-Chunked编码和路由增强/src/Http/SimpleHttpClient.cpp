@@ -37,11 +37,13 @@ SimpleHttpClient::Response SimpleHttpClient::Post(const std::string& host, int p
             return res;
         }
 
-         std::cout << "SimpleHttpClient::Post  success:" <<  res.success;
-         std::cout << " status_code:" <<  res.status_code;
-         std::cout << " body:" <<  res.body;
-         std::cout << " error_msg:" <<  res.error_msg;
-         std::cout << std::endl;
+        std::ostringstream ss;
+        ss << "SimpleHttpClient::Post  success:" <<  res.success;
+        ss << " status_code:" <<  res.status_code;
+        ss << " body:" <<  res.body;
+        ss << " error_msg:" <<  res.error_msg;
+        ss << std::endl;
+        std::cout << ss.str();
     }
 
     SimpleHttpClient::Response response;
@@ -75,11 +77,13 @@ SimpleHttpClient::Response SimpleHttpClient::Get(const std::string& host, int po
             return res;
         }
 
-         std::cout << "SimpleHttpClient::Get  success:" <<  res.success;
-         std::cout << " status_code:" <<  res.status_code;
-         std::cout << " body:" <<  res.body;
-         std::cout << " error_msg:" <<  res.error_msg;
-         std::cout << std::endl;
+        std::ostringstream ss;
+        ss << "SimpleHttpClient::Get  success:" <<  res.success;
+        ss << " status_code:" <<  res.status_code;
+        ss << " body:" <<  res.body;
+        ss << " error_msg:" <<  res.error_msg;
+        ss << std::endl;
+        std::cout << ss.str();
     }
 
     SimpleHttpClient::Response response;
