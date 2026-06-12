@@ -271,16 +271,7 @@ void HttpWebService::SendError(const std::shared_ptr<TcpConnection>& con, int co
 {
     std::string body = "<h1>" + std::to_string(code) + " " + msg + "</h1>";
     auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, code, body);
-    con->Send(response.first);
-    if(response.second)
-    {
-        HttpServer::SendChunkedData(con, body);
-    }
-
-    if(!bKeepAlive)
-    {
-        con->CloseWhenWriteFinish();
-    }
+    HttpServer::SyncResponseToClient(con, response.first, response.second, body, bKeepAlive, HttpServer::SyncResponseToken());
 }
 
 
@@ -294,16 +285,7 @@ void HttpWebService::AysncSendError(EventLoop* loop, const std::weak_ptr<TcpConn
         auto con = weak_con.lock();
         if(con)
         {
-            con->Send(response.first);
-            if(response.second)
-            {
-                HttpServer::SendChunkedData(con, content);
-            }
-
-            if(!bKeepAlive)
-            {
-                con->CloseWhenWriteFinish();
-            }
+            HttpServer::SyncResponseToClient(con, response.first, response.second, content, bKeepAlive, HttpServer::SyncResponseToken());
         }
     });
 }

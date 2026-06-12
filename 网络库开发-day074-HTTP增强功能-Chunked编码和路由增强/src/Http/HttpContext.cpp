@@ -348,8 +348,8 @@ std::pair<std::string, bool> HttpContext::GenerateResponseBySolveRequest(bool ke
         response << context;
     }
             
-    std::cout << "HttpContext::GenerateResponseBySolveRequest" << std::endl;
-    std::cout << response.str() << std::endl; 
+    //std::cout << "HttpContext::GenerateResponseBySolveRequest" << std::endl;
+    //std::cout << response.str() << std::endl; 
     return std::pair<std::string, bool>(response.str(), bChunk);
 }
 

@@ -1,6 +1,7 @@
 #include "HttpServer.h"
 #include "HttpContext.h"
 #include "HttpWebService.h"
+#include "HttpRouteParamHandler.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/HttpContentDecoder.h"
@@ -13,6 +14,7 @@
 HttpServer::HttpServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
 ,web_service_(std::make_unique<HttpWebService>())
+,route_handler_(std::make_unique<HttpRouteParamHandler>())
 {
     
     // 由于httpServer 计算很少，以读写io为主，则让计算和消息都在io线程处理(不要放入任务线程池反而性能更低)。
@@ -148,9 +150,11 @@ void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpC
     //std::weak_ptr<TcpConnection> weakConPtr = con;
     
     {
-        loop->RunInLoop([this, bKeepAlive, conWeakPtr, response = std::move(response), strContent = std::move(strContent)](){ 
+        loop->RunInLoop([this, bKeepAlive, conWeakPtr, response = std::move(response), strTrunk = std::move(strContent)](){ 
             //if(weakConPtr.lock()) weakConPtr.lock()->Send(strResponse);
                 std::shared_ptr<TcpConnection> con = conWeakPtr.lock(); 
+                HttpServer::SyncResponseToClient(con, response.first, response.second, strTrunk, bKeepAlive, SyncResponseToken());
+                /*
                 if(con && !con->IsWriteClosed())
                 {
                     con->Send(response.first);
@@ -164,9 +168,28 @@ void HttpServer::AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpC
                         con->CloseWhenWriteFinish();
                     }
                 } 
+                */
         });
     }
     
+}
+
+
+void HttpServer::SyncResponseToClient(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, bool bChunk, const std::string& strTrunkData, bool bKeepAlive, SyncResponseToken token)
+{
+    if(con && !con->IsWriteClosed())
+    {
+        con->Send(strContent);
+        if(bChunk)
+        {
+            HttpServer::SendChunkedData(con, strTrunkData);
+        }
+
+        if(!bKeepAlive)
+        {
+            con->CloseWhenWriteFinish();
+        }
+    } 
 }
 
 
@@ -183,18 +206,19 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
         return;
     }
 
+    const std::string& strPath = http_server_context_.GetPath();
     const std::string& strMethod = http_server_context_.GetMethod();
     if("POST" != strMethod)
     {
-        // 非post 统一当做get来处理. 
-        // 假设静态文件根目录为 "./www"，且所有 GET 请求都尝试作为静态文件处理
-        const std::string& strPath = http_server_context_.GetPath();
-        // 注意安全检查，避免出目录
-            // 简单路由：返回 "Hello, World!"
-            std::string body = "<h1>Hello, World!</h1>";
-            SendHttpResponse(con, body, 200, http_server_context_.KeepAlive());
+        HttpRouteParamHandler::RouteParams params;
+        HttpRouteParamHandler::RouteFunc func;
+        if(route_handler_->MatchRoute(strPath, params, func))
+        {
+            func(con, params, http_server_context_.KeepAlive());
+            return;
+        }
 
-            /*
+
         if(strPath == "/")
         {
             // 注意安全检查，避免出目录
@@ -212,12 +236,12 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
 
             web_service_->SendStaticFile(filepath, con, http_server_context_.KeepAlive());
         }
-            */
+        
 
         return;
     }
 
-    const std::string& strPath = http_server_context_.GetPath();
+   
     std::string strHandleKey(strPath.data() + 1, strPath.size()-1);  
     auto func = this->GetHadlerByMethod(strHandleKey);
     if(func)
@@ -237,16 +261,7 @@ void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
 void HttpServer::SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode, bool bKeepAlive)
 {
     auto response = HttpContext::GenerateResponseBySolveRequest(bKeepAlive, nStatusCode, strContent);
-    con->Send(response.first);
-    if(response.second)
-    {
-         HttpServer::SendChunkedData(con, strContent);
-    }
-
-    if(!bKeepAlive)
-    {
-        con->CloseWhenWriteFinish();
-    }
+    HttpServer::SyncResponseToClient(con, response.first, response.second, strContent, bKeepAlive, HttpServer::SyncResponseToken());
 }
 
 

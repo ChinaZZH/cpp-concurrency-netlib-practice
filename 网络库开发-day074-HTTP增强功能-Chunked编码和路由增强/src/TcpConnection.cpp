@@ -211,7 +211,7 @@ void TcpConnection::HandleClose(std::string strCloseInfo)
     loop_->AssertInLoopThread("TcpConnection::HandleClose");  // 确保在 对应的工作线程
 
     // 需要的时候开启，不需要的时候注释
-    //std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
+    std::cout << "TcpConnection::HandleClose fd:=" << fd_  << "  Close reason:="  << strCloseInfo.c_str() << std::endl;
     auto self = shared_from_this();
 
     if(fd_ > 0)

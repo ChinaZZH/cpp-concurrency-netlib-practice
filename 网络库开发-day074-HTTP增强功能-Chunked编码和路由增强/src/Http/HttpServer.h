@@ -8,6 +8,7 @@
 
 class EventLoop;
 class HttpWebService;
+class HttpRouteParamHandler;
 
 class HttpServer
 {
@@ -22,7 +23,23 @@ public:
 
     void RegisterMethod(const std::string& strMethod, Handler handler);
 
-    static void SendChunkedData(const std::shared_ptr<TcpConnection>& con, const std::string& strContent);
+    // 防止安全调用加一个保护
+    class SyncResponseToken
+    {
+    private:
+        SyncResponseToken() = default;
+        friend class HttpServer;
+        friend class HttpRouteParamHandler;
+        friend class HttpWebService;
+    };
+
+    static void SyncResponseToClient(
+        const std::shared_ptr<TcpConnection>& con, 
+        const std::string& strContent,
+        bool bChunk, 
+        const std::string& strTrunkData, 
+        bool bKeepAlive, 
+        SyncResponseToken token);
 
 private:
     // 同步 
@@ -37,11 +54,14 @@ private:
 
     Handler GetHadlerByMethod(const std::string& strMethod);
 
+    static void SendChunkedData(const std::shared_ptr<TcpConnection>& con, const std::string& strContent);
+
 private:
     TcpServer server_;
     HttpContext http_server_context_;
     std::unordered_map<std::string, Handler> method_handlers_;
     std::unique_ptr<HttpWebService> web_service_;
+    std::unique_ptr<HttpRouteParamHandler> route_handler_;
 
     friend class ServiceRegisterCenter;
 };
