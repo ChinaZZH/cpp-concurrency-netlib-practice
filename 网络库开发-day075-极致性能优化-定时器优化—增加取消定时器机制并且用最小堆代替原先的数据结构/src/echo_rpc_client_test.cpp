@@ -7,8 +7,9 @@
 #include "LibRpc/RpcErrorCodeDef.h"
 #include "Common/ProtoMethod.h"
 #include "Common/ConfigManager.h"
+#include "EventLoop.h"
 
-int echo_rpc_client_test() 
+int main() 
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {
@@ -32,6 +33,11 @@ int echo_rpc_client_test()
         return -1;
     }
     
+    EventLoop loop;
+    std::thread io_thread([&loop](){
+        loop.Loop();
+    });
+
     AddRequest req;
     req.set_a(1);
     req.set_b(0);
@@ -40,14 +46,23 @@ int echo_rpc_client_test()
         req.set_b(i);
         int expected_sum = 1 + i;
 
-        std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
-        AddResponse response;
-        response.ParseFromString(strResult);
+        rpcClient->CallAsync("add", req.SerializeAsString(), [expected_sum, &loop, i](const std::string& result, int32_t error){
 
-        std::cout << "RPC result: " << response.sum() << " Expect sum:=" << expected_sum << std::endl;
-        //assert(expected_sum == response.sum());
+            AddResponse response;
+            response.ParseFromString(result);
+
+            std::cout << "CallAsync RPC result: " << response.sum() << " Expect sum:=" << expected_sum << std::endl;
+            //assert(expected_sum == response.sum());
+
+            if((i+1) >= 10)
+            {
+                loop.Quit();
+            }
+
+        }, 5000);
     }
     
-
+    // 不能让他马上结束
+    io_thread.join();
     return 0;
 }

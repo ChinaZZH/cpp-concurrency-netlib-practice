@@ -8,6 +8,8 @@
 #include <thread>
 #include <mutex>
 #include <functional>
+#include <queue>
+#include <unordered_set>
 
 class Channel;
 class Epoll;
@@ -86,10 +88,14 @@ private:
 // 新增定时器
 public:
     // 单次定时器 delay为delay毫秒执行回调
-    void RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb);
+    void RunAfter(uint64_t timer_id, std::chrono::milliseconds delay, std::function<void()> funcCb);
 
     // 周期性回调
-    void RunEvery(std::chrono::milliseconds interval, std::function<void()> funcCb, bool bImmediatelyFlag = false);
+    void RunEvery(uint64_t timer_id, std::chrono::milliseconds interval, std::function<void()> funcCb);
+
+    uint64_t GenerateNewTimerId();
+
+    void CancelTimer(uint64_t timer_id);
 
 private:
     void HandleTimerRead();
@@ -122,7 +128,32 @@ private:
     int timerFd_;
     //std::unique_ptr<Channel> timerChannel_; 融入到channels_列表中去了，统一管理
     // 存储所有定时器：按超时时间排序（multimap 按时间自动排序）
-    std::multimap<std::chrono::steady_clock::time_point, std::function<void()>> timersFunc_;
+    //std::multimap<std::chrono::steady_clock::time_point, std::function<void()>> timersFunc_;
+    // 优化定时器，用小顶堆来实现，提高插入和删除的效率
+    
+    struct TimerNode
+    {
+        std::chrono::steady_clock::time_point expire_time;
+        std::function<void()> callback;
+        uint64_t id;            // 唯一的定时器id,用于取消定时器
+
+        // 默认大顶堆，则取反得到小顶堆
+        bool operator<(const TimerNode& other_timer) const
+        {
+            if(expire_time > other_timer.expire_time){
+                return true;
+            }else if(expire_time == other_timer.expire_time){
+                return id > other_timer.id;
+            }
+
+            return false;
+        }
+        
+    };
+
+    std::priority_queue<TimerNode> timersFunc_; 
+    std::unordered_set<uint64_t>  cancel_timer_list_;
+    std::atomic<uint64_t> next_timer_id_{1};
 
     // 将connection_list一直到对应的eventloop中来
     std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;

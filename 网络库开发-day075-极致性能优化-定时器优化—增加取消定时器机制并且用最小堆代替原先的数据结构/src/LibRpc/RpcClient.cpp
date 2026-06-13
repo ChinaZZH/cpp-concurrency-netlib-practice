@@ -242,21 +242,24 @@ void RpcClient::CallAsync(const std::string& method, const std::string& params, 
         throw std::runtime_error("RpcClient::SendRequest connection event_loop is nullptr");
     }
 
+    uint64_t timer_id = ((timeout_ms <= 0)? 0 : loop_->GenerateNewTimerId());
     uint64_t req_id = async_call_next_id_.fetch_add(2, std::memory_order_release);
     std::string trace_id = RpcClient::GenerateTraceId();
     std::string strData = std::move(RpcCodec::Protobuf_EncodeRequest(req_id, method, params, trace_id));
     
     {
         std::lock_guard<std::mutex> lk(aync_mutex_);
-        async_callback_pending_func_[req_id] = cb;
+        async_callback_pending_func_[req_id] = std::pair(cb, timer_id);
     }
 
 
     if(timeout_ms > 0)
     {
+        // std::cout << "add timer_id:=" << timer_id << std::endl;
         int32_t fd = con_->GetFd();
         std::weak_ptr<RpcClient> weakRpcClient = shared_from_this();
-        loop_->RunAfter(std::chrono::milliseconds(timeout_ms), [req_id, fd, weakRpcClient] () {
+        loop_->RunAfter(timer_id, std::chrono::milliseconds(timeout_ms), [timer_id, req_id, fd, weakRpcClient] () {
+            // std::cout << "time_out timer_id=" << timer_id << std::endl;
             auto rpcClient = weakRpcClient.lock();
             if(rpcClient)
             {
@@ -312,6 +315,7 @@ void RpcClient::ProcessOnResponseByCall(uint64_t res_id, int32_t code, const std
 void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, const std::string& result, bool bTimeOut /*= false*/)
 {
     AsyncCallback cb = nullptr;
+    uint64_t timer_id = 0;
     {
         std::lock_guard<std::mutex> lk(aync_mutex_);
         auto itr = async_callback_pending_func_.find(res_id);
@@ -325,8 +329,16 @@ void RpcClient::ProcessOnResponseByAsyncCall(uint64_t res_id, int32_t code, cons
             return;
         }
 
-        cb = (itr->second);
+        cb = (itr->second).first;
+        timer_id = (itr->second).second;
         async_callback_pending_func_.erase(itr);
+    }
+
+    // 不是定时器到期触发 并且定时器id>0
+    if(!bTimeOut && timer_id > 0 && loop_)
+    {
+        // std::cout << "cancel timer_id:=" << timer_id << std::endl;
+        loop_->CancelTimer(timer_id);
     }
 
     if(cb)

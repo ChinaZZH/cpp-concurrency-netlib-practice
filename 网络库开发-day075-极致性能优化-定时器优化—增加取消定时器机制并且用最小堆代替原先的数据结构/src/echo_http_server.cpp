@@ -19,7 +19,7 @@
 
 
 
-int main()
+int echo_http_server()
 {
     
     signal(SIGPIPE, SIG_IGN);

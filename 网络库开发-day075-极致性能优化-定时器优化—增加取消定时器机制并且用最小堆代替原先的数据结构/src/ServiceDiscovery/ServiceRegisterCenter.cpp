@@ -21,8 +21,9 @@ void ServiceRegisterCenter::InitServicesRegisterCenter()
     assert(base_loop);
 
     // 注册检测定时器
+    uint64_t timer_id = base_loop->GenerateNewTimerId();
     std::chrono::seconds checkSecs(10);
-    base_loop->RunEvery(checkSecs, [this](){
+    base_loop->RunEvery(timer_id, checkSecs, [this](){
         {
             auto now = std::chrono::steady_clock::now();
             std::lock_guard<std::mutex> lk(register_center_mutex_);

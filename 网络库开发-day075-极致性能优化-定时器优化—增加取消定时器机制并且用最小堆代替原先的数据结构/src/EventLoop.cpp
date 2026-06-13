@@ -72,13 +72,6 @@ EventLoop::~EventLoop()
 
 bool EventLoop::StartConnIdleTimer()
 {
-    // 在服务端的event_loop io线程里面跑的。
-    if(threadId_ != std::this_thread::get_id())
-    {
-        std::cout << "EventLoop::StartConnIdleTimer threadId_:" << threadId_ << " current thread_id:=" <<  std::this_thread::get_id() << std::endl;
-        return false;
-    }
-
     auto& cfg = ConfigManager::getInstance();
     int idle_ms_timeout = cfg.getInt("Connection", "idle_ms_timeout", 0);
     if(idle_ms_timeout <= 0)
@@ -87,7 +80,8 @@ bool EventLoop::StartConnIdleTimer()
     }
 
 
-    this->RunEvery(std::chrono::seconds(5), [this, idle_ms_timeout](){ this->CheckIdleConnections(idle_ms_timeout); });
+    uint64_t timer_id = this->GenerateNewTimerId();
+    this->RunEvery(timer_id, std::chrono::seconds(5), [this, idle_ms_timeout](){ this->CheckIdleConnections(idle_ms_timeout); });
     return true;
 }
 
@@ -359,16 +353,16 @@ void EventLoop::WakeUp()
 }
 
 
-void EventLoop::RunAfter(std::chrono::milliseconds delay, std::function<void()> funcCb)
+void EventLoop::RunAfter(uint64_t timer_id, std::chrono::milliseconds delay, std::function<void()> funcCb)
 {
-    auto timer_func = [this, delay, funcCb] () {
+    auto timer_func = [this, delay, funcCb, timer_id] () {
         std::chrono::milliseconds now(0);
         if(delay <= now)
         {
             funcCb();
         }else{
             auto expire = std::chrono::steady_clock::now() + delay;
-            timersFunc_.insert(std::make_pair(expire, std::move(funcCb)));
+            timersFunc_.push({expire, std::move(funcCb), timer_id});
             UpdateTimerFd();
         }
     };
@@ -385,20 +379,15 @@ void EventLoop::RunAfter(std::chrono::milliseconds delay, std::function<void()> 
 }
 
  // 周期性回调
-void EventLoop::RunEvery(std::chrono::milliseconds interval, std::function<void()> funcCb, bool bImmediatelyFlag /*= false*/)
+void EventLoop::RunEvery(uint64_t timer_id, std::chrono::milliseconds interval, std::function<void()> funcCb)
 {
-    auto timer_func = [this, interval, funcCb, bImmediatelyFlag] () {
-        if(bImmediatelyFlag)
-        {
-            funcCb();
-        }
-
+    auto timer_func = [this, interval, funcCb, timer_id] () {
         std::chrono::milliseconds now(0);
         if(interval > now)
         {
-            this->RunAfter(interval, [this, interval, funcCb](){
+            this->RunAfter(timer_id, interval, [this, timer_id, interval, funcCb](){
                 funcCb();
-                this->RunEvery(interval, funcCb, false);
+                this->RunEvery(timer_id, interval, funcCb);
             });
         }
     };
@@ -414,14 +403,47 @@ void EventLoop::RunEvery(std::chrono::milliseconds interval, std::function<void(
     }
 }
 
+
+
+uint64_t EventLoop::GenerateNewTimerId()
+{
+    return next_timer_id_.fetch_add(1, std::memory_order_relaxed);
+}
+
+
+void EventLoop::CancelTimer(uint64_t timer_id)
+{
+    cancel_timer_list_.insert(timer_id);
+}
+
+
 void EventLoop::ExecuteExpiredTimers()
 {
     auto now = std::chrono::steady_clock::now();
-    for(auto it = timersFunc_.begin(); it != timersFunc_.end() && (it->first) <= now ; )
+    while(!timersFunc_.empty())
     {
-        auto funcCb = std::move(it->second);
-        it = timersFunc_.erase(it);
-        funcCb();
+        TimerNode exec_timer;
+        {
+            const auto& timer = timersFunc_.top();
+            if(timer.expire_time > now)
+            {
+                return; // 结束执行
+            }
+
+            exec_timer = std::move(timer);
+            timersFunc_.pop();
+        }
+        
+
+        auto itr_cancel = cancel_timer_list_.find(exec_timer.id);
+        if(itr_cancel != cancel_timer_list_.end())
+        {
+            // 跳过执行回调函数
+            cancel_timer_list_.erase(itr_cancel);
+        }else{
+            exec_timer.callback();
+        }
+
     }
 }
 
@@ -453,7 +475,7 @@ void EventLoop::ExecuteExpiredTimers()
         return ;
     }
 
-    auto startClock = timersFunc_.begin()->first;
+    auto startClock = timersFunc_.top().expire_time;
     auto now = std::chrono::steady_clock::now();
     if (startClock <= now)
     {
