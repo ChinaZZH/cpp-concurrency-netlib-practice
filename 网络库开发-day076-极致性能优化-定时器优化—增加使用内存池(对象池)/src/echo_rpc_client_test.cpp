@@ -7,9 +7,24 @@
 #include "LibRpc/RpcErrorCodeDef.h"
 #include "Common/ProtoMethod.h"
 #include "Common/ConfigManager.h"
+#include "Common/ObjectPool.h"
 #include "EventLoop.h"
 
-int main() 
+
+int ObjectPool_test()
+{
+    struct Test {
+        int a, b;
+        Test(int x, int y) : a(x), b(y) { std::cout << "Construct " << a << "," << b << std::endl; }
+        ~Test() { std::cout << "Destruct " << a << "," << b << std::endl; }
+    };
+
+    ObjectPool<Test> pool(100);
+    Test* t1 = pool.Allocate(1,3);
+    return 0;
+}
+
+int echo_rpc_client_test() 
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {

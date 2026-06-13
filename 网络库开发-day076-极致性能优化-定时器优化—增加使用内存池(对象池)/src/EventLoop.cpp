@@ -413,7 +413,9 @@ uint64_t EventLoop::GenerateNewTimerId()
 
 void EventLoop::CancelTimer(uint64_t timer_id)
 {
-    cancel_timer_list_.insert(timer_id);
+    this->RunInLoop([this, timer_id](){
+         cancel_timer_list_.insert(timer_id);
+    });
 }
 
 

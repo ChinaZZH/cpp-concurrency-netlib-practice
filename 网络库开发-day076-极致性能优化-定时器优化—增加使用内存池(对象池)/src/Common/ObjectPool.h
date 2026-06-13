@@ -18,7 +18,7 @@ public:
         {
            T* ptr = static_cast<T*>(::operator new(sizeof(T)));
            free_list_.push_back(ptr);
-           allocated_.insert(ptr);
+           allocated_.push_back(ptr);
         }
     }
 
@@ -27,7 +27,7 @@ public:
     {
         for(auto& ptr : allocated_)
         {
-            auto itr = std::find(free_list_.begin(); free_list_.end(), ptr);
+            auto itr = std::find(free_list_.begin(), free_list_.end(), ptr);
             if(itr == free_list_.end())
             {
                 ptr->~T();
@@ -48,7 +48,7 @@ public:
             free_list_.pop_back();
         }else{
              ptr = static_cast<T*>(::operator new(sizeof(T)));
-             allocated_.insert(ptr);
+             allocated_.push_back(ptr);
         }
 
         ::new (ptr) T(std::forward<Args>(args)...);
@@ -64,19 +64,24 @@ public:
             return false;
         }
 
-        // 没有分配过这一块内存
-        auto itr = allocated_.find(ptr);
-        if(itr == allocated_.end())
+        // 没有分配过这一块内存 校验1
         {
-            return false;
+            auto itr_allocated = std::find(allocated_.begin(), allocated_.end(), ptr);
+            if(itr_allocated == allocated_.end())
+            {
+                return false;
+            }
         }
-
-        // 已经在free_list里面了。
-        auto itr = std::find(free_list_.begin(); free_list_.end(), ptr);
-        if(itr != free_list_.end())
+       
         {
-            return false;
+            // 已经在free_list里面了。
+            auto itr_free_list = std::find(free_list_.begin(), free_list_.end(), ptr);
+            if(itr_free_list != free_list_.end())
+            {
+                return false;
+            }
         }
+        
 
         ptr->~T();
         free_list_.push_back(ptr);
@@ -111,5 +116,5 @@ public:
 
 private:
     std::vector<T*>            free_list_;     // 空闲内存空间(已析构，可以取出直接进行构造使用)
-    std::unordered_set<T*>     allocated_;     // 所有分配过的内存
+    std::vector<T*>            allocated_;     // 所有分配过的内存
 };

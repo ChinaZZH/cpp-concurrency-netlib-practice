@@ -5,6 +5,7 @@
 #include <mutex>
 #include <map>
 
+// 主要排查问题用，后期如果要用，需要异步写日志。
 class LogFile
 {
 public:

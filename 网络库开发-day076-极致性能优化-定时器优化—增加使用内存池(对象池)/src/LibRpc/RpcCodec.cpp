@@ -111,6 +111,7 @@ bool RpcCodec::ReadString(Buffer& buffer, std::string& strValue)
 std::string RpcCodec::Protobuf_EncodeRequest(uint64_t id, const std::string& method, const std::string& params, const std::string& trace_id)
 {
     // 开启日志链路追踪
+    /*
     {
         std::ostringstream file_stream;
         file_stream << "[trace_id=" << trace_id << "] Seq_id=" << id << " RpcClient Send method=" << method << std::endl;
@@ -121,7 +122,7 @@ std::string RpcCodec::Protobuf_EncodeRequest(uint64_t id, const std::string& met
         auto& logfile = LogFile::getInstance();
         logfile.AppendContent(log_file_name, file_stream.str());
     }
-    
+    */
 
     RpcRequest request;
     request.set_id(id);
@@ -155,6 +156,7 @@ bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& 
     trace_id = std::move(request.trace_id());
 
      // 开启日志链路追踪
+     /*
     {
         std::ostringstream file_stream;
         file_stream << "[trace_id=" << trace_id << "] Seq_id=" << id << " RpcServer receive method=" << method << std::endl;
@@ -165,6 +167,8 @@ bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& 
         auto& logfile = LogFile::getInstance();
         logfile.AppendContent(log_file_name, file_stream.str());
     }
+    */
+
     return true;
 }
 
@@ -172,6 +176,7 @@ bool RpcCodec::Protobuf_DecodeRequest(const std::string& strBuffData, uint64_t& 
 std::string RpcCodec::Protobuf_EncodeResponse(uint64_t id, int32_t code, const std::string& result, const std::string& trace_id)
 {
     // 开启日志链路追踪
+    /*
     {
         std::ostringstream file_stream;
         file_stream << "[trace_id=" << trace_id << "]  Seq_id=" << id << " RpcServer Send code= " << code << std::endl;
@@ -182,6 +187,7 @@ std::string RpcCodec::Protobuf_EncodeResponse(uint64_t id, int32_t code, const s
         auto& logfile = LogFile::getInstance();
         logfile.AppendContent(log_file_name, file_stream.str());
     }
+    */
 
     RpcResponse response;
     response.set_id(id);
@@ -215,6 +221,7 @@ bool RpcCodec::Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t&
     trace_id = std::move(response.trace_id());
 
      // 开启日志链路追踪
+    /*
     {
         std::ostringstream file_stream;
         file_stream << "[trace_id=" << trace_id << "]  Seq_id=" << id << " RpcClient receive code= " << code << std::endl;
@@ -225,6 +232,8 @@ bool RpcCodec::Protobuf_DecodeResponse(const std::string& strBuffData, uint64_t&
         auto& logfile = LogFile::getInstance();
         logfile.AppendContent(log_file_name, file_stream.str());
     }
+    */
+
     return true;
 }
 
