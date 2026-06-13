@@ -12,6 +12,10 @@ public:
 
     Buffer(size_t initialSize = kInitialSize);
 
+    Buffer(Buffer&& other);
+
+    Buffer& operator=(Buffer&& other);
+
     void Swap(Buffer& rhs);
 
     // 可读数据长度
@@ -38,6 +42,7 @@ public:
     void Append(const char* data, size_t len);
     
     void Append(const std::string& str) {  Append(str.c_str(), str.length()); }
+
 
     // 从fd读取数据(非阻塞)
     ssize_t ReadFd(int fd, int* nSaveErrno);

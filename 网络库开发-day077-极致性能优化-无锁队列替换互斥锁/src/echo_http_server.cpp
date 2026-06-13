@@ -47,7 +47,7 @@ int echo_http_server()
     // httpSrver
     HttpServer server(&loop, port);
     server.RegisterMethod("add", JsonMethodLib::add);
-    server.Start(0, 6); // eventloopThread 6个工作线程为最佳性能
+    server.Start(); // eventloopThread 6个工作线程为最佳性能
     //ServiceRegisterCenter register_center(&server); // 注册中心 不需要的时候直接注释这一行就是普通的httpServer了
 
     loop.Loop();

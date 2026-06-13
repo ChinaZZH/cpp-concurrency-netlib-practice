@@ -49,7 +49,7 @@ int main()
     int my_port = cfg.getInt("Rpc", "listen_port", 8888);
     RpcServer server(&loop, my_port);
     server.RegisterMethod("add", ProtoMethod::add);
-    server.Start(0, 6);
+    server.Start();
 
     // 不向服务注册中心注册了。
     /*

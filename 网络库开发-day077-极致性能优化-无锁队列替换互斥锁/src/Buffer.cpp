@@ -13,6 +13,31 @@ Buffer::Buffer(size_t initialSize /*= kInitialSize*/)
 
 }
 
+
+Buffer::Buffer(Buffer&& other)
+:buffer_(std::move(other.buffer_))
+,read_index_(other.read_index_)
+,write_index_(other.write_index_)
+{
+    other.read_index_ = other.write_index_ = 0;
+}
+
+Buffer& Buffer::operator=(Buffer&& other)
+{
+    if(this != &other)
+    {
+        buffer_ = (std::move(other.buffer_));
+        read_index_ = (other.read_index_);
+        write_index_ = (other.write_index_);
+
+        other.read_index_ = 0;
+        other.write_index_ = 0;
+    }
+
+    return (*this);
+}
+
+
 void Buffer::Swap(Buffer& rhs)
 {
     if(this != &rhs)
@@ -53,6 +78,8 @@ void Buffer::Append(const char* data, size_t len)
     std::copy(data, data + len, Begin() + write_index_);
     write_index_ += len;
 }
+
+
 
 
 // 预留writable 空间，确保能容纳len字节
@@ -133,7 +160,15 @@ ssize_t Buffer::ReadFd(int fd, int* nSaveErrno)
 // 发送数据到fd(非阻塞，尽量发送)
 ssize_t Buffer::WriteFd(int fd, int* nSaveErrno)
 {
+    /*
     ssize_t n = ::write(fd, Peek(), ReadableBytes());
+    */
+
+    // 用writev, 用以后多个不同的缓冲区写入做扩展。
+    struct iovec iov;
+    iov.iov_base = const_cast<char*>(Peek());
+    iov.iov_len = ReadableBytes();
+    ssize_t n = ::writev(fd, &iov, 1);
     if(n <= 0)
     {
         if(n < 0)

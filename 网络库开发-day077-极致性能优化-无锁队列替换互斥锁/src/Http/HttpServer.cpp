@@ -40,9 +40,9 @@ HttpServer::HttpServer(EventLoop* loop, int nPort)
 
 HttpServer::~HttpServer() = default;
 
-void HttpServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
+void HttpServer::Start()
 {
-    server_.Start(option, nEventLoopThread, nTaskThreadNum);
+    server_.Start();
 }
 
 

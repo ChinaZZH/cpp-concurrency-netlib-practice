@@ -26,7 +26,7 @@ public:
     
     ~TcpServer();
 
-    void Start(int option, int nEventLoopThread, int nTaskThreadNum = std::thread::hardware_concurrency());
+    void Start();
 
 
     ThreadPool* GetThreadPool() { return taskThreadPool_.get(); }

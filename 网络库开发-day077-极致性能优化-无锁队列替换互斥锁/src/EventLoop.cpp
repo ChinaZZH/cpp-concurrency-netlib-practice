@@ -54,6 +54,12 @@ EventLoop::EventLoop()
         timerChannel->EnableReading();
         this->AddChannel(std::move(timerChannel));
     }
+
+    {
+        auto& cfg = ConfigManager::getInstance();
+        int mutex_queue_option = cfg.getInt("EventLoop", "mutex_queue", 0);
+        mutex_queue_flag_ = (mutex_queue_option > 0? true : false);
+    }
 }
 
 EventLoop::~EventLoop() 
@@ -310,9 +316,13 @@ void EventLoop::RunInLoop(std::function<void()> cb)
 
 void EventLoop::QueueInLoop(std::function<void()> cb)
 {
+    if(mutex_queue_flag_)
     {
         std::lock_guard<std::mutex> lk(mutex_);
         pendingFunctors_.emplace_back(std::move(cb));
+    }
+    else{
+        concurrent_queue_func_.enqueue(std::move(cb));
     }
    
     // 可选：唤醒 epoll_wait（简化实现，暂不唤醒，下次事件会处理）
@@ -323,21 +333,33 @@ void EventLoop::QueueInLoop(std::function<void()> cb)
 
 void EventLoop::DoPendingFunctors()
 {
-    std::vector<std::function<void()>> tmpFunctorsList;
+    if(mutex_queue_flag_)
     {
-        std::lock_guard<std::mutex> lk(mutex_);
-        if(pendingFunctors_.empty())
+        std::vector<std::function<void()>> tmpFunctorsList;
         {
-            return;
-        }
+            std::lock_guard<std::mutex> lk(mutex_);
+            if(pendingFunctors_.empty())
+            {
+                return;
+            }
         
-        pendingFunctors_.swap(tmpFunctorsList);
-    }
+            pendingFunctors_.swap(tmpFunctorsList);
+        }
 
-    for(auto& func : tmpFunctorsList)
-    {
-        func();
+        for(auto& func : tmpFunctorsList)
+        {
+            func();
+        }
     }
+    else
+    {
+        std::function<void()> func_cb;
+        while(concurrent_queue_func_.try_dequeue(func_cb))
+        {
+            func_cb();
+        }
+    }
+    
 }
 
      

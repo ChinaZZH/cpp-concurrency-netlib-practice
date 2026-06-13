@@ -10,6 +10,7 @@
 #include <functional>
 #include <queue>
 #include <unordered_set>
+#include "Common/ConcurrentQueue.h"
 
 class Channel;
 class Epoll;
@@ -117,8 +118,6 @@ private:
     std::vector<int> delayServerChannelsToRemove_;
     std::vector<PairTcpClient> delayRemoveForClientChannel_;
 
-    std::vector<std::function<void()>> pendingFunctors_;
-	std::mutex mutex_;
 
     int wakeUpFd_;
     //std::unique_ptr<Channel> wakeUpChannel_; 融入到channels_列表中去了，统一管理
@@ -160,4 +159,9 @@ private:
     
 
    // int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)
+    bool mutex_queue_flag_ = false;
+    std::vector<std::function<void()>> pendingFunctors_;
+	std::mutex mutex_;
+
+    moodycamel::ConcurrentQueue<std::function<void()>> concurrent_queue_func_;
 };

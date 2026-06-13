@@ -31,9 +31,9 @@ RpcServer::~RpcServer()
     
 }
 
-void RpcServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
+void RpcServer::Start()
 {
-    server_.Start(option, nEventLoopThread, nTaskThreadNum);
+    server_.Start();
 }
 
 
@@ -45,50 +45,73 @@ void RpcServer::RegisterMethod(const std::string& strMethod, Handler handler)
 
 void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
 {
-    con->GetLoop()->AssertInLoopThread("RpcServer::OnMessage");
+    EventLoop* loop_ptr = con->GetLoop();
+    assert(loop_ptr);
+    loop_ptr->AssertInLoopThread("RpcServer::OnMessage");
 
     //Buffer buf;
     //buf.Append(strMsg.data(), strMsg.size());
+    ThreadPool* task_thread_pool = server_.GetThreadPool(); 
+    assert(task_thread_pool);
 
-    uint64_t id;
-    std::string strMethod, strParams, trace_id;
-    bool ok = RpcCodec::Protobuf_DecodeRequest(strMsg, id, strMethod, strParams, trace_id);
-    if(!ok)
-    {
-        this->HandlerResultResponse(con, id, eRpcCode_ParamError, "{}", trace_id);
-        return;
-    }
+    std::weak_ptr<TcpConnection> weak_connection_ptr = con;
+    task_thread_pool->AddTask([this, loop_ptr, strMsg=std::move(strMsg), weak_connection_ptr](){
+        if(!loop_ptr)
+        {
+            return;
+        }
 
-    // 需要通过走rpcLogFile
-    // file_ <<  "RpcServer::OnMessage id:="  << id << std::endl;
-    auto itr = methods_.find(strMethod);
-    if(itr == methods_.end())
-    {
-        this->HandlerResultResponse(con, id, eRpcCode_NotGetMethod, "{}", trace_id);
-        return;
-    }
+        uint64_t id;
+        std::string strMethod, strParams, trace_id;
+        bool ok = RpcCodec::Protobuf_DecodeRequest(strMsg, id, strMethod, strParams, trace_id);
+        if(!ok)
+        {
+            this->HandlerResultResponse(loop_ptr, weak_connection_ptr, id, eRpcCode_ParamError, "{}", trace_id);
+            return;
+        }
 
-    std::string result;
-    try{
-        Handler handler = (itr->second);
-        result = handler(strParams);
-    }
-    catch(const std::exception& e)
-    {
-        this->HandlerResultResponse(con, id, eRpcCode_ServerError, "{}", trace_id);
-        return;
-    }
+        // 需要通过走rpcLogFile
+        // file_ <<  "RpcServer::OnMessage id:="  << id << std::endl;
+        auto itr = methods_.find(strMethod);
+        if(itr == methods_.end())
+        {
+            this->HandlerResultResponse(loop_ptr, weak_connection_ptr, id, eRpcCode_NotGetMethod, "{}", trace_id);
+            return;
+        }
 
-    this->HandlerResultResponse(con, id, eRpcCode_Success, result, trace_id);
+
+        std::string result;
+        try{
+            Handler handler = (itr->second);
+            result = handler(strParams);
+        }
+        catch(const std::exception& e)
+        {
+            this->HandlerResultResponse(loop_ptr, weak_connection_ptr, id, eRpcCode_ServerError, "{}", trace_id);
+            return;
+        }
+
+        this->HandlerResultResponse(loop_ptr, weak_connection_ptr, id, eRpcCode_Success, result, trace_id);
+    });
 }
 
 
-void RpcServer::HandlerResultResponse(const std::shared_ptr<TcpConnection>& con, uint64_t id, int32_t code, const std::string& strResult, const std::string& trace_id)
+void RpcServer::HandlerResultResponse(EventLoop* loop_ptr, const std::weak_ptr<TcpConnection>& weak_con, uint64_t id, int32_t code, const std::string& strResult, const std::string& trace_id)
 {
-    
+    if(!loop_ptr)
+    {
+        return;
+    }
+
     std::string strResponse = std::move(RpcCodec::Protobuf_EncodeResponse(id, code, strResult, trace_id));
     //std::cout << "Server sending response, size=" << strResponse.size() << " id=" << id << " code=" << code << std::endl;
-    con->Send(strResponse);
+    loop_ptr->RunInLoop([weak_con, strResponse=std::move(strResponse)](){
+        auto con = weak_con.lock();
+        if(con)
+        {
+            con->Send(strResponse);
+        }
+    });
 }
 
        

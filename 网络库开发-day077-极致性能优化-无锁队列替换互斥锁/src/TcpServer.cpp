@@ -7,6 +7,7 @@
 #include "EventLoop.h"
 #include "TcpConnection.h"
 #include "Decoder/LineDecoder.h"
+#include "Common/ConfigManager.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -65,22 +66,33 @@ TcpServer::~TcpServer()
     
 }
 
-void TcpServer::Start(int option, int nEventLoopThread, int nTaskThreadNum /*= std::thread::hardware_concurrency()*/)
+void TcpServer::Start()
 {
-    //std::cout << "TcpServer::Start 1111" << std::endl;
+    auto& cfg = ConfigManager::getInstance();
+    int nEventLoopThread = cfg.getInt("EventLoop", "sub_event_loop_count", 6);
     {
+        
         nEventLoopThreadCount_ = std::max(0, nEventLoopThread);
         eventLoopThreadPool_->SetThreadNum(nEventLoopThreadCount_);
         eventLoopThreadPool_->Start(this);
     }
+    
 //std::cout << "TcpServer::Start 222" << std::endl;
+    int task_thread_count = cfg.getInt("ThreadPool", "thread_count", 0);
     {
-        nTaskThreadNum = std::max(1, nTaskThreadNum);
-        taskThreadPool_->Start(option, nTaskThreadNum);
+         if(task_thread_count <= 0)
+        {
+            task_thread_count = std::thread::hardware_concurrency();
+        }
+
+        int option = cfg.getInt("ThreadPool", "start_option", 0);
+        
+        task_thread_count = std::max(1, task_thread_count);
+        taskThreadPool_->Start(option, task_thread_count);
     }
     
 
-    std::cout << "event_loop_thread_pool thread_num:=" << nEventLoopThreadCount_ << " task_thread_pool thread_num:=" << nTaskThreadNum << std::endl;
+    std::cout << "event_loop_thread_pool thread_num:=" << nEventLoopThreadCount_ << " task_thread_pool thread_num:=" << task_thread_count << std::endl;
 
     // 将监听socket加入到epoll中去。
     std::unique_ptr<Channel> listenChannel = std::make_unique<Channel>(listenSocket_->GetSocketId());

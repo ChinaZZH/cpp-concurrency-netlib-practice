@@ -19,7 +19,7 @@ public:
 
     ~HttpServer();
 
-    void Start(int option, int nEventLoopThread, int nTaskThreadNum = std::thread::hardware_concurrency());
+    void Start();
 
     void RegisterMethod(const std::string& strMethod, Handler handler);
 
