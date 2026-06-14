@@ -12,6 +12,7 @@
 - [事件循环线程池不同线程个数性能对比](./docs/netlib_performance_report_1.md)
 - [网络库实现多eventloop的架构图及其总结](./docs/netlib_design_2.md)
 - [互斥锁队列与无锁队列使用性能对比](./docs/mutex_or_lock_queue_compare.md)
+- [rpc同步和异步性能对比](./doc/srpc_call_and_async_call.md)
 
  
 14 周计划（并发基础 → 手写网络库 → Go 压测 → Skynet）
