@@ -1,6 +1,6 @@
 markdown
 
-# Day66： 网络库扩展完善 增加ini读取配置数据，同时修改定时器开始和运行都在event_loop的loop中运行
+# Day66： 网络库扩展完善 同步异步压测数据比较，修改定时器开始和运行都在event_loop的loop中运行
 
 ## 核心收获
 
