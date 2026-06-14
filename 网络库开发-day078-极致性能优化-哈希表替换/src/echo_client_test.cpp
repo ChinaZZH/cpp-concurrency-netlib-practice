@@ -19,7 +19,7 @@
 #include <signal.h>
 #include <thread>
 
-int ClientPressTest(int threads, int req_per_threads)
+int ClientPressTest(int threads, int req_per_threads, bool async_call)
 {
     //const int threads = 10;
     //const int req_per_threads = 10000; // 每个线程执行的次数
@@ -32,6 +32,7 @@ int ClientPressTest(int threads, int req_per_threads)
     {
         thread_pool.emplace_back(
 			client_work_function, 
+            async_call,
 			i, 
 			req_per_threads, 
 			std::ref(all_latencies[i]), 
@@ -75,8 +76,8 @@ int ClientPressTest(int threads, int req_per_threads)
         return all_us[idx];
     };
 
-    
-    std::cout << "Total request: " << total_req << std::endl;
+    std::string call_proc = async_call? "CallAsync" : "Call";
+    std::cout << call_proc << "  Total request: " << total_req << std::endl;
     std::cout << "Success: " << all_us.size();
     std::cout << " , Timeout: " << timeout_cnt.load(std::memory_order_relaxed);
     std::cout << " , Fail:" << (total_req - all_us.size() - timeout_cnt)  << std::endl;
@@ -233,10 +234,24 @@ int echo_client_test()
     }
 
 
-    std::cout << "start 50 thread and req_per_threads 10000: " << std::endl;
-    ClientPressTest(50, 10000);
+    std::cout << "start Async Call 100 thread and req_per_threads 10000: " << std::endl;
+    ClientPressTest(100, 10000, true);
     std::cout << std::endl << std::endl;
 
+
+    std::cout << "start Call 100 thread and req_per_threads 10000: " << std::endl;
+    ClientPressTest(100, 10000, false);
+    std::cout << std::endl << std::endl;
+
+    std::cout << "start Async Call 50 thread and req_per_threads 10000: " << std::endl;
+    ClientPressTest(50, 10000, true);
+    std::cout << std::endl << std::endl;
+
+    std::cout << "start Call 50 thread and req_per_threads 10000: " << std::endl;
+    ClientPressTest(50, 10000, false);
+    std::cout << std::endl << std::endl;
+
+    /*
     std::cout << "start 20 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(20, 10000);
     std::cout << std::endl << std::endl;
@@ -254,5 +269,7 @@ int echo_client_test()
     std::cout << "start 1 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(1, 10000);
     std::cout << std::endl << std::endl;
+    */
+
     return 0;
 }

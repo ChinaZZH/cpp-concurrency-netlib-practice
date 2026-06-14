@@ -8,6 +8,7 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
+#include <absl/container/flat_hash_map.h>
 
 class HttpServer;
 class ServiceRegisterCenter
@@ -30,6 +31,6 @@ private:
         int ttl_secs;
     };
 
-    std::unordered_map<std::string, std::vector<ServerInstance>> services_register_center_;
+    absl::flat_hash_map<std::string, std::vector<ServerInstance>> services_register_center_;
     std::mutex register_center_mutex_;
 };

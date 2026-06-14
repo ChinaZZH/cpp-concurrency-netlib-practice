@@ -10,6 +10,8 @@
 #include <functional>
 #include <queue>
 #include <unordered_set>
+#include <absl/container/flat_hash_set.h>
+#include <absl/container/flat_hash_map.h>
 #include "Common/ConcurrentQueue.h"
 
 class Channel;
@@ -112,7 +114,7 @@ private:
 
 private:
     std::unique_ptr<Epoll>  epoll_;
-    std::map<int, std::unique_ptr<Channel>> channels_;
+    absl::flat_hash_map<int, std::unique_ptr<Channel>> channels_;
     bool quit_;
     std::thread::id threadId_;
     std::vector<int> delayServerChannelsToRemove_;
@@ -151,11 +153,11 @@ private:
     };
 
     std::priority_queue<TimerNode> timersFunc_; 
-    std::unordered_set<uint64_t>  cancel_timer_list_;
+    absl::flat_hash_set<uint64_t>  cancel_timer_list_;
     std::atomic<uint64_t> next_timer_id_{1};
 
     // 将connection_list一直到对应的eventloop中来
-    std::map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
+    absl::flat_hash_map<int, std::shared_ptr<TcpConnection>> mapTcpConnection_;
     
 
    // int idleTimeOutSecs_ = 60; // 连接空闲时间断开，默认是60秒(<=0 则空闲时间可以无限)

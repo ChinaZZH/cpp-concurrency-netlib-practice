@@ -7,6 +7,7 @@
 #include <thread>
 #include "ThreadPool.h"
 #include "EventLoopThreadPool.h"
+#include <absl/container/flat_hash_map.h>
 
 
 class EventLoop;
@@ -61,5 +62,5 @@ private:
 
     ConnectionCallBack connectionCallBack_;
 
-    std::map<int, EventLoop*> mapLightClient; // 轻量化客户端连接
+    absl::flat_hash_map<int, EventLoop*> mapLightClient; // 轻量化客户端连接
 };

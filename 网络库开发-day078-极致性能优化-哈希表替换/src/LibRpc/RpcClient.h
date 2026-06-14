@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <nlohmann/json.hpp>
 #include <condition_variable>
+#include <absl/container/flat_hash_map.h>
 
 
 class TcpConnection;
@@ -88,16 +89,13 @@ private:
 
     std::atomic<uint64_t>   next_id_ = 1; // 奇数的id让同步Call使用
 
-    std::unordered_map<uint64_t, std::promise<std::string>> pending_;
+    absl::flat_hash_map<uint64_t, std::promise<std::string>> pending_;
     std::mutex mutex_;
 
     std::atomic<bool> bConnected_ = false; // 连接状态标志
 
-    // 测试使用
-    //std::unordered_map<uint64_t, std::chrono::time_point<std::chrono::steady_clock>> test_pending_time_;
-
     std::atomic<uint64_t>   async_call_next_id_ = 2; // 偶数的id让异步AsyncCall使用
-    std::map<uint64_t, std::pair<AsyncCallback, uint64_t>> async_callback_pending_func_;
+    absl::flat_hash_map<uint64_t, std::pair<AsyncCallback, uint64_t>> async_callback_pending_func_;
     std::mutex aync_mutex_;
 
     std::string ip_;

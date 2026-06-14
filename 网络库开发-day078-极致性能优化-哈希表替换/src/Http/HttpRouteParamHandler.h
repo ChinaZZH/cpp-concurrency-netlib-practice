@@ -4,12 +4,13 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <absl/container/flat_hash_map.h>
 
 class TcpConnection;
 class HttpRouteParamHandler
 {
 public:
-    using RouteParams = std::unordered_map<std::string, std::string>;
+    using RouteParams = absl::flat_hash_map<std::string, std::string>;
     using RouteFunc = std::function<void(const std::shared_ptr<TcpConnection>&, const RouteParams&, bool KeepAlive)>;
 
     HttpRouteParamHandler();

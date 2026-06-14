@@ -4,6 +4,7 @@
 #include <fstream>
 #include <mutex>
 #include <map>
+#include <absl/container/flat_hash_map.h>
 
 // 主要排查问题用，后期如果要用，需要异步写日志。
 class LogFile
@@ -36,7 +37,7 @@ private:
 
     
 private:
-    std::map<std::string, std::ofstream>  log_file_system_;
+    absl::flat_hash_map<std::string, std::ofstream>  log_file_system_;
     std::mutex mtx_;
 };
 

@@ -4,6 +4,7 @@
 #include <thread>
 #include "HttpContext.h"
 #include "../TcpServer.h"
+#include <absl/container/flat_hash_map.h>
 
 
 class EventLoop;
@@ -59,7 +60,7 @@ private:
 private:
     TcpServer server_;
     HttpContext http_server_context_;
-    std::unordered_map<std::string, Handler> method_handlers_;
+    absl::flat_hash_map<std::string, Handler> method_handlers_;
     std::unique_ptr<HttpWebService> web_service_;
     std::unique_ptr<HttpRouteParamHandler> route_handler_;
 

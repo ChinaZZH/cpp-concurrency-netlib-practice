@@ -115,7 +115,7 @@ void connection_pool_client_work_function(int id, int task_count, std::vector<ui
 
 
 
-void client_work_function(int id, int task_count, std::vector<uint64_t>& latencies, std::atomic<uint64_t>& timeout_cnt) {
+void client_work_function(bool async_call, int id, int task_count, std::vector<uint64_t>& latencies, std::atomic<uint64_t>& timeout_cnt) {
     // 创建 EventLoop 对象（将在独立线程中运行）
     EventLoop loop;
 
@@ -232,64 +232,69 @@ void client_work_function(int id, int task_count, std::vector<uint64_t>& latenci
             int expected_sum = add_num + i;
 
             // 暂时不使用同步回调，使用异步回调进行测试
-            /*
-            std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
-            AddResponse response;
-            response.ParseFromString(strResult);
-
-            //std::cout << "RPC result: " << response.sum() << std::endl;
-            assert(expected_sum == response.sum());
-            auto overall_end = std::chrono::steady_clock::now();
-            auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
-            latencies.emplace_back(cost_sec);
-            */
-
-            
-            rpcClient->CallAsync("add", req.SerializeAsString(), [&pending, &loop, expected_sum, overall_start, &latencies, &timeout_cnt](const std::string& strResult, int32_t error){
+            if(false == async_call)
+            {
+                std::string strResult = rpcClient->Call("add", req.SerializeAsString(), 5000);
                 AddResponse response;
                 response.ParseFromString(strResult);
 
-                if(0 == error)
-                {
-                    //std::cout << "RPC result: " << response.sum() << std::endl;
-                    assert(expected_sum == response.sum());
-                    auto overall_end = std::chrono::steady_clock::now();
-                    auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+                //std::cout << "RPC result: " << response.sum() << std::endl;
+                assert(expected_sum == response.sum());
+                auto overall_end = std::chrono::steady_clock::now();
+                auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+                latencies.emplace_back(cost_sec);
+            }else{
+                rpcClient->CallAsync("add", req.SerializeAsString(), [&pending, &loop, expected_sum, overall_start, &latencies, &timeout_cnt](const std::string& strResult, int32_t error){
+                    AddResponse response;
+                    response.ParseFromString(strResult);
 
-                    latencies.emplace_back(cost_sec);
-                }else{
-                    std::cout << "RPC error: " << error << std::endl;
-                    if(eRpcCode_TimeOut == error)
-                    {
-                        timeout_cnt.fetch_add(1, std::memory_order_relaxed);
+                    if(0 == error){
+                        //std::cout << "RPC result: " << response.sum() << std::endl;
+                        assert(expected_sum == response.sum());
+                        auto overall_end = std::chrono::steady_clock::now();
+                        auto cost_sec = std::chrono::duration_cast<std::chrono::microseconds>(overall_end - overall_start).count();
+
+                        latencies.emplace_back(cost_sec);
+                    }else{
+                        std::cout << "RPC error: " << error << std::endl;
+                        if(eRpcCode_TimeOut == error)
+                        {
+                            timeout_cnt.fetch_add(1, std::memory_order_relaxed);
+                        }
                     }
-                }
 
-                // 异步的时候添加代码
+                    // 异步的时候添加代码
+                    --pending;
+                    if(0 == pending)
+                    {
+                        // 停止 I/O 线程（可选，简单退出）
+                        loop.Quit();
+                    }
+                });
+            }
+        
+        } catch (const std::exception& e) {
+            std::cerr << "RPC error: " << e.what() << std::endl;
+            if(async_call)
+            {
                 --pending;
                 if(0 == pending)
                 {
                     // 停止 I/O 线程（可选，简单退出）
                     loop.Quit();
                 }
-            });
-
-            
-        } catch (const std::exception& e) {
-            std::cerr << "RPC error: " << e.what() << std::endl;
-            
-            --pending;
-            if(0 == pending)
-            {
-                // 停止 I/O 线程（可选，简单退出）
-                loop.Quit();
             }
+           
         }       
     }
     
 
     // 停止 I/O 线程（可选，简单退出）
-    //loop.Quit(); // 同步的时候终止代码,异步的时候屏蔽该代码
+    if(false == async_call)
+    {
+        loop.Quit(); // 同步的时候终止代码,异步的时候屏蔽该代码
+    }
+    
     io_thread.join();
     //return 0;
 }

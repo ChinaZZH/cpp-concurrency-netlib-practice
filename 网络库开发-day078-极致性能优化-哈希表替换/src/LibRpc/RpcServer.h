@@ -8,6 +8,7 @@
 #include <thread>
 #include <memory>
 #include <atomic>
+#include <absl/container/flat_hash_map.h>
 
 class EventLoop;
 class ServiceRegistry;
@@ -35,7 +36,7 @@ private:
 
 private:
     TcpServer server_;
-    std::unordered_map<std::string, Handler> methods_;
+    absl::flat_hash_map<std::string, Handler> methods_;
 
     std::unique_ptr<ServiceRegistry> service_registry_;
 };

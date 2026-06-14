@@ -213,7 +213,7 @@ void RpcClient::OnResponse(const std::string& data)
 
 void RpcClient::OncConnectionClosed()
 {
-    std::unordered_map<uint64_t, std::promise<std::string>> copy_pending;
+    absl::flat_hash_map<uint64_t, std::promise<std::string>> copy_pending;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         pending_.swap(copy_pending);

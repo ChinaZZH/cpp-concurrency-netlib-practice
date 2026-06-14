@@ -3,6 +3,7 @@
 #include "RpcClient.h"
 #include <stdexcept>
 #include <unordered_set>
+#include <absl/container/flat_hash_set.h>
 
 RpcConnectionPool::RpcConnectionPool() = default;
     
@@ -44,7 +45,7 @@ RpcConnectionPool::RpcClientPtr RpcConnectionPool::GetConnection()
 void RpcConnectionPool::Refresh(const std::vector<EndPoint>& newPoints)
 {
     // 删除没有的ip port
-    std::unordered_set<EndPoint> new_instance_list(newPoints.begin(), newPoints.end());
+    absl::flat_hash_set<EndPoint> new_instance_list(newPoints.begin(), newPoints.end());
     for(auto itr = rpc_client_list_.begin(); itr != rpc_client_list_.end(); )
     {
         RpcClientPtr client_ptr = (*itr);
@@ -59,7 +60,7 @@ void RpcConnectionPool::Refresh(const std::vector<EndPoint>& newPoints)
     }
 
     // 加入新的ip port
-     std::unordered_set<EndPoint> old_instance_list;
+     absl::flat_hash_set<EndPoint> old_instance_list;
      old_instance_list.reserve(rpc_client_list_.size());
      for(auto itr = rpc_client_list_.begin(); itr != rpc_client_list_.end(); )
      {

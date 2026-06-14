@@ -10,6 +10,8 @@ find_package(Threads REQUIRED)
 # 查找 添加 Protobuf 库
 find_package(Protobuf REQUIRED)
 
+# 查找添加absl库
+find_package(absl REQUIRED)
 
 # 假设 .proto 文件放在项目根目录下的 proto/ 文件夹
 set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
@@ -50,23 +52,28 @@ file(GLOB_RECURSE OTHER_SOURCES "src/*.cpp")
 set(ALL_SOURCES ${OTHER_SOURCES} ${PROTO_SRCS})
 
 # 生成可执行文件
-add_executable(echo_rpc_client_test ${ALL_SOURCES})
+add_executable(rpc_server ${ALL_SOURCES})
 
 # 包含生成的头文件目录（.pb.h 所在位置）
-target_include_directories(echo_rpc_client_test PRIVATE
+target_include_directories(rpc_server PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
     ${Protobuf_INCLUDE_DIRS}
 )
 
 
 # 链接线程库
-target_link_libraries(echo_rpc_client_test
+target_link_libraries(rpc_server
 	Threads::Threads
 	${Protobuf_LIBRARIES}
+	absl::flat_hash_map          # 主要的哈希图
+	absl::flat_hash_set          # 主要的哈希图
+    absl::hash                    # 哈希函数实现
+    absl::raw_hash_set            # 容器底层核心
+    absl::base                    # Abseil 基础库
 )
 
 # 可选：如果需要调试，可以设置编译选项
-target_compile_options(echo_rpc_client_test PRIVATE -g -O0)
+target_compile_options(rpc_server PRIVATE -g -O0)
 
 # 运行 cmake 后（甚至在编译前）就在 build 目录下看到配置文件 config
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/config/
