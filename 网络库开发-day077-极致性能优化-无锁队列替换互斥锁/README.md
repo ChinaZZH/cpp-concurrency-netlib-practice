@@ -33,7 +33,7 @@ EventLoop 使用互斥锁 + 任务线程池使用阻塞无锁队列
 
 -- 1. 为什么 EventLoop 用无锁队列反而更差？
 
-     EventLoop 的 pendingFunctors_ 是单消费者（IO线程）多生产者（工作线程）。
+    EventLoop 的 pendingFunctors_ 是单消费者（IO线程）多生产者（工作线程）。
  
     无锁队列（ConcurrentQueue）虽然避免了锁，但引入了昂贵的原子操作和内存序，当任务量很大时（每秒几十万次），其开销可能超过互斥锁。
  
@@ -68,7 +68,9 @@ EventLoop 使用互斥锁 + 任务线程池使用阻塞无锁队列
 
 ## 具体测试性能数据
 
--- 1.  客户端异步调用 AsyncCall. 100线程。   event_loop用互斥锁mutex  任务线程池用阻塞性无锁队列 性能远远高于 event_loop 和任务线程池 都是用互斥锁 mutex
+-- 1.  客户端异步调用 AsyncCall. 100线程。   
+
+     event_loop用互斥锁mutex  任务线程池用阻塞性无锁队列 性能远远高于 event_loop 和任务线程池 都是用互斥锁 mutex
 
 ```cpp
 event_loop 和任务线程池 都是用互斥锁 mutex
@@ -122,7 +124,9 @@ P999 latency: 7197
 
 ```
 
--- 2.  客户端异步调用 AsyncCall. 100线程。   event_loop用互斥锁mutex  任务线程池用阻塞性无锁队列 性能远远高于 event_loop为无锁队列， 线程池为阻塞型无锁队列
+-- 2.  客户端异步调用 AsyncCall. 100线程。   
+
+     event_loop用互斥锁mutex  任务线程池用阻塞性无锁队列 性能远远高于 event_loop为无锁队列， 线程池为阻塞型无锁队列
 ```cpp
 event_loop用互斥锁mutex  任务线程池用阻塞性无锁队列
 start Async Call 100 thread and req_per_threads 10000:
