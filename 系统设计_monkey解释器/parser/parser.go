@@ -16,6 +16,30 @@ type Parser struct {
 	errors    []string    // 错误信息
 }
 
+// 优先级常量
+const (
+	_ int = iota
+	LOWEST
+	EQUALS      // ==
+	LESSGREATER // < >
+	SUM         // +
+	PRODUCT     // *
+	PREFIX      // -X !X
+	CALL        // myFunction(x)
+)
+
+// 前缀解析函数类型
+type prefixParseFn func(*Parser) ast.Expression
+
+// 中缀解析函数类型
+type infixParseFn func(*Parser, ast.Expression) ast.Expression
+
+var prefixParseFns map[token.TokenType]prefixParseFn
+
+var infixParseFns map[token.TokenType]infixParseFn
+
+var precedences map[token.TokenType]int
+
 // New 创建一个新的Parser实例
 func New(tokens []token.Token) *Parser {
 	p := &Parser{
@@ -24,6 +48,35 @@ func New(tokens []token.Token) *Parser {
 		errors: []string{},
 	}
 
+	prefixParseFns = map[token.TokenType]prefixParseFn{
+		token.IDENT: (*Parser).parseIdentifier,
+		token.INT:   (*Parser).parseIntegerLiteral,
+		token.BANG:  (*Parser).parsePrefixExpression,
+		token.MINUS: (*Parser).parsePrefixExpression,
+	}
+
+	infixParseFns = map[token.TokenType]infixParseFn{
+		token.PLUS:     (*Parser).parseInfixExpression,
+		token.MINUS:    (*Parser).parseInfixExpression,
+		token.ASTERISK: (*Parser).parseInfixExpression,
+		token.SLASH:    (*Parser).parseInfixExpression,
+		token.LT:       (*Parser).parseInfixExpression,
+		token.GT:       (*Parser).parseInfixExpression,
+		token.EQ:       (*Parser).parseInfixExpression,
+		token.NOT_EQ:   (*Parser).parseInfixExpression,
+	}
+
+	precedences = map[token.TokenType]int{
+		token.EQ:       EQUALS,
+		token.NOT_EQ:   EQUALS,
+		token.LT:       LESSGREATER,
+		token.GT:       LESSGREATER,
+		token.PLUS:     SUM,
+		token.MINUS:    SUM,
+		token.ASTERISK: PRODUCT,
+		token.SLASH:    PRODUCT,
+		token.LPAREN:   CALL,
+	}
 	// 读取前两个token,初始化curToken和peekToken
 	p.nextToken()
 	p.nextToken()
@@ -207,33 +260,6 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 // 表达式解析（基础版，仅支持标识符和整数）
 // ============================================================
 
-// 优先级常量
-const (
-	_ int = iota
-	LOWEST
-	// Day3 会扩展更多优先级
-)
-
-// 前缀解析函数类型
-type prefixParseFn func(*Parser) ast.Expression
-
-var prefixParseFns = map[token.TokenType]prefixParseFn{
-	token.IDENT: (*Parser).parseIdentifier,
-	token.INT:   (*Parser).parseIntegerLiteral,
-}
-
-func (p *Parser) parseExpression(precedence int) ast.Expression {
-	prefixFn, ok := prefixParseFns[p.curToken.Type]
-	if !ok || nil == prefixFn {
-		p.noPrefixParseFnError(p.curToken.Type)
-		return nil
-	}
-
-	leftExp := prefixFn(p)
-	// Day3 会在这里添加中缀处理循环
-	return leftExp
-}
-
 func (p *Parser) parseIdentifier() ast.Expression {
 	/* Identifier 表示标识符表达式（变量名、函数名等）
 	type Identifier struct {
@@ -267,4 +293,87 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 	msg := fmt.Sprintf("no prefix parse function for %s found", t)
 	p.errors = append(p.errors, msg)
+}
+
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefixFn, ok := prefixParseFns[p.curToken.Type]
+	if !ok || nil == prefixFn {
+		p.noPrefixParseFnError(p.curToken.Type)
+		return nil
+	}
+
+	leftExp := prefixFn(p)
+
+	// 循环处理中缀运算符
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		infixFn, ok := infixParseFns[p.peekToken.Type]
+		if !ok || nil == infixFn {
+			return nil
+		}
+
+		p.nextToken()
+		leftExp = infixFn(p, leftExp)
+	}
+
+	return leftExp
+}
+
+// peekPrecedence 获取下一个 Token 的优先级
+func (p *Parser) peekPrecedence() int {
+	prec, ok := precedences[p.peekToken.Type]
+	if ok {
+		return prec
+	}
+
+	return LOWEST
+}
+
+// currPrecedence 获取当前 Token 的优先级
+func (p *Parser) currPrecedence() int {
+	prec, ok := precedences[p.curToken.Type]
+	if ok {
+		return prec
+	}
+
+	return LOWEST
+}
+
+func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
+	/* InfixExpression 表示中缀表达式: <expression><operator><expression>
+	type InfixExpression struct {
+		Token    token.Token // 运算符 token，如 '+', '-', '*', '/', '<', '>', '==', '!='
+		Left     Expression
+		Operator string
+		Right    Expression
+	}
+	*/
+	expression := &ast.InfixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+		Left:     left,
+	}
+
+	precedence := p.currPrecedence()
+	p.nextToken()
+	expression.Right = p.parseExpression(precedence)
+	return expression
+}
+
+// parsePrefixExpression 解析前缀表达式，如 !x 或 -5
+func (p *Parser) parsePrefixExpression() ast.Expression {
+	/* PrefixExpression 表示前缀表达式: <operator><expression>
+	type PrefixExpression struct {
+		Token    token.Token // 前缀运算符 token，如 '!', '-'
+		Operator string
+		Right    Expression
+	}
+	*/
+	expression := &ast.PrefixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+	}
+
+	p.nextToken()
+	expression.Right = p.parseExpression(PREFIX)
+	return expression
 }
