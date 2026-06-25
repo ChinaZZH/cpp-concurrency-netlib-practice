@@ -16,8 +16,9 @@ const (
 	EOF     = "EOF"     // 文件结束
 
 	// 标识符和字面量
-	IDENT = "IDENT" // 标识符， 如变量名，函数名
-	INT   = "INT"   // 整数
+	IDENT  = "IDENT"  // 标识符， 如变量名，函数名
+	INT    = "INT"    // 整数
+	STRING = "STRING" // 新增：字符串字面量
 
 	// 运算符
 	ASSIGN   = "="

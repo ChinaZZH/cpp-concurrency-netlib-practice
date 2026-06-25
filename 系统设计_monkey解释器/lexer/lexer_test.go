@@ -16,7 +16,7 @@ func TestNextToken(t *testing.T) {
 	if (5 < 10) { return true; }
 	else { return false; }
 	
-	10 == 10; 10 != 9;`
+	10 == 10; 10 != 9; let just_go = "abcde"; `
 
 	test := []struct {
 		expectedType   token.TokenType
@@ -111,6 +111,13 @@ func TestNextToken(t *testing.T) {
 		{token.INT, "10"},
 		{token.NOT_EQ, "!="},
 		{token.INT, "9"},
+		{token.SEMICOLON, ";"},
+
+		// let just_go = "abcde";
+		{token.LET, "let"},
+		{token.IDENT, "just_go"},
+		{token.ASSIGN, "="},
+		{token.STRING, "abcde"},
 		{token.SEMICOLON, ";"},
 
 		// 最后 EOF
