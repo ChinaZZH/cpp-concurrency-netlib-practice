@@ -382,3 +382,232 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 		}
 	}
 }
+
+// TestIfExpression 测试 if 表达式解析
+func TestIfExpression(t *testing.T) {
+	input := `if (x < y) { x; } else { y; }`
+
+	l := lexer.New(input)
+	allTokens := collectTokens(l)
+	p := New(allTokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	stmt, ok := program.StatementList[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.StatementList[0])
+	}
+
+	ifExp, ok := stmt.Expression.(*ast.IfExpression)
+	if !ok {
+		t.Fatalf("stmt is not ast.IfExpression. got=%T", stmt.Expression)
+	}
+
+	// 验证 x  < y 是否是中缀表示式
+	testInfixExpression(t, ifExp.Condition, "x", "<", "y")
+
+	// 验证 if(1) { 2 } else { 3 } 验证2
+	if len(ifExp.Consequence.Statements) != 1 {
+		t.Fatalf("consequence has wrong enough statements. got=%d", len(ifExp.Consequence.Statements))
+	}
+
+	conStmt, ok := ifExp.Consequence.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("ifExp.Consequence.Statements[0] is not ast.ExpressionStatement. got=%T", ifExp.Consequence.Statements[0])
+	}
+
+	testIdentifier(t, conStmt.Expression, "x")
+
+	if ifExp.Alternative == nil {
+		t.Fatalf("ifExp.Alternative is nil")
+	}
+
+	// 验证 if(1) { 2 } else { 3 } 验证 3
+	if len(ifExp.Alternative.Statements) != 1 {
+		t.Fatalf("alternative has wrong enough statements. got=%d", len(ifExp.Alternative.Statements))
+	}
+
+	alterStmt, ok := ifExp.Alternative.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("ifExp.Alternative.Statements[0] is not ast.ExpressionStatement. got=%T", ifExp.Alternative.Statements[0])
+	}
+
+	testIdentifier(t, alterStmt.Expression, "y")
+}
+
+// TestFunctionLiteralParsing 测试函数字面量解析
+func TestFunctionLiteralParsing(t *testing.T) {
+	input := `fn(x, y) { x + y; }`
+
+	l := lexer.New(input)
+	allTokens := collectTokens(l)
+	p := New(allTokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	// 先看整体
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	stmt, ok := program.StatementList[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.StatementList[0])
+	}
+
+	funcLit, ok := stmt.Expression.(*ast.FunctionLiteral)
+	if !ok {
+		t.Fatalf("stmt is not ast.FunctionLiteral. got=%T", stmt.Expression)
+	}
+
+	// 再查验param
+	if len(funcLit.Parameters) != 2 {
+		t.Fatalf("function literal has wrong parameters number. got=%d", len(funcLit.Parameters))
+	}
+
+	testIdentifier(t, funcLit.Parameters[0], "x")
+	testIdentifier(t, funcLit.Parameters[1], "y")
+
+	// 再验证body
+	if len(funcLit.Body.Statements) != 1 {
+		t.Fatalf("function body has wrong number of statements. got=%d", len(funcLit.Body.Statements))
+	}
+
+	bodyStmt, ok := funcLit.Body.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("body statement is not ExpressionStatement. got=%T", funcLit.Body.Statements[0])
+	}
+
+	testInfixExpression(t, bodyStmt.Expression, "x", "+", "y")
+}
+
+// TestFunctionLiteralWithNoParams 测试无参数的函数字面量
+func TestFunctionLiteralWithNoParams(t *testing.T) {
+	input := `fn() { 42; }`
+
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	stmt, ok := program.StatementList[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.StatementList[0])
+	}
+
+	funcLit, ok := stmt.Expression.(*ast.FunctionLiteral)
+	if !ok {
+		t.Fatalf("stmt.Expression is not ast.FunctionLiteral. got=%T", stmt.Expression)
+	}
+
+	if len(funcLit.Parameters) != 0 {
+		t.Fatalf("function literal has wrong number of parameters. got=%d", len(funcLit.Parameters))
+	}
+
+	// 再验证body
+	if len(funcLit.Body.Statements) != 1 {
+		t.Fatalf("function body has wrong number of statements. got=%d", len(funcLit.Body.Statements))
+	}
+
+	bodyStmt, ok := funcLit.Body.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("body statement is not ExpressionStatement. got=%T", funcLit.Body.Statements[0])
+	}
+
+	testIntegerLiteral(t, bodyStmt.Expression, 42)
+}
+
+// TestCallExpressionParsing 测试调用表达式解析
+func TestCallExpressionParsing(t *testing.T) {
+	input := `add(1, 2 * 3, 4 + 5);`
+
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	stmt, ok := program.StatementList[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.StatementList[0])
+	}
+
+	callExp, ok := stmt.Expression.(*ast.CallExpression)
+	if !ok {
+		t.Fatalf("stmt.Expression is not ast.callExp. got=%T", stmt.Expression)
+	}
+
+	testIdentifier(t, callExp.Function, "add")
+
+	if len(callExp.Arguments) != 3 {
+		t.Fatalf("wrong number of arguments. got=%d", len(callExp.Arguments))
+	}
+	testLiteralExpression(t, callExp.Arguments[0], 1)
+	testInfixExpression(t, callExp.Arguments[1], 2, "*", 3)
+	testInfixExpression(t, callExp.Arguments[2], 4, "+", 5)
+}
+
+// TestCallExpressionWithNoArgs 测试无参数的调用表达式
+func TestCallExpressionWithNoArgs(t *testing.T) {
+	input := `fn() { 42; }();`
+
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	stmt, ok := program.StatementList[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.Statements[0] is not ast.ExpressionStatement. got=%T", program.StatementList[0])
+	}
+
+	callExp, ok := stmt.Expression.(*ast.CallExpression)
+	if !ok {
+		t.Fatalf("stmt.Expression is not ast.CallExpression. got=%T", stmt.Expression)
+	}
+
+	// Function 应该是一个 FunctionLiteral
+	_, ok = callExp.Function.(*ast.FunctionLiteral)
+	if !ok {
+		t.Fatalf("callExp.Function is not FunctionLiteral. got=%T", callExp.Function)
+	}
+
+	if len(callExp.Arguments) != 0 {
+		t.Fatalf("wrong number of arguments. got=%d", len(callExp.Arguments))
+	}
+}
+
+// TestParserErrorHandling 测试 Parser 错误报告
+func TestParserErrorHandling(t *testing.T) {
+	input := `
+        let x 5;          // 缺少 =
+        let = 10;         // 缺少标识符
+    `
+
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Errorf("expected at least one error, got none")
+	}
+}

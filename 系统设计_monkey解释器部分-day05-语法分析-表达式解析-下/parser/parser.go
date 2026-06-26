@@ -49,10 +49,13 @@ func New(tokens []token.Token) *Parser {
 	}
 
 	prefixParseFns = map[token.TokenType]prefixParseFn{
-		token.IDENT: (*Parser).parseIdentifier,
-		token.INT:   (*Parser).parseIntegerLiteral,
-		token.BANG:  (*Parser).parsePrefixExpression,
-		token.MINUS: (*Parser).parsePrefixExpression,
+		token.IDENT:    (*Parser).parseIdentifier,
+		token.INT:      (*Parser).parseIntegerLiteral,
+		token.BANG:     (*Parser).parsePrefixExpression,
+		token.MINUS:    (*Parser).parsePrefixExpression,
+		token.LPAREN:   (*Parser).parseGroupedExpression,
+		token.IF:       (*Parser).parseIfExpression,
+		token.FUNCTION: (*Parser).parseFunctionLiteral,
 	}
 
 	infixParseFns = map[token.TokenType]infixParseFn{
@@ -64,6 +67,7 @@ func New(tokens []token.Token) *Parser {
 		token.GT:       (*Parser).parseInfixExpression,
 		token.EQ:       (*Parser).parseInfixExpression,
 		token.NOT_EQ:   (*Parser).parseInfixExpression,
+		token.LPAREN:   (*Parser).parseCallExpression,
 	}
 
 	precedences = map[token.TokenType]int{
@@ -155,34 +159,6 @@ func (p *Parser) parseStatement() ast.Statement {
 	default:
 		return p.parseExpressionStatement()
 	}
-}
-
-func (p *Parser) parseBlockStatement() *ast.BlockStatement {
-	/*
-		BlockStatement 表示代码块: { <statements> }
-
-		type BlockStatement struct {
-			Token      token.Token // '{' token
-			Statements []Statement
-		}
-	*/
-	blockStmt := &ast.BlockStatement{
-		Token:      p.curToken,
-		Statements: []ast.Statement{},
-	}
-
-	p.nextToken()
-	for !p.curTokenIs(token.RBRACE) || !p.curTokenIs(token.EOF) {
-		stmt := p.parseStatement()
-		if nil != stmt {
-			blockStmt.Statements = append(blockStmt.Statements, stmt)
-		}
-
-		p.nextToken()
-	}
-
-	// 注意，这里不消费Brace，由调用者决定是否消费
-	return blockStmt
 }
 
 func (p *Parser) parseLetStatement() *ast.LetStatement {
@@ -376,4 +352,185 @@ func (p *Parser) parsePrefixExpression() ast.Expression {
 	p.nextToken()
 	expression.Right = p.parseExpression(PREFIX)
 	return expression
+}
+
+// parseGroupedExpression 解析括号分组表达式: ( <expression> )
+func (p *Parser) parseGroupedExpression() ast.Expression {
+	p.nextToken()
+	exp := p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return exp
+}
+
+func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	/*
+		BlockStatement 表示代码块: { <statements> }
+
+		type BlockStatement struct {
+			Token      token.Token // '{' token
+			Statements []Statement
+		}
+	*/
+	blockStmt := &ast.BlockStatement{
+		Token:      p.curToken,
+		Statements: []ast.Statement{},
+	}
+
+	p.nextToken()
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		stmt := p.parseStatement()
+		if nil != stmt {
+			blockStmt.Statements = append(blockStmt.Statements, stmt)
+		}
+
+		p.nextToken()
+	}
+
+	// 注意，这里不消费Brace，由调用者决定是否消费
+	return blockStmt
+}
+
+// parseIfExpression 解析 if 表达式: if (condition) { consequence } else { alternative }
+func (p *Parser) parseIfExpression() ast.Expression {
+	/* IfExpression 表示条件表达式: if (<condition>) <consequence> [else <alternative>]
+	type IfExpression struct {
+		Token       token.Token // 'if' token
+		Condition   Expression
+		Consequence *BlockStatement
+		Alternative *BlockStatement
+	}
+	*/
+
+	expression := &ast.IfExpression{
+		Token: p.curToken,
+	}
+
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	// 当时在lparaen上，则跨国lparen
+	p.nextToken()
+	expression.Condition = p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	expression.Consequence = p.parseBlockStatement()
+	if !p.curTokenIs(token.RBRACE) {
+		return nil
+	}
+
+	if p.peekTokenIs(token.ELSE) {
+		p.nextToken()
+		if !p.expectPeek(token.LBRACE) {
+			return nil
+		}
+
+		expression.Alternative = p.parseBlockStatement()
+		if !p.curTokenIs(token.RBRACE) {
+			return nil
+		}
+
+	}
+
+	return expression
+}
+
+// parseFunctionLiteral 解析函数字面量: fn(parameters) { body }
+func (p *Parser) parseFunctionLiteral() ast.Expression {
+	/* FunctionLiteral 表示函数字面量: fn(<params>) <block>
+	type FunctionLiteral struct {
+		Token      token.Token // 'fn' token
+		Parameters []*Identifier
+		Body       *BlockStatement
+	}
+	*/
+
+	lit := &ast.FunctionLiteral{Token: p.curToken}
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
+
+	p.nextToken()
+	for !p.curTokenIs(token.RPAREN) {
+		expression := p.parseIdentifier()
+		identifier, ok := expression.(*ast.Identifier)
+		if !ok {
+			return nil
+		}
+
+		lit.Parameters = append(lit.Parameters, identifier)
+		p.nextToken()
+		if p.curTokenIs(token.RPAREN) {
+			break // 跳出循环
+		}
+
+		// 如果是逗号则吃掉一个逗号，不是逗号的话就要报错
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken()
+		} else {
+			msg := fmt.Sprintf("function param next must be , or ) , got %s error", p.curToken.Type)
+			p.errors = append(p.errors, msg)
+			return nil
+		}
+	}
+
+	if !p.expectPeek(token.LBRACE) {
+		return nil
+	}
+
+	lit.Body = p.parseBlockStatement()
+	if !p.curTokenIs(token.RBRACE) {
+		return nil
+	}
+
+	return lit
+}
+
+// parseCallExpression 解析调用表达式: function(arguments)
+func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
+	/*
+		CallExpression 表示函数调用: <function>(<arguments>)
+
+		type CallExpression struct {
+			Token     token.Token // '(' token
+			Function  Expression  // 被调用的表达式（标识符或函数字面量）
+			Arguments []Expression
+		}
+	*/
+	exp := &ast.CallExpression{
+		Token:     p.curToken,
+		Function:  function,
+		Arguments: []ast.Expression{},
+	}
+
+	// 是否是空参数
+	if p.peekTokenIs(token.RPAREN) {
+		p.nextToken()
+		return exp
+	}
+
+	p.nextToken() // 消费掉(
+	expression := p.parseExpression(LOWEST)
+	exp.Arguments = append(exp.Arguments, expression)
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken()
+		p.nextToken()
+		expression := p.parseExpression(LOWEST)
+		exp.Arguments = append(exp.Arguments, expression)
+	}
+
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
+
+	return exp
 }
