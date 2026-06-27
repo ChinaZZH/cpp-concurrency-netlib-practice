@@ -15,6 +15,5 @@
 - [rpc同步和异步性能对比](./doc/srpc_call_and_async_call.md)
 
  
-14 周计划（并发基础 → 手写网络库 → Go 压测 → Skynet）
+（C++并发基础 → 手写网络库 → monkey解释器和monkey编译器 → 游戏特定算法）
 
-14周学习计划：从 C++ 并发基础到手写 Reactor 网络库，再到 Go 压测工具和 Skynet 实践。
