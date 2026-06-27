@@ -56,6 +56,8 @@ func New(tokens []token.Token) *Parser {
 		token.LPAREN:   (*Parser).parseGroupedExpression,
 		token.IF:       (*Parser).parseIfExpression,
 		token.FUNCTION: (*Parser).parseFunctionLiteral,
+		token.TRUE:     (*Parser).parseBoolean,
+		token.FALSE:    (*Parser).parseBoolean,
 	}
 
 	infixParseFns = map[token.TokenType]infixParseFn{
@@ -493,6 +495,10 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 	}
 
 	return lit
+}
+
+func (p *Parser) parseBoolean() ast.Expression {
+	return &ast.Boolean{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
 }
 
 // parseCallExpression 解析调用表达式: function(arguments)

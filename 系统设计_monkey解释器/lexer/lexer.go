@@ -162,3 +162,17 @@ func (l *Lexer) NextToken() token.Token {
 
 	return tok
 }
+
+// Tokens 返回词法分析器生成的所有 Token 切片（包括 EOF）
+func (l *Lexer) Tokens() []token.Token {
+	var allTokens []token.Token
+	for {
+		curToken := l.NextToken()
+		allTokens = append(allTokens, curToken)
+		if token.EOF == curToken.Type {
+			break
+		}
+	}
+
+	return allTokens
+}
