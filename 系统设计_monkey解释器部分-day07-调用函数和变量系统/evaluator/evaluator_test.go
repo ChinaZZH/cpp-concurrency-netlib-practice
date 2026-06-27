@@ -127,6 +127,56 @@ func TestReturnStatement(t *testing.T) {
 	}
 }
 
+func TestLetStatement(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"let a = 5; a;", 5},
+		{"let a = 5 * 5; a;", 25},
+		{"let a = 5; let b = a; b;", 5},
+		{"let a = 5; let b = a; let c = a + b + 5; c;", 15},
+	}
+
+	for index, tt := range tests {
+		resultObj := testEval(t, index, tt.input)
+		testIntegerObject(t, resultObj, tt.expected)
+	}
+}
+
+func TestFunctionApplication(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"let identity = fn(x) { x; }; identity(5);", 5},
+		{"let identity = fn(x) { return x; }; identity(5);", 5},
+		{"let double = fn(x) { x * 2; }; double(5);", 10},
+		{"let add = fn(x, y) { x + y; }; add(5, 5);", 10},
+		{"let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));", 20},
+		{"fn(x) { x; }(5)", 5},
+		{"let identity = fn(x) { return x; 3; 45;}; identity(5);", 5},
+	}
+
+	for index, tt := range tests {
+		resultObj := testEval(t, index, tt.input)
+		testIntegerObject(t, resultObj, tt.expected)
+	}
+}
+
+func TestClosure(t *testing.T) {
+	input := `
+        let newAdder = fn(x) {
+            fn(y) { x + y };
+        };
+        let addTwo = newAdder(2);
+        addTwo(3);
+    `
+
+	evaluated := testEval(t, 0, input)
+	testIntegerObject(t, evaluated, 5)
+}
+
 // ============================================================
 // 辅助函数
 // ============================================================
@@ -141,7 +191,8 @@ func testEval(t *testing.T, index int, input string) object.Object {
 		t.Fatalf("index %d, parse errors: %v", index, p.Errors())
 	}
 
-	evalResult := Eval(program)
+	env := object.NewEnvironment()
+	evalResult := Eval(program, env)
 	return evalResult
 }
 
