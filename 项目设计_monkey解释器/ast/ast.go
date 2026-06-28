@@ -440,7 +440,7 @@ func (hl *HashLiteral) String() string {
 // StringLiteral 表示字符串字面量，如 "hello"
 type StringLiteral struct {
 	Token token.Token
-	value string
+	Value string
 }
 
 func (sl *StringLiteral) expressionNode() {

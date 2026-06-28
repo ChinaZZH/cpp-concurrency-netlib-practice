@@ -58,6 +58,9 @@ func New(tokens []token.Token) *Parser {
 		token.FUNCTION: (*Parser).parseFunctionLiteral,
 		token.TRUE:     (*Parser).parseBoolean,
 		token.FALSE:    (*Parser).parseBoolean,
+		token.STRING:   (*Parser).parseStringLiteral,
+		token.LBRACKET: (*Parser).parseArrayExpression,
+		token.LBRACE:   (*Parser).parseHashLiteral,
 	}
 
 	infixParseFns = map[token.TokenType]infixParseFn{
@@ -70,6 +73,7 @@ func New(tokens []token.Token) *Parser {
 		token.EQ:       (*Parser).parseInfixExpression,
 		token.NOT_EQ:   (*Parser).parseInfixExpression,
 		token.LPAREN:   (*Parser).parseCallExpression,
+		token.LBRACKET: (*Parser).parseIndexExpression,
 	}
 
 	precedences = map[token.TokenType]int{
@@ -82,6 +86,7 @@ func New(tokens []token.Token) *Parser {
 		token.ASTERISK: PRODUCT,
 		token.SLASH:    PRODUCT,
 		token.LPAREN:   CALL,
+		token.LBRACKET: CALL, // 索引操作优先级与函数调用相同
 	}
 	// 读取前两个token,初始化curToken和peekToken
 	p.nextToken()
@@ -539,4 +544,117 @@ func (p *Parser) parseCallExpression(function ast.Expression) ast.Expression {
 	}
 
 	return exp
+}
+
+func (p *Parser) parseIndexExpression(arrayName ast.Expression) ast.Expression {
+	/* IndexExpression 表示索引表达式，如 arr[0] 或 hash["key"]
+	type IndexExpression struct {
+		Token token.Token
+		Left  Expression
+		Index Expression
+	}
+	*/
+	if p.peekTokenIs(token.RBRACKET) {
+		return nil
+	}
+
+	indexExp := &ast.IndexExpression{Token: p.curToken, Left: arrayName}
+	p.nextToken()
+	indexExp.Index = p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+
+	return indexExp
+}
+
+func (p *Parser) parseStringLiteral() ast.Expression {
+	/* StringLiteral 表示字符串字面量，如 "hello"
+	type StringLiteral struct {
+	  	Token token.Token
+	  	Value string
+	  }
+	*/
+
+	return &ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+}
+
+// parseArrayLiteral 解析数组字面量: [<expression>, <expression>, ...]
+func (p *Parser) parseArrayExpression() ast.Expression {
+	/* ArrayLiteral 表示函数调用: 表示数组字面量，如 [1, 2, 3]
+	type ArrayLiteral struct {
+		Token    token.Token
+		Elements []Expression
+	}
+	*/
+	array := &ast.ArrayLiteral{Token: p.curToken, Elements: []ast.Expression{}}
+
+	// 如果下一个 token 是 ']'，表示空数组
+	if p.peekTokenIs(token.RBRACKET) {
+		p.nextToken() // 跳到 ']'
+		return array
+	}
+
+	p.nextToken() // 跳过 '['
+	tmpExpression := p.parseExpression(LOWEST)
+	array.Elements = append(array.Elements, tmpExpression)
+
+	for !p.peekTokenIs(token.RBRACKET) {
+		if !p.expectPeek(token.COMMA) {
+			return nil
+		}
+
+		p.nextToken()
+		tmpExpression := p.parseExpression(LOWEST)
+		array.Elements = append(array.Elements, tmpExpression)
+
+	}
+
+	if !p.expectPeek(token.RBRACKET) {
+		return nil
+	}
+
+	return array
+}
+
+func (p *Parser) parseHashLiteral() ast.Expression {
+	/* HashLiteral 表示哈希字面量，如 {"key": 1, "value": 2}
+	type HashLiteral struct {
+		Token token.Token
+		Pairs map[Expression]Expression
+	}
+	*/
+	hash := &ast.HashLiteral{Token: p.curToken, Pairs: map[ast.Expression]ast.Expression{}}
+	if p.peekTokenIs(token.RBRACE) {
+		p.nextToken()
+		return hash
+	}
+
+	p.nextToken() //跳过{
+	for true {
+		key := p.parseExpression(LOWEST)
+		if !p.expectPeek(token.COLON) {
+			return nil
+		}
+
+		p.nextToken()
+		value := p.parseExpression(LOWEST)
+		hash.Pairs[key] = value
+
+		if p.peekTokenIs(token.RBRACE) {
+			break
+		}
+
+		if !p.expectPeek(token.COMMA) {
+			return nil
+		}
+
+		p.nextToken() // 跳过
+	}
+
+	if !p.expectPeek(token.RBRACE) {
+		return nil
+	}
+
+	return hash
 }

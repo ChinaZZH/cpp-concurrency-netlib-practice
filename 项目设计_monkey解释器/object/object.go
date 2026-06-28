@@ -1,6 +1,10 @@
 package object
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+	"strings"
+)
 
 type objectType string
 
@@ -10,6 +14,10 @@ const (
 	NULL_OBJ         = "NULL"
 	RETURN_VALUE_OBJ = "RETURN_VALUE"
 	FUNCTION_OBJ     = "FUNCTION"
+	ERROR_OBJ        = "ERROR"
+	STRING_OBJ       = "STRING"
+	ARRAY_OBJ        = "ARRAY"
+	HASH_OBJ         = "HASH"
 )
 
 type Object interface {
@@ -33,6 +41,10 @@ func (i *Integer) Inspect() string {
 	return fmt.Sprintf("%d", i.Value)
 }
 
+func (i *Integer) HashKey() HashKey {
+	return HashKey{Type: i.Type(), Value: uint64(i.Value)}
+}
+
 // ============================================================
 // 布尔对象
 // ============================================================
@@ -47,6 +59,15 @@ func (b *Boolean) Type() objectType {
 
 func (b *Boolean) Inspect() string {
 	return fmt.Sprintf("%t", b.Value)
+}
+
+func (b *Boolean) HashKey() HashKey {
+	val := 0
+	if b.Value {
+		val = 1
+	}
+
+	return HashKey{Type: b.Type(), Value: uint64(val)}
 }
 
 // ============================================================
@@ -76,4 +97,116 @@ func (rv *ReturnValue) Type() objectType {
 
 func (rv *ReturnValue) Inspect() string {
 	return rv.Value.Inspect()
+}
+
+// ============================================================
+// 错误处理对象，可以兼容多种类型
+// ============================================================
+type Error struct {
+	Message string
+}
+
+func (e *Error) Type() objectType {
+	return ERROR_OBJ
+}
+
+func (e *Error) Inspect() string {
+	return e.Message
+}
+
+// ============================================================
+// 字符串对象，可以兼容多种类型
+// ============================================================
+type String struct {
+	Value string
+}
+
+func (s *String) Type() objectType {
+	return STRING_OBJ
+}
+
+func (s *String) Inspect() string {
+	return s.Value
+}
+
+func (s *String) HashKey() HashKey {
+	h := uint64(1469598103934665603) // FNV-1a offset basis
+	for _, c := range s.Value {
+		h ^= uint64(c)
+		h *= 1099511628211
+	}
+
+	return HashKey{Type: s.Type(), Value: h}
+}
+
+// ============================================================
+// 数组对象，可以兼容多种类型
+// ============================================================
+type Array struct {
+	Element []Object
+}
+
+func (a *Array) Type() objectType {
+	return ARRAY_OBJ
+}
+
+func (ao *Array) Inspect() string {
+	var out bytes.Buffer
+	out.WriteString("[")
+	for index, elem := range ao.Element {
+		if index > 0 {
+			out.WriteString(", ")
+		}
+
+		out.WriteString(elem.Inspect())
+	}
+	out.WriteString("]")
+	return out.String()
+}
+
+// ============================================================
+// 哈希值
+// ============================================================
+type HashKey struct {
+	Type  objectType
+	Value uint64
+}
+
+// Hasher 接口：可哈希的对象必须实现此方法
+type Hasher interface {
+	HashKey() HashKey
+}
+
+// ============================================================
+// 哈希对
+// ============================================================
+type HashPair struct {
+	Key   Object
+	Value Object
+}
+
+// ============================================================
+// 哈希对象
+// ============================================================
+
+type Hash struct {
+	Pairs map[HashKey]HashPair
+}
+
+func (h *Hash) Type() objectType {
+	return HASH_OBJ
+}
+
+func (h *Hash) Inspect() string {
+	pairs := []string{}
+	for _, pair := range h.Pairs {
+		hashData := pair.Key.Inspect() + ": " + pair.Value.Inspect()
+		pairs = append(pairs, hashData)
+	}
+
+	var out bytes.Buffer
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ", "))
+	out.WriteString("}")
+	return out.String()
 }

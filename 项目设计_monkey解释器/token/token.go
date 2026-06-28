@@ -39,6 +39,9 @@ const (
 	RPAREN    = ")"
 	LBRACE    = "{"
 	RBRACE    = "}"
+	LBRACKET  = "["
+	RBRACKET  = "]"
+	COLON     = ":"
 
 	// 关键字
 	FUNCTION = "FUNCTION"

@@ -611,3 +611,178 @@ func TestParserErrorHandling(t *testing.T) {
 		t.Errorf("expected at least one error, got none")
 	}
 }
+
+func TestArrayLiteralParsing(t *testing.T) {
+	input := "[1, 2 * 2, 3 + 3];"
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	stmt := program.StatementList[0].(*ast.ExpressionStatement)
+	array, ok := stmt.Expression.(*ast.ArrayLiteral)
+	if !ok {
+		t.Fatalf("exp not ast.ArrayLiteral. got=%T", stmt.Expression)
+	}
+
+	if len(array.Elements) != 3 {
+		t.Fatalf("len(array.Elements) not 3. got=%d", len(array.Elements))
+	}
+
+	testIntegerLiteral(t, array.Elements[0], 1)
+	testInfixExpression(t, array.Elements[1], 2, "*", 2)
+	testInfixExpression(t, array.Elements[2], 3, "+", 3)
+}
+
+func TestIndexExpressionParsing(t *testing.T) {
+	input := "myArray[1 + 1]"
+	l := lexer.New(input)
+	p := New(l.Tokens())
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	stmt := program.StatementList[0].(*ast.ExpressionStatement)
+	indexExp, ok := stmt.Expression.(*ast.IndexExpression)
+	if !ok {
+		t.Fatalf("exp not ast.IndexExpression. got=%T", stmt.Expression)
+	}
+	testIdentifier(t, indexExp.Left, "myArray")
+	testInfixExpression(t, indexExp.Index, 1, "+", 1)
+}
+
+func TestEmptyHash(t *testing.T) {
+	input := "let empty = {};"
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	letStmt, ok := program.StatementList[0].(*ast.LetStatement)
+	if !ok {
+		t.Fatalf("stmt LetStatement. got=%T", program.StatementList[0])
+	}
+
+	if letStmt.Name.Value != "empty" {
+		t.Fatalf("letStmt.Name.Value error. got=%s", letStmt.Name.Value)
+	}
+
+	if letStmt.Name.TokenLiteral() != "empty" {
+		t.Fatalf("letStmt.Name.TokenLiteral() error. got=%s", letStmt.Name.TokenLiteral())
+	}
+
+	hashLt, ok := letStmt.Value.(*ast.HashLiteral)
+	if !ok {
+		t.Fatalf("hash no ast.HashLiteral. got=%T", letStmt.Value)
+	}
+
+	if len(hashLt.Pairs) != 0 {
+		t.Fatalf("len(hash.Pairs) not 3. got=%d", len(hashLt.Pairs))
+	}
+}
+
+func TestHashOneData(t *testing.T) {
+	input := `let nonEmpty = {"a": 1};`
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	letStmt, ok := program.StatementList[0].(*ast.LetStatement)
+	if !ok {
+		t.Fatalf("stmt LetStatement. got=%T", program.StatementList[0])
+	}
+
+	if letStmt.Name.Value != "nonEmpty" {
+		t.Fatalf("letStmt.Name.Value error. got=%s", letStmt.Name.Value)
+	}
+
+	if letStmt.Name.TokenLiteral() != "nonEmpty" {
+		t.Fatalf("letStmt.Name.TokenLiteral() error. got=%s", letStmt.Name.TokenLiteral())
+	}
+
+	hashLt, ok := letStmt.Value.(*ast.HashLiteral)
+	if !ok {
+		t.Fatalf("hash no ast.HashLiteral. got=%T", letStmt.Value)
+	}
+
+	if len(hashLt.Pairs) != 1 {
+		t.Fatalf("len(hash.Pairs) not 3. got=%d", len(hashLt.Pairs))
+	}
+
+	testHashStringKeyIntegerValue(t, hashLt.Pairs, "a", 1)
+}
+
+func TestHashParsing(t *testing.T) {
+	input := `let nonEmpty = {"a": 1, "b": 2};`
+	l := lexer.New(input)
+	tokens := collectTokens(l)
+	p := New(tokens)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.StatementList) != 1 {
+		t.Fatalf("program has not enough statements. got=%d", len(program.StatementList))
+	}
+
+	letStmt, ok := program.StatementList[0].(*ast.LetStatement)
+	if !ok {
+		t.Fatalf("stmt LetStatement. got=%T", program.StatementList[0])
+	}
+
+	if letStmt.Name.Value != "nonEmpty" {
+		t.Fatalf("letStmt.Name.Value error. got=%s", letStmt.Name.Value)
+	}
+
+	if letStmt.Name.TokenLiteral() != "nonEmpty" {
+		t.Fatalf("letStmt.Name.TokenLiteral() error. got=%s", letStmt.Name.TokenLiteral())
+	}
+
+	hashLt, ok := letStmt.Value.(*ast.HashLiteral)
+	if !ok {
+		t.Fatalf("hash no ast.HashLiteral. got=%T", letStmt.Value)
+	}
+
+	if len(hashLt.Pairs) != 2 {
+		t.Fatalf("len(hash.Pairs) not 3. got=%d", len(hashLt.Pairs))
+	}
+
+	testHashStringKeyIntegerValue(t, hashLt.Pairs, "a", 1)
+	testHashStringKeyIntegerValue(t, hashLt.Pairs, "b", 2)
+}
+
+func testHashStringKeyIntegerValue(t *testing.T, Pairs map[ast.Expression]ast.Expression, key string, value int64) {
+	for hashKey, hashVal := range Pairs {
+		keyString, ok := hashKey.(*ast.StringLiteral)
+		if !ok {
+			t.Fatalf("testHashStringKeyIntegerValue key must be string. got=%t", hashKey)
+		}
+
+		if keyString.Value != key {
+			continue
+		}
+
+		if keyString.TokenLiteral() != key {
+			t.Fatalf("keyString.TokenLiteral() error. got=%s", keyString.TokenLiteral())
+		}
+
+		valueInteger, ok := hashVal.(*ast.IntegerLiteral)
+		if !ok {
+			t.Fatalf("testHashStringKeyIntegerValue value must be integer. got=%t", hashVal)
+		}
+
+		if valueInteger.Value != value {
+			t.Fatalf("valueInteger.Value error. got=%d", valueInteger.Value)
+		}
+	}
+}
