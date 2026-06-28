@@ -1,6 +1,7 @@
 package evaluator
 
 import (
+	"fmt"
 	"monkey/ast"
 	"monkey/object"
 )
@@ -69,6 +70,33 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 		}
 
 		return applyFunction(function, args)
+
+	case *ast.StringLiteral:
+		return &object.String{Value: node.Value}
+
+	case *ast.ArrayLiteral:
+		elems := evalExpressions(node.Elements, env)
+		if len(elems) == 1 && isError(elems[0]) {
+			return elems[0]
+		}
+
+		return &object.Array{Element: elems}
+
+	case *ast.IndexExpression:
+		left := Eval(node.Left, env)
+		if isError(left) {
+			return left
+		}
+
+		index := Eval(node.Index, env)
+		if isError(left) {
+			return index
+		}
+
+		return evalIndexExpression(left, index)
+
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
 	}
 
 	return NULL
@@ -139,6 +167,11 @@ func evalInfixExpression(operator string, left object.Object, right object.Objec
 		return evalBooleanInfixExpression(operator, left, right)
 	}
 
+	// 处理字符串运算
+	if left.Type() == object.STRING_OBJ && right.Type() == object.STRING_OBJ {
+		return evalStringObjInfixExpression(operator, left, right)
+	}
+
 	return NULL
 }
 
@@ -184,6 +217,16 @@ func evalBooleanInfixExpression(operator string, left object.Object, right objec
 	default:
 		return NULL
 	}
+}
+
+func evalStringObjInfixExpression(operator string, left object.Object, right object.Object) object.Object {
+	if "+" != operator {
+		return newError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
+	}
+
+	resultVal := left.(*object.String).Value
+	resultVal += right.(*object.String).Value
+	return &object.String{Value: resultVal}
 }
 
 func evalIfExpression(ie *ast.IfExpression, env *object.Environment) object.Object {
@@ -278,6 +321,76 @@ func applyFunction(fn object.Object, args []object.Object) object.Object {
 	}
 }
 
+func evalIndexExpression(left object.Object, index object.Object) object.Object {
+	switch {
+	case object.ARRAY_OBJ == left.Type() && object.INTEGER_OBJ == index.Type():
+		return evalArrayIndexExpression(left, index)
+	case object.HASH_OBJ == left.Type():
+		return evalHashIndexExpression(left, index)
+	default:
+		return newError("index operator not supported: %s", left.Type())
+	}
+}
+
+func evalArrayIndexExpression(arrayObj object.Object, indexObj object.Object) object.Object {
+	array := arrayObj.(*object.Array)
+	index := indexObj.(*object.Integer).Value
+	max := int64(len(array.Element) - 1)
+	if index < 0 || index > max {
+		return NULL
+	}
+
+	return array.Element[index]
+}
+
+func evalHashIndexExpression(hashObj object.Object, indexObj object.Object) object.Object {
+	hash := hashObj.(*object.Hash)
+
+	hasher, ok := indexObj.(object.Hasher)
+	if !ok {
+		return newError("unusable as hash key: %s", indexObj.Type())
+	}
+
+	// 没找到
+	hashPair, ok := hash.Pairs[hasher.HashKey()]
+	if !ok {
+		return NULL
+	}
+
+	return hashPair.Value
+}
+
+func evalHashLiteral(node *ast.HashLiteral, env *object.Environment) object.Object {
+	/*
+		type HashLiteral struct {
+			Token token.Token
+			Pairs map[Expression]Expression
+		}
+	*/
+
+	pairs := make(map[object.HashKey]object.HashPair)
+	for keyExpssion, valExpression := range node.Pairs {
+		keyObj := Eval(keyExpssion, env)
+		if isError(keyObj) {
+			return keyObj
+		}
+
+		haseher, ok := keyObj.(object.Hasher)
+		if !ok {
+			return newError("unusable as hash key: %s", keyObj.Type())
+		}
+
+		valueObj := Eval(valExpression, env)
+		if isError(keyObj) {
+			return keyObj
+		}
+
+		pairs[haseher.HashKey()] = object.HashPair{Key: keyObj, Value: valueObj}
+	}
+
+	return &object.Hash{Pairs: pairs}
+}
+
 // isError 判断对象是否为错误对象（暂未实现错误类型，可简化）
 func isError(obj object.Object) bool {
 	// 先占位，后续会实现错误对象
@@ -287,5 +400,5 @@ func isError(obj object.Object) bool {
 // newError 创建错误对象(先简单实现，后续完善)
 func newError(format string, a ...interface{}) object.Object {
 	// 返回 NULL 或特殊错误对象
-	return NULL
+	return &object.Error{Message: fmt.Sprintf(format, a...)}
 }
