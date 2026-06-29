@@ -18,6 +18,7 @@ const (
 	STRING_OBJ       = "STRING"
 	ARRAY_OBJ        = "ARRAY"
 	HASH_OBJ         = "HASH"
+	BUILTIN_OBJ      = "BUILTIN"
 )
 
 type Object interface {
@@ -209,4 +210,20 @@ func (h *Hash) Inspect() string {
 	out.WriteString(strings.Join(pairs, ", "))
 	out.WriteString("}")
 	return out.String()
+}
+
+// ============================================================
+// 内置函数对象
+// ============================================================
+
+type Builtin struct {
+	Fn func(args ...Object) Object
+}
+
+func (b *Builtin) Type() objectType {
+	return BUILTIN_OBJ
+}
+
+func (b *Builtin) Inspect() string {
+	return "builtin function"
 }
