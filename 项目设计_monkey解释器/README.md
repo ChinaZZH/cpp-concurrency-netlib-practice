@@ -20,5 +20,55 @@ markdown
 
 -- 8. 支持go语言的内置函数， 增加REPL。
 
+## 整个程序的核心
 
+-- 1. 语法分析
+```go
+// Parser 结构体
+type Parser struct {
+	tokens    []token.Token
+	pos       int         // 当前读取位置（指向 peekToken）
+	curToken  token.Token // 当前正在处理的 Token
+	peekToken token.Token // 下一个 Token（预读）
+	errors    []string    // 错误信息
+}
 
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefixFn, ok := prefixParseFns[p.curToken.Type]
+	if !ok || nil == prefixFn {
+		p.noPrefixParseFnError(p.curToken.Type)
+		return nil
+	}
+
+	leftExp := prefixFn(p)
+
+	// 循环处理中缀运算符
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		infixFn, ok := infixParseFns[p.peekToken.Type]
+		if !ok || nil == infixFn {
+			return nil
+		}
+
+		p.nextToken()
+		leftExp = infixFn(p, leftExp)
+	}
+
+	return leftExp
+}
+```
+
+-- 2. 求值器
+```go
+func evalProgram(program *ast.Program) object.Object {
+	var result object.Object
+	for _, statement := range program.StatementList {
+		result = Eval(statement)
+		returnVal, ok := result.(*object.ReturnValue)
+		if ok && nil != returnVal {
+			return returnVal.Value
+		}
+	}
+
+	return result
+}
+```
