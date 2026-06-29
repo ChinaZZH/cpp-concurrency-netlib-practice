@@ -1,18 +1,38 @@
 markdown
 
-# Day01： monkey解释器 词法分析
+# Day05： monkey解释器 语法分析之表达式解析下
 
 ## 核心收获
 
--- 1. 定义类型常量，定义一个词法单元。一个词法单元有一个类型常量值和一个具体的字面量组成。
+-- 1. 增加对括号分组，函数定义，函数调用，以及if表达式的表达式的支持。
 
--- 2. 定义关键字表，当关键字表查找不对的时候，这个时候才属于变量名。
+-- 2. 将括号分组，函数定义，函数调用，以及if表达式放入不同的分组进去。
 
--- 3. 词法分析的，过滤空格和tab以及回车换行键。 同时根据首字符来做每个不同的字符对应的处理，获取对应的词法单元。同时跳到下一个首字符。
+```go
+prefixParseFns = map[token.TokenType]prefixParseFn{
+		token.IDENT: (*Parser).parseIdentifier,
+		token.INT:   (*Parser).parseIntegerLiteral,
+		token.BANG:  (*Parser).parsePrefixExpression,
+		token.MINUS: (*Parser).parsePrefixExpression,
+		token.IDENT:    (*Parser).parseIdentifier,
+		token.INT:      (*Parser).parseIntegerLiteral,
+		token.BANG:     (*Parser).parsePrefixExpression,
+		token.MINUS:    (*Parser).parsePrefixExpression,
+		token.LPAREN:   (*Parser).parseGroupedExpression,
+		token.IF:       (*Parser).parseIfExpression,
+		token.FUNCTION: (*Parser).parseFunctionLiteral,
+	}
 
--- 4. 进行足量的测试保证程序的正确性。
+	infixParseFns = map[token.TokenType]infixParseFn{
+		token.GT:       (*Parser).parseInfixExpression,
+		token.EQ:       (*Parser).parseInfixExpression,
+		token.NOT_EQ:   (*Parser).parseInfixExpression,
+		token.LPAREN:   (*Parser).parseCallExpression,
+	}
+
+```
 
 ## 测试
--- 一切正常。
+-- 单元测试通过。
 
 
