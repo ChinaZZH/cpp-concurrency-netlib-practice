@@ -1,6 +1,6 @@
 markdown
 
-# Day01： monkey解释器  语法分析抽象语法树ast的结构定义
+# Day02： monkey解释器  语法分析抽象语法树ast的结构定义
 
 ## 核心收获
 
@@ -8,7 +8,28 @@ markdown
 
 -- 2. 定义结点接口 Node interface. 提供接口函数  TokenLiteral() string   返回该节点关联的 Token 字面量，用于调试 和 String() string  用于打印 AST（调试用）。
 
--- 3.  定义语句 Statement interface 和 表达式 Expression interface。
+-- 3.  定义语句 Statement interface 和 表达式 Expression interface。然后具体的语句和表达式分别实现下面两个接口。
+
+```go
+// Node 是所有ast节点的接口
+type Node interface {
+	TokenLiteral() string // 返回该节点关联的 Token 字面量，用于调试
+	String() string       // 用于打印 AST（调试用）
+}
+
+// Statement 语句节点接口（程序中的声明、控制流等）
+type Statement interface {
+	Node
+	statementNode() // 占位方法，用于区分语句和表达式
+}
+
+// Expression 表达式节点接口（求值产生值）
+type Expression interface {
+	Node
+	expressionNode() // 占位方法，用于区分语句和表达式
+}
+
+```
 
 -- 4.  语句是控制整个程序的流程和执行动作的。 而表达式产生一个值, 同时表达式是挂在语句下面的一个结点。
 

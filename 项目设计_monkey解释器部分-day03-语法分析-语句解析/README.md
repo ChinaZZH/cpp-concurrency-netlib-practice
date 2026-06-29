@@ -1,16 +1,26 @@
 markdown
 
-# Day01： monkey解释器 词法分析
+# Day03： monkey解释器 语法分析之语句的解析
 
 ## 核心收获
 
--- 1. 定义类型常量，定义一个词法单元。一个词法单元有一个类型常量值和一个具体的字面量组成。
+-- 1. 定义语法解析器。根据token流来一个一个token去做语法分析，再根据ast各个语句和表达式的结构的定义就可以知道各个语句和表达式是怎么做语法分析的了。
+```go
+// Parser 结构体
+type Parser struct {
+	tokens    []token.Token
+	pos       int         // 当前读取位置（指向 peekToken）
+	curToken  token.Token // 当前正在处理的 Token
+	peekToken token.Token // 下一个 Token（预读）
+	errors    []string    // 错误信息
+}
 
--- 2. 定义关键字表，当关键字表查找不对的时候，这个时候才属于变量名。
+```
 
--- 3. 词法分析的，过滤空格和tab以及回车换行键。 同时根据首字符来做每个不同的字符对应的处理，获取对应的词法单元。同时跳到下一个首字符。
+-- 2. ParseProgram。 解析整个程序，生成ast的根节点。整个程序的语句都是ast根节点下面并列的语句子节点。
 
--- 4. 进行足量的测试保证程序的正确性。
+-- 3. parseStatement 根据语句的类型去做语句的语法分析。
+
 
 ## 测试
 -- 一切正常。
