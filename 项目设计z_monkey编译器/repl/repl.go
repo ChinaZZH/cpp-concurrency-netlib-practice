@@ -18,6 +18,9 @@ func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
 	env := object.NewEnvironment()
 
+	//constants := []interface{}{}
+	//globals := make([]object.Object, vm.GlobalsSize)
+
 	for {
 		fmt.Fprint(out, PROMPT)
 		scanned := scanner.Scan()

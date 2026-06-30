@@ -18,6 +18,10 @@ const (
 	OpLessThan
 	OpEqual
 	OpNotEqual
+	OpTrue
+	OpFalse
+	OpBang  // !
+	OpMinus // -（前缀）
 )
 
 // Definition 指令定义：名称 + 操作数数量
@@ -36,6 +40,10 @@ var definitions = map[Opcode]*Definition{
 	OpLessThan:    {"OpLessThan", []int{}},
 	OpEqual:       {"OpEqual", []int{}},
 	OpNotEqual:    {"OpNotEqual", []int{}},
+	OpTrue:        {"OpTrue", []int{}},
+	OpFalse:       {"OpFalse", []int{}},
+	OpBang:        {"OpBang", []int{}},
+	OpMinus:       {"OpMinus", []int{}},
 }
 
 func Lookup(op Opcode) (*Definition, bool) {
