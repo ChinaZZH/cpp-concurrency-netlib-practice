@@ -10,6 +10,14 @@ type Opcode byte
 
 const (
 	OpConstant Opcode = iota // 加载常量到栈
+	OpAdd
+	OpSub
+	OpMul
+	OpDiv
+	OpGreaterThan
+	OpLessThan
+	OpEqual
+	OpNotEqual
 )
 
 // Definition 指令定义：名称 + 操作数数量
@@ -19,7 +27,15 @@ type Definition struct {
 }
 
 var definitions = map[Opcode]*Definition{
-	OpConstant: {"OpConstant", []int{2}},
+	OpConstant:    {"OpConstant", []int{2}},
+	OpAdd:         {"OpAdd", []int{}},
+	OpSub:         {"OpSub", []int{}},
+	OpMul:         {"OpMul", []int{}},
+	OpDiv:         {"OpDiv", []int{}},
+	OpGreaterThan: {"OpGreaterThan", []int{}},
+	OpLessThan:    {"OpLessThan", []int{}},
+	OpEqual:       {"OpEqual", []int{}},
+	OpNotEqual:    {"OpNotEqual", []int{}},
 }
 
 func Lookup(op Opcode) (*Definition, bool) {
@@ -60,6 +76,12 @@ func Make(op Opcode, operands ...int) []byte {
 	for index, o := range operands {
 		width := def.OperandWidths[index]
 		switch width {
+		case 1:
+			if o > 256 {
+				panic(fmt.Sprintf("operand value %d exceeds 1-byte range for %s", o, def.Name))
+			}
+
+			instruction[offset] = byte(o)
 		case 2:
 			if o > 65535 {
 				panic(fmt.Sprintf("operand value %d exceeds 2-byte range for %s", o, def.Name))
