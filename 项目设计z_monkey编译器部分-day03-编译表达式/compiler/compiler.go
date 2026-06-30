@@ -70,7 +70,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		case "!=":
 			instruction = code.Make(code.OpNotEqual)
 		default:
-			return fmt.Errorf("unknown operator: %s", node.Operator)
+			return fmt.Errorf("unknown infixExpression operator: %s", node.Operator)
 		}
 
 		c.instructions = append(c.instructions, instruction...)
@@ -81,6 +81,36 @@ func (c *Compiler) Compile(node ast.Node) error {
 		constantIndex := c.addConstant(node.Value)
 
 		instruction := code.Make(code.OpConstant, constantIndex)
+		c.instructions = append(c.instructions, instruction...)
+		return nil
+
+	case *ast.Boolean:
+		var instructions []byte
+		if node.Value {
+			instructions = code.Make(code.OpTrue)
+		} else {
+			instructions = code.Make(code.OpFalse)
+		}
+
+		c.instructions = append(c.instructions, instructions...)
+		return nil
+
+	case *ast.PrefixExpression:
+		err := c.Compile(node.Right)
+		if nil != err {
+			return err
+		}
+
+		var instruction []byte
+		switch node.Operator {
+		case "!":
+			instruction = code.Make(code.OpBang)
+		case "-":
+			instruction = code.Make(code.OpMinus)
+		default:
+			return fmt.Errorf("unknown prefix operator: %s", node.Operator)
+		}
+
 		c.instructions = append(c.instructions, instruction...)
 		return nil
 	}
