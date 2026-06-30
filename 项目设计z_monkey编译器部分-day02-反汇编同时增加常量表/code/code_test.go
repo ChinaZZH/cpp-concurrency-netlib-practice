@@ -24,3 +24,13 @@ func TestMake(t *testing.T) {
 		}
 	}
 }
+
+func TestDisassemble(t *testing.T) {
+	instructions := Make(OpConstant, 123)
+	output := Disassmble(instructions)
+
+	expected := "0000: OpConstant 123\n"
+	if output != expected {
+		t.Errorf("disassembly mismatch:\nexpected:\n%s\ngot:\n%s", expected, output)
+	}
+}
