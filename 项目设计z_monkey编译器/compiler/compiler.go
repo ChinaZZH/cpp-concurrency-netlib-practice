@@ -113,9 +113,64 @@ func (c *Compiler) Compile(node ast.Node) error {
 
 		c.instructions = append(c.instructions, instruction...)
 		return nil
+	case *ast.IfExpression:
+		// 编译条件
+		err := c.Compile(node.Condition)
+		if nil != err {
+			return err
+		}
+
+		jumpNotTruthPos := len(c.instructions)
+		c.instructions = append(c.instructions, code.Make(code.OpJumpNotTruthy, 0xFFFF)...)
+
+		// 编译真分支
+		err = c.Compile(node.Consequence)
+		if nil != err {
+			return err
+		}
+
+		if nil != node.Alternative {
+			jumpPos := len(c.instructions)
+			c.instructions = append(c.instructions, code.Make(code.OpJump, 0xFFFF)...)
+
+			afterConsequencePos := len(c.instructions)
+			offset := afterConsequencePos - (jumpNotTruthPos + 3)
+			c.replaceJumpOperand(jumpNotTruthPos, offset)
+
+			// 编译假分支
+			err = c.Compile(node.Alternative)
+			if nil != err {
+				return err
+			}
+
+			afterAlternativePos := len(c.instructions)
+			offset = afterAlternativePos - (jumpPos + 3)
+			c.replaceJumpOperand(jumpPos, offset)
+		} else {
+			afterConsequencePos := len(c.instructions)
+			offset := afterConsequencePos - (jumpNotTruthPos + 3)
+			c.replaceJumpOperand(jumpNotTruthPos, offset)
+		}
+
+		return nil
+
+	case *ast.BlockStatement:
+		for _, statement := range node.Statements {
+			err := c.Compile(statement)
+			if nil != err {
+				return err
+			}
+		}
+
+		return nil
 	}
 
 	return fmt.Errorf("unsupported node type: %T", node)
+}
+
+func (c *Compiler) replaceJumpOperand(pos int, offset int) {
+	c.instructions[pos+1] = byte(offset >> 8)
+	c.instructions[pos+2] = byte(offset & 0xFF)
 }
 
 // Bytecode 返回生成的字节码

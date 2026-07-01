@@ -1,6 +1,9 @@
 package code
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestMake(t *testing.T) {
 	tests := []struct {
@@ -32,5 +35,19 @@ func TestDisassemble(t *testing.T) {
 	expected := "0000: OpConstant 123\n"
 	if output != expected {
 		t.Errorf("disassembly mismatch:\nexpected:\n%s\ngot:\n%s", expected, output)
+	}
+}
+
+func TestJumpInstruction(t *testing.T) {
+	ins := Make(OpJumpNotTruthy, 1234)
+	expected := []byte{byte(OpJumpNotTruthy), 0x04, 0xD2}
+	if !bytes.Equal(ins, expected) {
+		t.Errorf("wrong instruction: expected %v, got %v", expected, ins)
+	}
+
+	ins = Make(OpJump, 5678)
+	expected = []byte{byte(OpJump), 0x16, 0x2E}
+	if !bytes.Equal(ins, expected) {
+		t.Errorf("wrong instruction: expected %v, got %v", expected, ins)
 	}
 }
