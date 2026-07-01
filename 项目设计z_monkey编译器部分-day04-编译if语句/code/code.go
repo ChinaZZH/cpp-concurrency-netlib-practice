@@ -22,6 +22,8 @@ const (
 	OpFalse
 	OpBang  // !
 	OpMinus // -（前缀）
+	OpJumpNotTruthy
+	OpJump
 )
 
 // Definition 指令定义：名称 + 操作数数量
@@ -31,19 +33,21 @@ type Definition struct {
 }
 
 var definitions = map[Opcode]*Definition{
-	OpConstant:    {"OpConstant", []int{2}},
-	OpAdd:         {"OpAdd", []int{}},
-	OpSub:         {"OpSub", []int{}},
-	OpMul:         {"OpMul", []int{}},
-	OpDiv:         {"OpDiv", []int{}},
-	OpGreaterThan: {"OpGreaterThan", []int{}},
-	OpLessThan:    {"OpLessThan", []int{}},
-	OpEqual:       {"OpEqual", []int{}},
-	OpNotEqual:    {"OpNotEqual", []int{}},
-	OpTrue:        {"OpTrue", []int{}},
-	OpFalse:       {"OpFalse", []int{}},
-	OpBang:        {"OpBang", []int{}},
-	OpMinus:       {"OpMinus", []int{}},
+	OpConstant:      {"OpConstant", []int{2}},
+	OpAdd:           {"OpAdd", []int{}},
+	OpSub:           {"OpSub", []int{}},
+	OpMul:           {"OpMul", []int{}},
+	OpDiv:           {"OpDiv", []int{}},
+	OpGreaterThan:   {"OpGreaterThan", []int{}},
+	OpLessThan:      {"OpLessThan", []int{}},
+	OpEqual:         {"OpEqual", []int{}},
+	OpNotEqual:      {"OpNotEqual", []int{}},
+	OpTrue:          {"OpTrue", []int{}},
+	OpFalse:         {"OpFalse", []int{}},
+	OpBang:          {"OpBang", []int{}},
+	OpMinus:         {"OpMinus", []int{}},
+	OpJumpNotTruthy: {"OpJumpNotTruthy", []int{2}},
+	OpJump:          {"OpJump", []int{2}},
 }
 
 func Lookup(op Opcode) (*Definition, bool) {
