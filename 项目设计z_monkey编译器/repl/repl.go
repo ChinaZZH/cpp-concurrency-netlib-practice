@@ -6,20 +6,15 @@ import (
 	"io"
 	"monkey/code"
 	"monkey/compiler"
-	"monkey/evaluator"
 	"monkey/lexer"
-	"monkey/object"
 	"monkey/parser"
+	"monkey/vm"
 )
 
 const PROMPT = ">> "
 
 func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
-	env := object.NewEnvironment()
-
-	//constants := []interface{}{}
-	//globals := make([]object.Object, vm.GlobalsSize)
 
 	for {
 		fmt.Fprint(out, PROMPT)
@@ -56,18 +51,14 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		if !compileMode {
-			evaluated := evaluator.Eval(program, env)
-			if evaluated != nil {
-				fmt.Fprintln(out, evaluated.Inspect())
-			}
-		} else {
-			comp := compiler.New()
-			err := comp.Compile(program)
-			if err != nil {
-				fmt.Println(out, "Compiler error:", err)
-				continue
-			}
+		comp := compiler.New()
+		err := comp.Compile(program)
+		if err != nil {
+			fmt.Println(out, "Compiler error:", err)
+			continue
+		}
+
+		if compileMode {
 
 			byteCode := comp.ByteCode()
 			fmt.Fprintln(out, "=====Bytecode=======")
@@ -76,6 +67,20 @@ func Start(in io.Reader, out io.Writer) {
 			for i, c := range comp.Constants() {
 				fmt.Fprintf(out, "%d: %v\n", i, c)
 			}
+
+			continue
+		}
+
+		vmInstance := vm.New(comp.ByteCode(), comp.Constants())
+		err = vmInstance.Run()
+		if err != nil {
+			fmt.Fprintln(out, "VM error:", err)
+			continue
+		}
+
+		// 获取栈顶结果
+		if vmInstance.LastPoppedStackElem() != nil {
+			fmt.Fprintln(out, vmInstance.LastPoppedStackElem().Inspect())
 		}
 
 	}
