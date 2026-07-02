@@ -9,12 +9,14 @@ import (
 type Compiler struct {
 	instructions []byte
 	constants    []interface{} // 常量池
+	symbolTable  *SymbolTable
 }
 
 func New() *Compiler {
 	return &Compiler{
 		instructions: []byte{},
 		constants:    []interface{}{},
+		symbolTable:  NewSymbolTable(),
 	}
 }
 
@@ -129,28 +131,26 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 
+		jumpPos := len(c.instructions)
+		c.instructions = append(c.instructions, code.Make(code.OpJump, 0xFFFF)...)
+
+		afterConsequencePos := len(c.instructions)
+		offset := afterConsequencePos - (jumpNotTruthPos + 3)
+		c.replaceJumpOperand(jumpNotTruthPos, offset)
+
+		// 编译假分支
 		if nil != node.Alternative {
-			jumpPos := len(c.instructions)
-			c.instructions = append(c.instructions, code.Make(code.OpJump, 0xFFFF)...)
-
-			afterConsequencePos := len(c.instructions)
-			offset := afterConsequencePos - (jumpNotTruthPos + 3)
-			c.replaceJumpOperand(jumpNotTruthPos, offset)
-
-			// 编译假分支
 			err = c.Compile(node.Alternative)
 			if nil != err {
 				return err
 			}
-
-			afterAlternativePos := len(c.instructions)
-			offset = afterAlternativePos - (jumpPos + 3)
-			c.replaceJumpOperand(jumpPos, offset)
 		} else {
-			afterConsequencePos := len(c.instructions)
-			offset := afterConsequencePos - (jumpNotTruthPos + 3)
-			c.replaceJumpOperand(jumpNotTruthPos, offset)
+			c.instructions = append(c.instructions, code.Make(code.OpNull)...)
 		}
+
+		afterExpressionPos := len(c.instructions)
+		offset = afterExpressionPos - (jumpPos + 3)
+		c.replaceJumpOperand(jumpPos, offset)
 
 		return nil
 
@@ -160,6 +160,43 @@ func (c *Compiler) Compile(node ast.Node) error {
 			if nil != err {
 				return err
 			}
+		}
+
+		return nil
+
+	case *ast.LetStatement:
+		// 1. 编译右边的表达式（值），结果会留在栈顶
+		err := c.Compile(node.Value)
+		if nil != err {
+			return err
+		}
+
+		// 2. 在符号表中定义变量，获得索引
+		symbol := c.symbolTable.Define(node.Name.Value)
+
+		// 3. 根据作用域生成对应的指令
+		if symbol.Scope == GlobalScope {
+			c.instructions = append(c.instructions, code.Make(code.OpSetGlobal, symbol.Index)...)
+		} else {
+			// 局部变量（后续实现，先占位）
+			return fmt.Errorf("local variables not implemented yet")
+		}
+
+		return nil
+
+	case *ast.Identifier:
+		// 1. 在符号表中查找变量
+		sym, ok := c.symbolTable.Resolve(node.Value)
+		if !ok {
+			return fmt.Errorf("undefined variable: %s", node.Value)
+		}
+
+		// 根据作用域生成对应的指令
+		if sym.Scope == GlobalScope {
+			c.instructions = append(c.instructions, code.Make(code.OpGetGlobal, sym.Index)...)
+		} else {
+			// 局部变量（后续实现，先占位）
+			return fmt.Errorf("local variables not implemented yet")
 		}
 
 		return nil
