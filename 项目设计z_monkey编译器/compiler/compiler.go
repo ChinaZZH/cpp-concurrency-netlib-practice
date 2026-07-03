@@ -3,6 +3,7 @@ package compiler
 import (
 	"fmt"
 	"monkey/ast"
+	"monkey/builtin"
 	"monkey/code"
 	"monkey/object"
 )
@@ -241,23 +242,32 @@ func (c *Compiler) Compile(node ast.Node) error {
 		return nil
 
 	case *ast.Identifier:
-		// 1. 在符号表中查找变量
+		// 1. 查符号表（局部/全局变量）
 		sym, ok := c.symbolTable.Resolve(node.Value)
-		if !ok {
-			return fmt.Errorf("undefined variable: %s", node.Value)
+		if ok {
+			// 根据作用域生成对应的指令
+			switch sym.Scope {
+			case GlobalScope:
+				c.instructions = append(c.instructions, code.Make(code.OpGetGlobal, sym.Index)...)
+			case LocalScope:
+				c.instructions = append(c.instructions, code.Make(code.OpGetLocal, sym.Index)...)
+			default:
+				return fmt.Errorf("local variables not implemented yet")
+			}
+
+			return nil
 		}
 
-		// 根据作用域生成对应的指令
-		switch sym.Scope {
-		case GlobalScope:
-			c.instructions = append(c.instructions, code.Make(code.OpGetGlobal, sym.Index)...)
-		case LocalScope:
-			c.instructions = append(c.instructions, code.Make(code.OpGetLocal, sym.Index)...)
-		default:
-			return fmt.Errorf("local variables not implemented yet")
+		// 2. 查内置函数
+		builtin, ok := builtin.LookUp(node.Value)
+		if ok {
+			// 将内置函数作为常量存入常量池
+			index := c.addConstant(builtin)
+			c.instructions = append(c.instructions, code.Make(code.OpConstant, index)...)
+			return nil
 		}
 
-		return nil
+		return fmt.Errorf("undefined variable: %s", node.Value)
 
 	case *ast.FunctionLiteral:
 		// 创建一个新的编译器实例来编译函数体（使用当前符号表作为外部环境）

@@ -108,6 +108,8 @@ func (vm *VM) Run() error {
 				obj = &object.String{Value: v}
 			case bool:
 				obj = &object.Boolean{Value: v}
+			case *object.Builtin:
+				obj = v
 			default:
 				return fmt.Errorf("unsupported constant type: %T", raw)
 			}
@@ -414,20 +416,22 @@ func (vm *VM) Run() error {
 
 			// 获取被调用的闭包（在栈顶）
 			funcObj := vm.pop()
-			closureObj, ok := funcObj.(*object.Closure)
-			if !ok {
+			switch funcObj := funcObj.(type) {
+			case *object.Closure:
+				// 创建新帧
+				numLocals := funcObj.Fn.NumLocals
+				// 注意：NumLocals 包含参数和局部变量，目前我们只设置参数，局部变量后续实现
+				// 为了简单，我们假设 NumLocals 至少等于参数个数，并将参数放入 locals
+				closureFrame := NewFrame(funcObj, numLocals)
+				// 绑定参数到局部变量（索引从0开始）
+				copy(closureFrame.locals, params)
+				vm.pushFrame(closureFrame)
+			case *object.Builtin:
+				reusltObj := funcObj.Fn(params...)
+				vm.push(reusltObj)
+			default:
 				return fmt.Errorf("code.Closure get type error, got %t", funcObj)
 			}
-
-			// 创建新帧
-			numLocals := closureObj.Fn.NumLocals
-			// 注意：NumLocals 包含参数和局部变量，目前我们只设置参数，局部变量后续实现
-			// 为了简单，我们假设 NumLocals 至少等于参数个数，并将参数放入 locals
-			closureFrame := NewFrame(closureObj, numLocals)
-			// 绑定参数到局部变量（索引从0开始）
-			copy(closureFrame.locals, params)
-			vm.pushFrame(closureFrame)
-			continue
 		case code.OpReturnVal:
 			vm.popFrame()
 		case code.OpReturn:
