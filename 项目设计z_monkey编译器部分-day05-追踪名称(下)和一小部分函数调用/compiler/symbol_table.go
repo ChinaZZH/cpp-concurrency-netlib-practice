@@ -55,6 +55,14 @@ func (s *SymbolTable) Define(name string) Symbol {
 	return symbol
 }
 
+// Define 在当前作用域中定义一个符号（变量）
+func (s *SymbolTable) DefineLocal(name string) Symbol {
+	symbol := Symbol{Name: name, Index: s.numDefinitions, Scope: LocalScope}
+	s.store[name] = symbol
+	s.numDefinitions++
+	return symbol
+}
+
 // Resolve 在当前和外部作用域中查找符号
 func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	symbol, ok := s.store[name]

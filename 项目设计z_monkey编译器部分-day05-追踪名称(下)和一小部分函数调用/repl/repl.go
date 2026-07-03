@@ -7,6 +7,7 @@ import (
 	"monkey/code"
 	"monkey/compiler"
 	"monkey/lexer"
+	"monkey/object"
 	"monkey/parser"
 	"monkey/vm"
 )
@@ -60,12 +61,15 @@ func Start(in io.Reader, out io.Writer) {
 
 		if compileMode {
 
-			byteCode := comp.ByteCode()
 			fmt.Fprintln(out, "=====Bytecode=======")
-			fmt.Fprintln(out, code.Disassmble(byteCode))
+			code.DisassembleInstructions(out, comp.ByteCode(), comp.Constants())
 			fmt.Fprintln(out, "=====Constants======")
 			for i, c := range comp.Constants() {
 				fmt.Fprintf(out, "%d: %v\n", i, c)
+				if fn, ok := c.(*object.CompiledFunction); ok {
+					fmt.Fprintf(out, "   Function (params=%d, locals=%d):\n", fn.NumParams, fn.NumLocals)
+					code.DisassembleInstructions(out, fn.Instructions, nil)
+				}
 			}
 
 			continue

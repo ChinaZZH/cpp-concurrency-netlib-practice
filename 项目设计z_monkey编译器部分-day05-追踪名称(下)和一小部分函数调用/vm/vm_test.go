@@ -96,6 +96,70 @@ func TestVMIntegration(t *testing.T) {
 	}
 }
 
+func TestVMFunction(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected interface{} // int64, bool, string, nil (表示 null)
+	}{
+		// 基本函数调用（单参数）
+
+		{"let add = fn(x) { x + 1; }; add(5);", 6},
+
+		{"let double = fn(x) { x * 2; }; double(5);", 10},
+
+		// 多参数函数
+		{"let add = fn(x, y) { x + y; }; add(3, 4);", 7},
+		{"let sub = fn(x, y) { x - y; }; sub(10, 3);", 7},
+		{"let mul = fn(x, y) { x * y; }; mul(3, 4);", 12},
+		{"let div = fn(x, y) { x / y; }; div(10, 2);", 5},
+
+		// 函数调用表达式作为参数
+		{"let add = fn(x, y) { x + y; }; add(add(1, 2), 3);", 6},
+
+		// return 语句（有返回值）
+		{"let identity = fn(x) { return x; }; identity(8);", 8},
+		{"let doubleReturn = fn(x) { return x * 2; }; doubleReturn(5);", 10},
+
+		// return 语句（无返回值 → null）
+		{"let returnNull = fn() { return; }; returnNull();", nil},
+
+		// 条件语句内的函数返回值
+		{"let abs = fn(x) { if (x > 0) { return x; } else { return -x; }; }; abs(-5);", 5},
+
+		// 函数体中的变量绑定
+		{"let addOne = fn(x) { let y = x + 1; return y; }; addOne(3);", 4},
+
+		{"let add = fn(x) { x + 1; }; add(5);", 6},
+		{"let add = fn(x, y) { x + y; }; add(3, 4);", 7},
+		{"let identity = fn(x) { return x; }; identity(10);", 10},
+
+		// 嵌套函数调用（非闭包）
+		//{"let outer = fn(x) { fn(y) { x + y; }; }; let inner = outer(2); inner(3);", 5}, // 闭包（若暂不支持，可注释）
+		// 递归
+		//{"let fact = fn(n) { if (n == 1) { 1 } else { n * fact(n - 1); }; }; fact(5);", 120}, // 递归（若暂不支持，可注释）
+
+	}
+
+	for _, tt := range tests {
+		// 执行虚拟机并获取结果
+		result := testVM(t, tt.input)
+
+		// 根据期望类型断言
+		switch expected := tt.expected.(type) {
+		case int:
+			testIntegerObject(t, result, int64(expected))
+		case int64:
+			testIntegerObject(t, result, expected)
+		case bool:
+			testBooleanObject(t, result, expected)
+		case nil:
+			testNullObject(t, result)
+		default:
+			t.Errorf("unexpected expected type: %T", expected)
+		}
+	}
+}
+
 // testVM 执行一段 Monkey 代码并返回栈顶值（或 null）
 func testVM(t *testing.T, input string) object.Object {
 	// 词法分析、解析
@@ -114,7 +178,23 @@ func testVM(t *testing.T, input string) object.Object {
 		t.Fatalf("compiler error: %s", err)
 	}
 
+	/*
+		var out io.Writer
+		out = os.Stdout
+		fmt.Fprintln(out, "=====Bytecode=======")
+		code.DisassembleInstructions(out, comp.ByteCode(), comp.Constants())
+		fmt.Fprintln(out, "=====Constants======")
+		for i, c := range comp.Constants() {
+			fmt.Fprintf(out, "%d: %v\n", i, c)
+			if fn, ok := c.(*object.CompiledFunction); ok {
+				fmt.Fprintf(out, "   Function (params=%d, locals=%d):\n", fn.NumParams, fn.NumLocals)
+				code.DisassembleInstructions(out, fn.Instructions, nil)
+			}
+		}
+	*/
+
 	// 执行 VM
+
 	vm := New(comp.ByteCode(), comp.Constants())
 	err = vm.Run()
 	if err != nil {

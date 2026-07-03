@@ -27,6 +27,12 @@ const (
 	OpSetGlobal
 	OpGetGlobal
 	OpNull
+	OpClosure
+	OpSetLocal
+	OpGetLocal
+	OpReturnVal
+	OpReturn
+	OpCall
 )
 
 // Definition 指令定义：名称 + 操作数数量
@@ -54,6 +60,12 @@ var definitions = map[Opcode]*Definition{
 	OpSetGlobal:     {"OpSetGlobal", []int{2}},
 	OpGetGlobal:     {"OpGetGlobal", []int{2}},
 	OpNull:          {"OpNull", []int{}},
+	OpClosure:       {"OpClosure", []int{2}},
+	OpSetLocal:      {"OpSetLocal", []int{2}},
+	OpGetLocal:      {"OpGetLocal", []int{2}},
+	OpReturnVal:     {"OpReturnVal", []int{}},
+	OpReturn:        {"OpReturn", []int{}},
+	OpCall:          {"OpCall", []int{1}}, // 操作数：参数个数（1字节）
 }
 
 func Lookup(op Opcode) (*Definition, bool) {
