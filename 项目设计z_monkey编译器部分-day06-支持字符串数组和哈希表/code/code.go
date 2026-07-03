@@ -33,6 +33,9 @@ const (
 	OpReturnVal
 	OpReturn
 	OpCall
+	OpArray
+	OpIndex
+	OpHash
 )
 
 // Definition 指令定义：名称 + 操作数数量
@@ -65,7 +68,10 @@ var definitions = map[Opcode]*Definition{
 	OpGetLocal:      {"OpGetLocal", []int{2}},
 	OpReturnVal:     {"OpReturnVal", []int{}},
 	OpReturn:        {"OpReturn", []int{}},
-	OpCall:          {"OpCall", []int{1}}, // 操作数：参数个数（1字节）
+	OpCall:          {"OpCall", []int{1}},  // 操作数：参数个数（1字节）
+	OpArray:         {"OpArray", []int{2}}, // 操作数：数组元素个数（1字节）
+	OpIndex:         {"OpIndex", []int{}},
+	OpHash:          {"OpHash", []int{2}}, // 操作数：键值对个数（1字节）
 }
 
 func Lookup(op Opcode) (*Definition, bool) {

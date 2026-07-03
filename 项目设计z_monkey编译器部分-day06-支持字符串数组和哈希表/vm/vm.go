@@ -119,6 +119,67 @@ func (vm *VM) Run() error {
 			vm.push(False)
 		case code.OpNull:
 			vm.push(Null)
+		case code.OpArray:
+			array_len := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			array_obj := &object.Array{Element: make([]object.Object, array_len)}
+			for i := array_len - 1; i >= 0; i-- {
+				array_obj.Element[i] = vm.pop()
+			}
+
+			vm.push(array_obj)
+		case code.OpHash:
+			pair_len := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			pairs := make(map[object.HashKey]object.HashPair)
+			for i := 0; i < pair_len; i++ {
+				value := vm.pop()
+				key := vm.pop()
+
+				hasher, ok := key.(object.Hasher)
+				if !ok {
+					return fmt.Errorf("key object can not hasher: got_index = %T", key)
+				}
+
+				pairs[hasher.HashKey()] = object.HashPair{Key: key, Value: value}
+			}
+
+			vm.push(&object.Hash{Pairs: pairs})
+		case code.OpIndex:
+			index := vm.pop()
+			leftObj := vm.pop()
+
+			switch leftObj := leftObj.(type) {
+			case *object.Array:
+				integer_idx, ok := index.(*object.Integer)
+				if !ok {
+
+				}
+
+				idx := integer_idx.Value
+				if idx < 0 || idx >= int64(len(leftObj.Element)) {
+					return fmt.Errorf("index out of bounds: got_index = %d max_len = %d", idx, len(leftObj.Element))
+				}
+
+				vm.push(leftObj.Element[idx])
+			case *object.Hash:
+				hasher, ok := index.(object.Hasher)
+				if !ok {
+					return fmt.Errorf("code.OpIndex can not hasher: got_index = %T", index)
+				}
+
+				hashKey := hasher.HashKey()
+				hashVal, ok := leftObj.Pairs[hashKey]
+				if !ok {
+					vm.push(Null)
+				} else {
+					vm.push(hashVal.Value)
+				}
+			default:
+				return fmt.Errorf("index operator not supported on %s", leftObj.Type())
+			}
 
 		// ========== 算术运算 ==========
 		case code.OpAdd:
