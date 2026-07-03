@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"monkey/ast"
 	"monkey/code"
+	"monkey/object"
 )
 
 type Compiler struct {
@@ -175,10 +176,12 @@ func (c *Compiler) Compile(node ast.Node) error {
 		symbol := c.symbolTable.Define(node.Name.Value)
 
 		// 3. 根据作用域生成对应的指令
-		if symbol.Scope == GlobalScope {
+		switch symbol.Scope {
+		case GlobalScope:
 			c.instructions = append(c.instructions, code.Make(code.OpSetGlobal, symbol.Index)...)
-		} else {
-			// 局部变量（后续实现，先占位）
+		case LocalScope:
+			c.instructions = append(c.instructions, code.Make(code.OpSetLocal, symbol.Index)...)
+		default:
 			return fmt.Errorf("local variables not implemented yet")
 		}
 
@@ -192,13 +195,102 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 
 		// 根据作用域生成对应的指令
-		if sym.Scope == GlobalScope {
+		switch sym.Scope {
+		case GlobalScope:
 			c.instructions = append(c.instructions, code.Make(code.OpGetGlobal, sym.Index)...)
-		} else {
-			// 局部变量（后续实现，先占位）
+		case LocalScope:
+			c.instructions = append(c.instructions, code.Make(code.OpGetLocal, sym.Index)...)
+		default:
 			return fmt.Errorf("local variables not implemented yet")
 		}
 
+		return nil
+
+	case *ast.FunctionLiteral:
+		// 创建一个新的编译器实例来编译函数体（使用当前符号表作为外部环境）
+		// 注意：函数体内部需要局部作用域，所以需要嵌套符号表
+		new_compiler := New()
+		new_compiler.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+
+		// 在编译函数体之前，将参数注册到局部符号表
+		for _, param := range node.Parameters {
+			new_compiler.symbolTable.DefineLocal(param.Value)
+		}
+
+		// 编译函数体（参数列表暂不处理，将在后续步骤添加）
+		for _, statement := range node.Body.Statements {
+			err := new_compiler.Compile(statement)
+			if err != nil {
+				return err
+			}
+		}
+
+		// --- 隐式返回处理 ---
+		body_len := len(node.Body.Statements)
+		if body_len <= 0 {
+			// 空函数体 → 返回 null
+			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpNull)...)
+			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturn)...)
+		} else {
+			last_statement := node.Body.Statements[body_len-1]
+			switch last_statement.(type) {
+			case *ast.ReturnStatement:
+				// 已经是显式 return，不额外添加
+			case *ast.ExpressionStatement:
+				// 表达式值已在栈顶，返回该值
+				new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturnVal)...)
+			default:
+				// let 语句等无值语句 → 返回 null
+				new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpNull)...)
+				new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturn)...)
+			}
+		}
+
+		// 将编译后的函数对象存入当前编译器的常量池
+		fn := &object.CompiledFunction{
+			Instructions: new_compiler.instructions,
+			Constants:    new_compiler.constants,
+			NumLocals:    new_compiler.symbolTable.numDefinitions, // 后续实现局部变量时更新
+			NumParams:    len(node.Parameters),
+		}
+
+		fnIndex := c.addConstant(fn)
+		c.instructions = append(c.instructions, code.Make(code.OpClosure, fnIndex)...)
+		return nil
+
+	case *ast.ReturnStatement:
+		if nil != node.ReturnValue {
+			err := c.Compile(node.ReturnValue)
+			if nil != err {
+				return err
+			}
+
+			c.instructions = append(c.instructions, code.Make(code.OpReturnVal)...)
+		} else {
+			// 没有返回值，压入 null 然后返回
+			c.instructions = append(c.instructions, code.Make(code.OpNull)...)
+			c.instructions = append(c.instructions, code.Make(code.OpReturn)...)
+		}
+
+		return nil
+
+	case *ast.CallExpression:
+		// 编译被调用的函数表达式
+		err := c.Compile(node.Function)
+		if nil != err {
+			return err
+		}
+
+		// 编译每个参数
+		for _, param := range node.Arguments {
+			err = c.Compile(param)
+			if nil != err {
+				return err
+			}
+		}
+
+		// 生成 OpCall 指令，操作数为参数个数
+		c.instructions = append(c.instructions, code.Make(code.OpCall, len(node.Arguments))...)
 		return nil
 	}
 

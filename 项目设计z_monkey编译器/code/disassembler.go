@@ -2,6 +2,7 @@ package code
 
 import (
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -54,4 +55,31 @@ func Disassmble(instructions []byte) string {
 	}
 
 	return out.String()
+}
+
+func DisassembleInstructions(out io.Writer, instructions []byte, constants []interface{}) {
+	for i := 0; i < len(instructions); {
+		op := Opcode(instructions[i])
+		def, ok := Lookup(op)
+		if !ok {
+			fmt.Fprintf(out, "ERROR: unknown opcode %d\n", op)
+			i++
+			continue
+		}
+		fmt.Fprintf(out, "%04d: %s", i, def.Name)
+		// 读取操作数
+		i++ // 跳过操作码
+		for _, width := range def.OperandWidths {
+			if width == 2 {
+				operand := int(instructions[i])<<8 | int(instructions[i+1])
+				fmt.Fprintf(out, " %d", operand)
+				i += 2
+			} else if width == 1 {
+				operand := int(instructions[i])
+				fmt.Fprintf(out, " %d", operand)
+				i += 1
+			}
+		}
+		fmt.Fprintln(out)
+	}
 }

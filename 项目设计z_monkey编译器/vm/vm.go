@@ -11,21 +11,38 @@ import (
 const GlobalsSize = 65536
 
 type VM struct {
-	instructions []byte          // 字节码指令序列
-	constants    []interface{}   // 常量池
-	globals      []object.Object // 全局变量存储
-	stack        []object.Object // 操作数栈
-	sp           int             // 栈指针
+	//instructions []byte          // 字节码指令序列
+	//constants []interface{}   // 常量池
+	globals   []object.Object // 全局变量存储
+	frames    []*Frame        // 调用帧栈
+	frameIdex int             // 当前帧索引
+	stack     []object.Object // 操作数栈
+	sp        int             // 栈指针
+	//locals       []object.Object //当前函数的局部变量
+
 }
 
 func New(bytecode []byte, constants []interface{}) *VM {
+	mainClosure := &object.Closure{
+		Fn: &object.CompiledFunction{
+			Instructions: bytecode,
+			Constants:    constants,
+			NumLocals:    0,
+			NumParams:    0,
+		},
+		Free: []object.Object{},
+	}
+
+	mainFrame := NewFrame(mainClosure, 0)
 	return &VM{
-		instructions: bytecode, // 存储字节码
-		constants:    constants,
-		globals:      make([]object.Object, GlobalsSize),
-		stack:        make([]object.Object, 0, 2048), // 预分配栈空间
-		//stack: []object.Object{}, // 预分配栈空间
-		sp: 0,
+		//instructions: bytecode, // 存储字节
+		globals:   make([]object.Object, GlobalsSize),
+		frames:    []*Frame{mainFrame},
+		frameIdex: 0,
+		stack:     make([]object.Object, 0, 2048), // 预分配栈空间
+		sp:        0,
+		//locals: make([]object.Object, 2048), // 初始容量
+
 	}
 }
 
@@ -56,23 +73,29 @@ func (vm *VM) LastPoppedStackElem() object.Object {
 
 // Run 执行字节码
 func (vm *VM) Run() error {
-	//fmt.Println("vm run")
 
-	for ip := 0; ip < len(vm.instructions); {
-		op := code.Opcode(vm.instructions[ip])
-		ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
-		//fmt.Printf("vm opCode :%d\n", op)
+	for {
+		frame := vm.currentFrame()
+		if frame.ip >= len(frame.fn.Fn.Instructions) {
+			//fmt.Printf("end vm run frame_index := %d frame_ip:=%d, len_of_instructions:=%d\n", vm.frameIdex, frame.ip, len(frame.fn.Fn.Instructions))
+			break
+		}
+
+		frame_instructions := frame.fn.Fn.Instructions
+		op := code.Opcode(frame_instructions[frame.ip])
+		frame.ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
+		//fmt.Printf("vm.run opcode := %d, func_frame_index:=%d\n", op, vm.frameIdex)
 
 		switch op {
 		// ========== 常量与字面量 ==========
 		case code.OpConstant:
 			//fmt.Printf("vm.instructions lenght :%d, ip%d\n", len(vm.instructions), ip)
-			idx := int(vm.instructions[ip])<<8 | int(vm.instructions[ip+1])
-			ip += 2
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
 
 			//fmt.Printf("vm.constants totallength :%d\n", len(vm.constants))
 			var obj object.Object
-			raw := vm.constants[idx]
+			raw := frame.fn.Fn.Constants[idx]
 			//fmt.Printf("vm.constants index :%d\n", idx)
 
 			//fmt.Printf("OpConstant type %t", raw)
@@ -240,29 +263,29 @@ func (vm *VM) Run() error {
 
 			// ========== 条件跳转 ==========
 		case code.OpJumpNotTruthy:
-			offset := int(vm.instructions[ip])<<8 | int(vm.instructions[ip+1])
-			ip += 2
+			offset := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
 
 			condition := vm.pop()
 			if !isTruthy(condition) {
-				ip += offset
+				frame.ip += offset
 			}
 
 		case code.OpJump:
-			offset := int(vm.instructions[ip])<<8 | int(vm.instructions[ip+1])
-			ip += 2
-			ip += offset
+			offset := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+			frame.ip += offset
 
 			// ========== 全局变量 ==========
 		case code.OpSetGlobal:
-			idx := int(vm.instructions[ip])<<8 | int(vm.instructions[ip+1])
-			ip += 2
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
 
 			global_data := vm.pop()
 			vm.globals[idx] = global_data
 		case code.OpGetGlobal:
-			idx := int(vm.instructions[ip])<<8 | int(vm.instructions[ip+1])
-			ip += 2
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
 
 			val := vm.globals[idx]
 			if val == nil {
@@ -271,6 +294,83 @@ func (vm *VM) Run() error {
 
 			vm.push(val)
 
+			// ========== 本地局部变量 ==========
+		case code.OpSetLocal:
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			local_data := vm.pop()
+			frame.locals[idx] = local_data
+		case code.OpGetLocal:
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			val := frame.locals[idx]
+			if val == nil {
+				return fmt.Errorf("global variable not set at index %d", idx)
+			}
+
+			vm.push(val)
+			// ========== 函数相关 ==========
+		case code.OpClosure:
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			compiled_fun, ok := frame.fn.Fn.Constants[idx].(*object.CompiledFunction)
+			if !ok {
+				return fmt.Errorf("code.OpClosure get function error, got %t", frame.fn.Fn.Constants[idx])
+			}
+
+			closure := &object.Closure{Fn: compiled_fun,
+				Free: []object.Object{},
+			}
+
+			vm.push(closure)
+
+		case code.OpCall:
+			// 读取参数个数
+			param_num := int(frame_instructions[frame.ip])
+			frame.ip += 1
+
+			// 从栈顶弹出参数（顺序：先压入的参数在栈底，最后一个参数在栈顶）
+			// 我们按顺序弹出到切片中（但我们需要按参数顺序绑定）
+			// 由于栈是后进先出，我们提前分配切片，从栈中按顺序提取
+			params := make([]object.Object, param_num)
+			for i := param_num - 1; i >= 0; i-- {
+				params[i] = vm.pop()
+			}
+
+			/*
+				for i := 0; i < param_num; i++ {
+					param_num, ok := params[i].(*object.Integer)
+					if !ok {
+						fmt.Printf("code.OpCall param type be integer error: got=%t\n", params[i])
+					} else {
+						fmt.Printf("code.OpCall param index:%d value=%d\n", i, param_num.Value)
+					}
+				}
+			*/
+
+			// 获取被调用的闭包（在栈顶）
+			funcObj := vm.pop()
+			closureObj, ok := funcObj.(*object.Closure)
+			if !ok {
+				return fmt.Errorf("code.Closure get type error, got %t", funcObj)
+			}
+
+			// 创建新帧
+			numLocals := closureObj.Fn.NumLocals
+			// 注意：NumLocals 包含参数和局部变量，目前我们只设置参数，局部变量后续实现
+			// 为了简单，我们假设 NumLocals 至少等于参数个数，并将参数放入 locals
+			closureFrame := NewFrame(closureObj, numLocals)
+			// 绑定参数到局部变量（索引从0开始）
+			copy(closureFrame.locals, params)
+			vm.pushFrame(closureFrame)
+			continue
+		case code.OpReturnVal:
+			vm.popFrame()
+		case code.OpReturn:
+			vm.popFrame()
 		default:
 			return fmt.Errorf("unknown opcode: %d", op)
 
@@ -278,6 +378,43 @@ func (vm *VM) Run() error {
 	}
 
 	return nil
+}
+
+/*
+func (vm *VM) setLocal(idx int, obj object.Object) {
+	if idx >= len(vm.locals) {
+		new_len := max(2*len(vm.locals), idx+1)
+		newLocal := make([]object.Object, new_len)
+		copy(newLocal, vm.locals)
+		vm.locals = newLocal
+	}
+
+	vm.locals[idx] = obj
+}
+
+func (vm *VM) getLocal(idx int) object.Object {
+	if idx >= len(vm.locals) {
+		return nil
+	}
+
+	return vm.locals[idx]
+}
+*/
+
+func (vm *VM) currentFrame() *Frame {
+	return vm.frames[vm.frameIdex]
+}
+
+func (vm *VM) pushFrame(frame *Frame) {
+	vm.frames = append(vm.frames, frame)
+	vm.frameIdex += 1
+	//vm.frameIdex = len(vm.frames)-1
+}
+
+func (vm *VM) popFrame() {
+	vm.frames = vm.frames[:vm.frameIdex]
+	//fmt.Printf("popFrame current len(frameslist):=%d current_frame_idx:=%d", len(vm.frames), vm.frameIdex-1)
+	vm.frameIdex -= 1
 }
 
 // ========== 辅助函数 ==========

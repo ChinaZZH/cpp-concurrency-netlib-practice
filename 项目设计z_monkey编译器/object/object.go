@@ -9,16 +9,18 @@ import (
 type objectType string
 
 const (
-	INTEGER_OBJ      = "INTEGER"
-	BOOLEAN_OBJ      = "BOOLEAN"
-	NULL_OBJ         = "NULL"
-	RETURN_VALUE_OBJ = "RETURN_VALUE"
-	FUNCTION_OBJ     = "FUNCTION"
-	ERROR_OBJ        = "ERROR"
-	STRING_OBJ       = "STRING"
-	ARRAY_OBJ        = "ARRAY"
-	HASH_OBJ         = "HASH"
-	BUILTIN_OBJ      = "BUILTIN"
+	INTEGER_OBJ           = "INTEGER"
+	BOOLEAN_OBJ           = "BOOLEAN"
+	NULL_OBJ              = "NULL"
+	RETURN_VALUE_OBJ      = "RETURN_VALUE"
+	FUNCTION_OBJ          = "FUNCTION"
+	ERROR_OBJ             = "ERROR"
+	STRING_OBJ            = "STRING"
+	ARRAY_OBJ             = "ARRAY"
+	HASH_OBJ              = "HASH"
+	BUILTIN_OBJ           = "BUILTIN"
+	COMPILED_FUNCTION_OBJ = "COMPILED_FUNCTION"
+	CLOSURE_OBJ           = "CLOSURE"
 )
 
 type Object interface {
@@ -226,4 +228,38 @@ func (b *Builtin) Type() objectType {
 
 func (b *Builtin) Inspect() string {
 	return "builtin function"
+}
+
+// ============================================================
+// 编译后的函数体（字节码 + 元信息），是“函数定义”的静态表示。
+// ============================================================
+type CompiledFunction struct {
+	Instructions []byte
+	Constants    []interface{}
+	NumLocals    int
+	NumParams    int
+}
+
+func (cf *CompiledFunction) Type() objectType {
+	return COMPILED_FUNCTION_OBJ
+}
+
+func (cf *CompiledFunction) Inspect() string {
+	return fmt.Sprintf("CompiledFunction[%p]", cf)
+}
+
+// ============================================================
+// 闭包，是“函数定义 + 捕获的变量”的运行时组合，是实际执行时的函数对象。
+// ============================================================
+type Closure struct {
+	Fn   *CompiledFunction //指向编译后的函数体
+	Free []Object          //Free []Object：捕获的自由变量（闭包捕获的外部变量）
+}
+
+func (c *Closure) Type() objectType {
+	return CLOSURE_OBJ
+}
+
+func (c *Closure) Inspect() string {
+	return fmt.Sprintf("Closure[%p]", c)
 }
