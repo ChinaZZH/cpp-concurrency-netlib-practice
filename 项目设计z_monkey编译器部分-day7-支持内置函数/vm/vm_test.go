@@ -102,6 +102,15 @@ func TestVMIntegration(t *testing.T) {
 		{`{"a": 1}["a"] + {"b": 2}["b"]`, 3},
 		{`let h = {"key": "value"}; h["key"]`, "value"},
 		{`true`, true}, // 占位，实际测试时需区分类型
+
+		// 内置函数
+		{`len("hello")`, 5},
+		{`len([1, 2, 3])`, 3},
+		{`len({"a":1, "b":2})`, 2},
+		{`first([10, 20, 30])`, 10},
+		{`rest([1, 2, 3])`, []int64{2, 3}}, // 需支持数组比较
+		{`push([1, 2], 3)`, []int64{1, 2, 3}},
+		{`let a = [1]; push(a, 2); a`, []int64{1}}, // 验证不可变性
 	}
 
 	for _, tt := range tests {
