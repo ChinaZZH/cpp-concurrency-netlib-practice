@@ -87,6 +87,27 @@ func (c *Compiler) Compile(node ast.Node) error {
 		c.instructions = append(c.instructions, instruction...)
 		return nil
 
+	case *ast.StringLiteral:
+		// 将整数常量存入常量表
+		constantIndex := c.addConstant(node.Value)
+
+		instruction := code.Make(code.OpConstant, constantIndex)
+		c.instructions = append(c.instructions, instruction...)
+		return nil
+
+	case *ast.ArrayLiteral:
+		for _, expression := range node.Elements {
+			err := c.Compile(expression)
+			if err != nil {
+				return err
+			}
+		}
+
+		array_len := len(node.Elements)
+		instruction := code.Make(code.OpArray, array_len)
+		c.instructions = append(c.instructions, instruction...)
+		return nil
+
 	case *ast.Boolean:
 		var instructions []byte
 		if node.Value {
@@ -98,6 +119,38 @@ func (c *Compiler) Compile(node ast.Node) error {
 		c.instructions = append(c.instructions, instructions...)
 		return nil
 
+	case *ast.HashLiteral:
+		for keyPair, valuePair := range node.Pairs {
+			err := c.Compile(keyPair)
+			if err != nil {
+				return err
+			}
+
+			err = c.Compile(valuePair)
+			if err != nil {
+				return err
+			}
+		}
+
+		hash_len := len(node.Pairs)
+		instruction := code.Make(code.OpHash, hash_len)
+		c.instructions = append(c.instructions, instruction...)
+		return nil
+
+	case *ast.IndexExpression:
+		err := c.Compile(node.Left)
+		if err != nil {
+			return err
+		}
+
+		err = c.Compile(node.Index)
+		if err != nil {
+			return err
+		}
+
+		instruction := code.Make(code.OpIndex)
+		c.instructions = append(c.instructions, instruction...)
+		return nil
 	case *ast.PrefixExpression:
 		err := c.Compile(node.Right)
 		if nil != err {

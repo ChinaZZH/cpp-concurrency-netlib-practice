@@ -74,6 +74,34 @@ func TestVMIntegration(t *testing.T) {
 		{"let flag = true; !flag", false},
 		{"let x = 5 + 3; x", 8},
 		{"let result = if (true) { 10 } else { 20 }; result", 10},
+
+		// 字符串
+		{`"hello"`, "hello"},
+		{`"world"`, "world"},
+		{`let s = "test"; s`, "test"},
+
+		// 数组
+		{`[1, 2, 3]`, []int64{1, 2, 3}},
+		{`[1 + 2, 3 * 4, 5 - 6]`, []int64{3, 12, -1}},
+		{`let arr = [1, 2, 3]; arr`, []int64{1, 2, 3}},
+		//{`[1, [2, 3]]`, []int64{1, 2, 3}}, // 嵌套数组暂不深入测试
+
+		// 数组
+		{`[1, 2, 3][0]`, 1},
+		{`[1, 2, 3][1]`, 2},
+		{`[1, 2, 3][2]`, 3},
+		{`let arr = [1, 2, 3]; arr[0]`, 1},
+		{`let arr = [1, 2, 3]; arr[1 + 1]`, 3},
+		{`[1, 2, 3][0] + [1, 2, 3][2]`, 4},
+
+		// 哈希表索引
+		{`{"a": 1}["a"]`, 1},
+		{`{"a": 1, "b": 2}["b"]`, 2},
+		{`let h = {"k": 10}; h["k"]`, 10},
+		{`{"a": 1}["missing"]`, nil},
+		{`{"a": 1}["a"] + {"b": 2}["b"]`, 3},
+		{`let h = {"key": "value"}; h["key"]`, "value"},
+		{`true`, true}, // 占位，实际测试时需区分类型
 	}
 
 	for _, tt := range tests {
@@ -88,6 +116,10 @@ func TestVMIntegration(t *testing.T) {
 			testIntegerObject(t, result, expected)
 		case bool:
 			testBooleanObject(t, result, expected)
+		case string:
+			testStringObject(t, result, expected)
+		case []int64:
+			testIntArrayObject(t, result, expected)
 		case nil:
 			testNullObject(t, result)
 		default:
@@ -152,6 +184,8 @@ func TestVMFunction(t *testing.T) {
 			testIntegerObject(t, result, expected)
 		case bool:
 			testBooleanObject(t, result, expected)
+		case string:
+			testStringObject(t, result, expected)
 		case nil:
 			testNullObject(t, result)
 		default:
@@ -218,6 +252,29 @@ func testIntegerObject(t *testing.T, obj object.Object, expected int64) {
 	}
 }
 
+func testIntArrayObject(t *testing.T, obj object.Object, expected []int64) {
+	result, ok := obj.(*object.Array)
+	if !ok {
+		t.Errorf("object is not Array. got=%T (%+v)", obj, obj)
+		return
+	}
+	if len(result.Element) != len(expected) {
+		t.Errorf("object has wrong length. got=%d, want=%d", len(result.Element), len(expected))
+	}
+
+	for idx, element := range result.Element {
+		elem_obj, ok := element.(*object.Integer)
+		if !ok || nil == elem_obj {
+			t.Errorf("elem_obj has wrong type at %T", elem_obj)
+		}
+
+		if elem_obj.Value != expected[idx] {
+			t.Errorf("object has wrong valu at %d. got=%d, want=%d", idx, elem_obj.Value, expected[idx])
+		}
+	}
+
+}
+
 func testBooleanObject(t *testing.T, obj object.Object, expected bool) {
 	result, ok := obj.(*object.Boolean)
 	if !ok {
@@ -232,5 +289,16 @@ func testBooleanObject(t *testing.T, obj object.Object, expected bool) {
 func testNullObject(t *testing.T, obj object.Object) {
 	if obj != Null && obj != nil {
 		t.Errorf("object is not Null. got=%T (%+v)", obj, obj)
+	}
+}
+
+func testStringObject(t *testing.T, obj object.Object, expected string) {
+	result, ok := obj.(*object.String)
+	if !ok {
+		t.Errorf("object is not String. got=%T (%+v)", obj, obj)
+		return
+	}
+	if result.Value != expected {
+		t.Errorf("object has wrong value. got=%s, want=%s", result.Value, expected)
 	}
 }
