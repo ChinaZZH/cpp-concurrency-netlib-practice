@@ -12,7 +12,7 @@ type Compiler struct {
 	instructions []byte
 	constants    []interface{} // 常量池
 	symbolTable  *SymbolTable
-	depthTest    int
+	depthTest    int // 测试使用
 }
 
 func New() *Compiler {
@@ -222,14 +222,14 @@ func (c *Compiler) Compile(node ast.Node) error {
 		return nil
 
 	case *ast.LetStatement:
-		// 1. 编译右边的表达式（值），结果会留在栈顶
+		// 1. 在符号表中定义变量，获得索引
+		symbol := c.symbolTable.Define(node.Name.Value)
+
+		// 2. 编译右边的表达式（值），结果会留在栈顶
 		err := c.Compile(node.Value)
 		if nil != err {
 			return err
 		}
-
-		// 2. 在符号表中定义变量，获得索引
-		symbol := c.symbolTable.Define(node.Name.Value)
 
 		// 3. 根据作用域生成对应的指令
 		switch symbol.Scope {

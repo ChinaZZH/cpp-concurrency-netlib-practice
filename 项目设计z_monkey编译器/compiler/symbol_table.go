@@ -88,7 +88,7 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	if nil != s.outer {
 		outerSym, found := s.outer.Resolve(name)
 		if found {
-			if GlobalScope == outerSym.Scope {
+			if GlobalScope == outerSym.Scope || BuiltinScope == outerSym.Scope {
 				return outerSym, true
 			}
 
