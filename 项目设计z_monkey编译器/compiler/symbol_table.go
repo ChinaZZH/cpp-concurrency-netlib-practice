@@ -1,7 +1,5 @@
 package compiler
 
-import "fmt"
-
 type SymbolType int
 
 // SymbolType 表示符号的类型（作用域）
@@ -71,11 +69,12 @@ func (s *SymbolTable) DefineLocal(name string) Symbol {
 func (s *SymbolTable) DefineFree(original Symbol) Symbol {
 	// 将原始符号（来自外部作用域）存入 freeSymbols 列表
 	s.freeSymbols = append(s.freeSymbols, original)
-	fmt.Println("DefineFree")
 
 	// 在当前符号表注册一个新符号，Scope 为 FreeScope，Index 指向 freeSymbols 中的位置
 	symbol := Symbol{Name: original.Name, Index: len(s.freeSymbols) - 1, Scope: FreeScope}
 	s.store[original.Name] = symbol
+
+	//fmt.Printf("DefineFree name:=%s, index=%d scope=%d free_offset=%d\n", original.Name, original.Index, original.Scope, symbol.Index)
 	return symbol
 }
 

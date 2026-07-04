@@ -12,6 +12,7 @@ type Compiler struct {
 	instructions []byte
 	constants    []interface{} // 常量池
 	symbolTable  *SymbolTable
+	depthTest    int
 }
 
 func New() *Compiler {
@@ -19,6 +20,7 @@ func New() *Compiler {
 		instructions: []byte{},
 		constants:    []interface{}{},
 		symbolTable:  NewSymbolTable(),
+		depthTest:    1,
 	}
 }
 
@@ -276,6 +278,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 		// 注意：函数体内部需要局部作用域，所以需要嵌套符号表
 		new_compiler := New()
 		new_compiler.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
+		new_compiler.depthTest = c.depthTest + 1
 
 		// 在编译函数体之前，将参数注册到局部符号表
 		for _, param := range node.Parameters {
@@ -296,18 +299,22 @@ func (c *Compiler) Compile(node ast.Node) error {
 			// 空函数体 → 返回 null
 			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpNull)...)
 			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturn)...)
+			fmt.Printf("FunctionLiteral body Empty\n")
 		} else {
 			last_statement := node.Body.Statements[body_len-1]
 			switch last_statement.(type) {
 			case *ast.ReturnStatement:
 				// 已经是显式 return，不额外添加
+				//fmt.Printf("FunctionLiteral ReturnStatement\n")
 			case *ast.ExpressionStatement:
 				// 表达式值已在栈顶，返回该值
 				new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturnVal)...)
+				//fmt.Printf("FunctionLiteral ExpressionStatement\n")
 			default:
 				// let 语句等无值语句 → 返回 null
 				new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpNull)...)
 				new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturn)...)
+				//fmt.Printf("FunctionLiteral default\n")
 			}
 		}
 
@@ -324,15 +331,25 @@ func (c *Compiler) Compile(node ast.Node) error {
 			NumFree:      numFree,
 		}
 
-		/*
-			for _, freeSymbol := range c.symbolTable.freeSymbols {
-				if GlobalScope == freeSymbol.Scope {
-					c.instructions = append(c.instructions, code.Make(code.OpGetGlobal, freeSymbol.Index)...)
-				} else {
-					c.instructions = append(c.instructions, code.Make(code.OpGetLocal, freeSymbol.Index)...)
+		//fmt.Printf("ast.FunctionLiteral free symbol number %d, depth %d\n", numFree, c.depthTest)
+		for _, freeSymbol := range new_compiler.symbolTable.freeSymbols {
+			//fmt.Printf("freeSymbol index = %d\n", index)
+			if LocalScope == freeSymbol.Scope {
+				//fmt.Printf("freeSymbol LocalScope index:= %d\n", freeSymbol.Index)
+				c.instructions = append(c.instructions, code.Make(code.OpGetLocal, freeSymbol.Index)...)
+
+			} else if FreeScope == freeSymbol.Scope {
+				newFreeSymbol, ok := c.symbolTable.Resolve(freeSymbol.Name)
+				if !ok {
+					return fmt.Errorf("Get freeSymbols freeScope wrong")
 				}
+
+				//fmt.Printf("freeSymbol FreeScope index:= %d\n", newFreeSymbol.Index)
+				c.instructions = append(c.instructions, code.Make(code.OpGetFree, newFreeSymbol.Index)...)
+			} else {
+				return fmt.Errorf("wrong freeSymbols type")
 			}
-		*/
+		}
 
 		fnIndex := c.addConstant(fn)
 		c.instructions = append(c.instructions, code.Make(code.OpClosure, fnIndex, numFree)...)

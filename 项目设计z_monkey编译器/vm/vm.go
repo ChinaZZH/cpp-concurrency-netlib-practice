@@ -65,6 +65,23 @@ func (vm *VM) pop() object.Object {
 	return obj
 }
 
+func (vm *VM) showStackInfo() {
+	for index, numObject := range vm.stack {
+		switch numObject := numObject.(type) {
+		case (*object.CompiledFunction):
+			fmt.Printf("index: %d  Function (params=%d, locals=%d, free=%d numObject=%p):\n", index, numObject.NumParams, numObject.NumLocals, numObject.NumFree, &numObject)
+		case (*object.Boolean):
+			fmt.Printf("index: %d Boolean value:=%t\n", index, numObject.Value)
+		case (*object.Integer):
+			fmt.Printf("index: %d Integer value:=%d\n", index, numObject.Value)
+		case (*object.String):
+			fmt.Printf("index: %d String value:=%s\n", index, numObject.Value)
+		default:
+			fmt.Printf("index: %d default value:=%t\n", index, numObject)
+		}
+	}
+}
+
 func (vm *VM) LastPoppedStackElem() object.Object {
 	if vm.sp > 0 {
 		return vm.stack[vm.sp-1]
@@ -76,12 +93,17 @@ func (vm *VM) LastPoppedStackElem() object.Object {
 // Run 执行字节码
 func (vm *VM) Run() error {
 
+	instruction_index := 0
 	for {
 		frame := vm.currentFrame()
 		if frame.ip >= len(frame.fn.Fn.Instructions) {
 			//fmt.Printf("end vm run frame_index := %d frame_ip:=%d, len_of_instructions:=%d\n", vm.frameIdex, frame.ip, len(frame.fn.Fn.Instructions))
 			break
 		}
+
+		instruction_index += 1
+		//fmt.Printf("before instruction index:=%d stack_count:=%d frame_index:=%d\n", instruction_index, len(vm.stack), vm.frameIdex)
+		//vm.showStackInfo()
 
 		start_index := frame.ip
 		frame_instructions := frame.fn.Fn.Instructions
@@ -188,14 +210,17 @@ func (vm *VM) Run() error {
 
 		// ========== 算术运算 ==========
 		case code.OpAdd:
+			if len(vm.stack) < 2 {
+				return fmt.Errorf("stack length must be >= 2 got=%d", len(vm.stack))
+			}
+
 			right := vm.pop()
 			left := vm.pop()
-
 			// 目前支持整数加法和字符串加法，遇到其他类型返回错误
 			if object.INTEGER_OBJ == left.Type() && object.INTEGER_OBJ == right.Type() {
 				sum := left.(*object.Integer).Value + right.(*object.Integer).Value
 				vm.push(&object.Integer{Value: sum})
-				fmt.Printf("code.OpAdd left:=%d right:=%d sum:=%d", left.(*object.Integer).Value, right.(*object.Integer).Value, sum)
+				//fmt.Printf("code.OpAdd left:=%d right:=%d sum:=%d", left.(*object.Integer).Value, right.(*object.Integer).Value, sum)
 			} else if object.STRING_OBJ == left.Type() && object.STRING_OBJ == right.Type() {
 				new_string := left.(*object.String).Value + right.(*object.String).Value
 				vm.push(&object.String{Value: new_string})
@@ -476,6 +501,9 @@ func (vm *VM) Run() error {
 		end_index := frame.ip
 		vm.run_insrtuctions = append(vm.run_insrtuctions, frame_instructions[start_index:end_index]...)
 
+		//fmt.Printf("after instruction index:%d statck_count=%d frame_idex = %d\n", instruction_index, len(vm.stack), vm.frameIdex)
+		//vm.showStackInfo()
+		//fmt.Printf("\n\n\n")
 	}
 
 	return nil
