@@ -20,6 +20,8 @@ type VM struct {
 	sp        int             // 栈指针
 	//locals       []object.Object //当前函数的局部变量
 
+	// 测试使用
+	run_insrtuctions []byte
 }
 
 func New(bytecode []byte, constants []interface{}) *VM {
@@ -42,7 +44,7 @@ func New(bytecode []byte, constants []interface{}) *VM {
 		stack:     make([]object.Object, 0, 2048), // 预分配栈空间
 		sp:        0,
 		//locals: make([]object.Object, 2048), // 初始容量
-
+		run_insrtuctions: make([]byte, 0, 1024),
 	}
 }
 
@@ -81,6 +83,7 @@ func (vm *VM) Run() error {
 			break
 		}
 
+		start_index := frame.ip
 		frame_instructions := frame.fn.Fn.Instructions
 		op := code.Opcode(frame_instructions[frame.ip])
 		frame.ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
@@ -192,6 +195,7 @@ func (vm *VM) Run() error {
 			if object.INTEGER_OBJ == left.Type() && object.INTEGER_OBJ == right.Type() {
 				sum := left.(*object.Integer).Value + right.(*object.Integer).Value
 				vm.push(&object.Integer{Value: sum})
+				fmt.Printf("code.OpAdd left:=%d right:=%d sum:=%d", left.(*object.Integer).Value, right.(*object.Integer).Value, sum)
 			} else if object.STRING_OBJ == left.Type() && object.STRING_OBJ == right.Type() {
 				new_string := left.(*object.String).Value + right.(*object.String).Value
 				vm.push(&object.String{Value: new_string})
@@ -374,18 +378,35 @@ func (vm *VM) Run() error {
 			}
 
 			vm.push(val)
+		// ========== 自由变量变量 ==========
+		case code.OpGetFree:
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			if idx < 0 || idx >= len(frame.fn.Free) {
+				return fmt.Errorf("free variable not set at index %d", idx)
+			}
+
+			vm.push(frame.fn.Free[idx])
 			// ========== 函数相关 ==========
 		case code.OpClosure:
 			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
-			frame.ip += 2
+			numFree := int(frame_instructions[frame.ip+2])
+			frame.ip += 3
 
 			compiled_fun, ok := frame.fn.Fn.Constants[idx].(*object.CompiledFunction)
 			if !ok {
 				return fmt.Errorf("code.OpClosure get function error, got %t", frame.fn.Fn.Constants[idx])
 			}
 
-			closure := &object.Closure{Fn: compiled_fun,
-				Free: []object.Object{},
+			free := make([]object.Object, numFree)
+			for i := numFree - 1; i >= 0; i-- {
+				free[i] = vm.pop()
+			}
+
+			closure := &object.Closure{
+				Fn:   compiled_fun,
+				Free: free,
 			}
 
 			vm.push(closure)
@@ -434,12 +455,27 @@ func (vm *VM) Run() error {
 			}
 		case code.OpReturnVal:
 			vm.popFrame()
+			// 测试函数
+			/*
+				valueObj := vm.LastPoppedStackElem()
+				value_integer_obj, ok := valueObj.(*object.Integer)
+				if !ok {
+					fmt.Printf("returnValue Type error got:= %T\n", valueObj)
+				} else {
+					fmt.Printf("return value:= %d\n", value_integer_obj)
+				}
+			*/
+
 		case code.OpReturn:
 			vm.popFrame()
 		default:
 			return fmt.Errorf("unknown opcode: %d", op)
 
 		}
+
+		end_index := frame.ip
+		vm.run_insrtuctions = append(vm.run_insrtuctions, frame_instructions[start_index:end_index]...)
+
 	}
 
 	return nil

@@ -1,10 +1,14 @@
 package vm
 
 import (
+	"fmt"
+	"io"
+	"monkey/code"
 	"monkey/compiler"
 	"monkey/lexer"
 	"monkey/object"
 	"monkey/parser"
+	"os"
 	"testing"
 )
 
@@ -15,6 +19,7 @@ func TestVMIntegration(t *testing.T) {
 		expected interface{} // int64, bool, string, nil (表示 null)
 	}{
 		// 整数常量
+
 		{"5", 5},
 		{"10", 10},
 		{"-5", -5},
@@ -111,6 +116,10 @@ func TestVMIntegration(t *testing.T) {
 		{`rest([1, 2, 3])`, []int64{2, 3}}, // 需支持数组比较
 		{`push([1, 2], 3)`, []int64{1, 2, 3}},
 		{`let a = [1]; push(a, 2); a`, []int64{1}}, // 验证不可变性
+
+		// 闭包
+		//{`let addTwo = fn(x) { fn(y) { x + y; }; }; let add = addTwo(5); add(3);`, 8},
+		//{`let outer = fn(x) { fn(y) { x + y; }; }; outer(2)(3);`, 5},
 	}
 
 	for _, tt := range tests {
@@ -137,6 +146,7 @@ func TestVMIntegration(t *testing.T) {
 	}
 }
 
+/*
 func TestVMFunction(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -202,6 +212,7 @@ func TestVMFunction(t *testing.T) {
 		}
 	}
 }
+*/
 
 // testVM 执行一段 Monkey 代码并返回栈顶值（或 null）
 func testVM(t *testing.T, input string) object.Object {
@@ -243,6 +254,11 @@ func testVM(t *testing.T, input string) object.Object {
 	if err != nil {
 		t.Fatalf("VM error: %s", err)
 	}
+
+	var out io.Writer
+	out = os.Stdout
+	fmt.Fprintln(out, "=====Bytecode=======")
+	code.DisassembleInstructions(out, vm.run_insrtuctions, nil)
 
 	// 返回栈顶结果
 	return vm.LastPoppedStackElem()

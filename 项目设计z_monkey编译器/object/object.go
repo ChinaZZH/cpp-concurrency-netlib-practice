@@ -238,6 +238,7 @@ type CompiledFunction struct {
 	Constants    []interface{}
 	NumLocals    int
 	NumParams    int
+	NumFree      int
 }
 
 func (cf *CompiledFunction) Type() objectType {
