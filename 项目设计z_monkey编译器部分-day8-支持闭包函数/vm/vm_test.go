@@ -111,6 +111,11 @@ func TestVMIntegration(t *testing.T) {
 		{`rest([1, 2, 3])`, []int64{2, 3}}, // 需支持数组比较
 		{`push([1, 2], 3)`, []int64{1, 2, 3}},
 		{`let a = [1]; push(a, 2); a`, []int64{1}}, // 验证不可变性
+
+		// 闭包
+		{`let addTwo = fn(x) { return x + 3; }; addTwo(5); `, 8},
+		{`let addTwo = fn(x) {  fn(y) { x + y; }; }; let add = addTwo(5); add(3);`, 8},
+		{`let outer = fn(x) { fn(y) { x + y; }; }; outer(2)(3);`, 5},
 	}
 
 	for _, tt := range tests {
@@ -175,9 +180,9 @@ func TestVMFunction(t *testing.T) {
 		{"let identity = fn(x) { return x; }; identity(10);", 10},
 
 		// 嵌套函数调用（非闭包）
-		//{"let outer = fn(x) { fn(y) { x + y; }; }; let inner = outer(2); inner(3);", 5}, // 闭包（若暂不支持，可注释）
+		{"let outer = fn(x) { fn(y) { x + y; }; }; let inner = outer(2); inner(3);", 5},
 		// 递归
-		//{"let fact = fn(n) { if (n == 1) { 1 } else { n * fact(n - 1); }; }; fact(5);", 120}, // 递归（若暂不支持，可注释）
+		{"let fact = fn(n) { if (n == 1) { 1 } else { n * fact(n - 1); }; }; fact(5);", 120}, // 递归（若暂不支持，可注释）
 
 	}
 
@@ -243,6 +248,13 @@ func testVM(t *testing.T, input string) object.Object {
 	if err != nil {
 		t.Fatalf("VM error: %s", err)
 	}
+
+	/*
+		var out io.Writer
+		out = os.Stdout
+		fmt.Fprintln(out, "=====Bytecode=======")
+		code.DisassembleInstructions(out, vm.run_insrtuctions, nil)
+	*/
 
 	// 返回栈顶结果
 	return vm.LastPoppedStackElem()

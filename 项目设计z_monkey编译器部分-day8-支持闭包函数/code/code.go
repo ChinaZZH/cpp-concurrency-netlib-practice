@@ -36,6 +36,8 @@ const (
 	OpArray
 	OpIndex
 	OpHash
+	//OpSetFree
+	OpGetFree
 )
 
 // Definition 指令定义：名称 + 操作数数量
@@ -63,7 +65,7 @@ var definitions = map[Opcode]*Definition{
 	OpSetGlobal:     {"OpSetGlobal", []int{2}},
 	OpGetGlobal:     {"OpGetGlobal", []int{2}},
 	OpNull:          {"OpNull", []int{}},
-	OpClosure:       {"OpClosure", []int{2}},
+	OpClosure:       {"OpClosure", []int{2, 1}},
 	OpSetLocal:      {"OpSetLocal", []int{2}},
 	OpGetLocal:      {"OpGetLocal", []int{2}},
 	OpReturnVal:     {"OpReturnVal", []int{}},
@@ -72,6 +74,8 @@ var definitions = map[Opcode]*Definition{
 	OpArray:         {"OpArray", []int{2}}, // 操作数：数组元素个数（1字节）
 	OpIndex:         {"OpIndex", []int{}},
 	OpHash:          {"OpHash", []int{2}}, // 操作数：键值对个数（1字节）
+	//OpSetFree:       {"OpSetFree", []int{2}},
+	OpGetFree: {"OpGetFree", []int{2}},
 }
 
 func Lookup(op Opcode) (*Definition, bool) {

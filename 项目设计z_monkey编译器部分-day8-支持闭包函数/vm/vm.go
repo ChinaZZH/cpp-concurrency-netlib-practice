@@ -11,15 +11,14 @@ import (
 const GlobalsSize = 65536
 
 type VM struct {
-	//instructions []byte          // 字节码指令序列
-	//constants []interface{}   // 常量池
 	globals   []object.Object // 全局变量存储
 	frames    []*Frame        // 调用帧栈
 	frameIdex int             // 当前帧索引
 	stack     []object.Object // 操作数栈
 	sp        int             // 栈指针
-	//locals       []object.Object //当前函数的局部变量
 
+	// 测试使用
+	run_insrtuctions []byte
 }
 
 func New(bytecode []byte, constants []interface{}) *VM {
@@ -42,7 +41,7 @@ func New(bytecode []byte, constants []interface{}) *VM {
 		stack:     make([]object.Object, 0, 2048), // 预分配栈空间
 		sp:        0,
 		//locals: make([]object.Object, 2048), // 初始容量
-
+		run_insrtuctions: make([]byte, 0, 1024),
 	}
 }
 
@@ -63,6 +62,23 @@ func (vm *VM) pop() object.Object {
 	return obj
 }
 
+func (vm *VM) showStackInfo() {
+	for index, numObject := range vm.stack {
+		switch numObject := numObject.(type) {
+		case (*object.CompiledFunction):
+			fmt.Printf("index: %d  Function (params=%d, locals=%d, free=%d numObject=%p):\n", index, numObject.NumParams, numObject.NumLocals, numObject.NumFree, &numObject)
+		case (*object.Boolean):
+			fmt.Printf("index: %d Boolean value:=%t\n", index, numObject.Value)
+		case (*object.Integer):
+			fmt.Printf("index: %d Integer value:=%d\n", index, numObject.Value)
+		case (*object.String):
+			fmt.Printf("index: %d String value:=%s\n", index, numObject.Value)
+		default:
+			fmt.Printf("index: %d default value:=%t\n", index, numObject)
+		}
+	}
+}
+
 func (vm *VM) LastPoppedStackElem() object.Object {
 	if vm.sp > 0 {
 		return vm.stack[vm.sp-1]
@@ -81,24 +97,20 @@ func (vm *VM) Run() error {
 			break
 		}
 
+		start_index := frame.ip
 		frame_instructions := frame.fn.Fn.Instructions
 		op := code.Opcode(frame_instructions[frame.ip])
 		frame.ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
-		//fmt.Printf("vm.run opcode := %d, func_frame_index:=%d\n", op, vm.frameIdex)
 
 		switch op {
 		// ========== 常量与字面量 ==========
 		case code.OpConstant:
-			//fmt.Printf("vm.instructions lenght :%d, ip%d\n", len(vm.instructions), ip)
 			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
 			frame.ip += 2
 
-			//fmt.Printf("vm.constants totallength :%d\n", len(vm.constants))
 			var obj object.Object
 			raw := frame.fn.Fn.Constants[idx]
-			//fmt.Printf("vm.constants index :%d\n", idx)
 
-			//fmt.Printf("OpConstant type %t", raw)
 			switch v := raw.(type) {
 			case int64:
 				obj = &object.Integer{Value: v}
@@ -185,13 +197,17 @@ func (vm *VM) Run() error {
 
 		// ========== 算术运算 ==========
 		case code.OpAdd:
+			if len(vm.stack) < 2 {
+				return fmt.Errorf("stack length must be >= 2 got=%d", len(vm.stack))
+			}
+
 			right := vm.pop()
 			left := vm.pop()
-
 			// 目前支持整数加法和字符串加法，遇到其他类型返回错误
 			if object.INTEGER_OBJ == left.Type() && object.INTEGER_OBJ == right.Type() {
 				sum := left.(*object.Integer).Value + right.(*object.Integer).Value
 				vm.push(&object.Integer{Value: sum})
+				//fmt.Printf("code.OpAdd left:=%d right:=%d sum:=%d", left.(*object.Integer).Value, right.(*object.Integer).Value, sum)
 			} else if object.STRING_OBJ == left.Type() && object.STRING_OBJ == right.Type() {
 				new_string := left.(*object.String).Value + right.(*object.String).Value
 				vm.push(&object.String{Value: new_string})
@@ -374,18 +390,35 @@ func (vm *VM) Run() error {
 			}
 
 			vm.push(val)
+		// ========== 自由变量变量 ==========
+		case code.OpGetFree:
+			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
+			frame.ip += 2
+
+			if idx < 0 || idx >= len(frame.fn.Free) {
+				return fmt.Errorf("free variable not set at index %d", idx)
+			}
+
+			vm.push(frame.fn.Free[idx])
 			// ========== 函数相关 ==========
 		case code.OpClosure:
 			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
-			frame.ip += 2
+			numFree := int(frame_instructions[frame.ip+2])
+			frame.ip += 3
 
 			compiled_fun, ok := frame.fn.Fn.Constants[idx].(*object.CompiledFunction)
 			if !ok {
 				return fmt.Errorf("code.OpClosure get function error, got %t", frame.fn.Fn.Constants[idx])
 			}
 
-			closure := &object.Closure{Fn: compiled_fun,
-				Free: []object.Object{},
+			free := make([]object.Object, numFree)
+			for i := numFree - 1; i >= 0; i-- {
+				free[i] = vm.pop()
+			}
+
+			closure := &object.Closure{
+				Fn:   compiled_fun,
+				Free: free,
 			}
 
 			vm.push(closure)
@@ -402,17 +435,6 @@ func (vm *VM) Run() error {
 			for i := param_num - 1; i >= 0; i-- {
 				params[i] = vm.pop()
 			}
-
-			/*
-				for i := 0; i < param_num; i++ {
-					param_num, ok := params[i].(*object.Integer)
-					if !ok {
-						fmt.Printf("code.OpCall param type be integer error: got=%t\n", params[i])
-					} else {
-						fmt.Printf("code.OpCall param index:%d value=%d\n", i, param_num.Value)
-					}
-				}
-			*/
 
 			// 获取被调用的闭包（在栈顶）
 			funcObj := vm.pop()
@@ -440,6 +462,9 @@ func (vm *VM) Run() error {
 			return fmt.Errorf("unknown opcode: %d", op)
 
 		}
+
+		end_index := frame.ip
+		vm.run_insrtuctions = append(vm.run_insrtuctions, frame_instructions[start_index:end_index]...)
 	}
 
 	return nil

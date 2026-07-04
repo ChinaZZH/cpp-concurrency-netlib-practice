@@ -12,6 +12,7 @@ type Compiler struct {
 	instructions []byte
 	constants    []interface{} // 常量池
 	symbolTable  *SymbolTable
+	depthTest    int // 测试使用
 }
 
 func New() *Compiler {
@@ -220,14 +221,14 @@ func (c *Compiler) Compile(node ast.Node) error {
 		return nil
 
 	case *ast.LetStatement:
-		// 1. 编译右边的表达式（值），结果会留在栈顶
+		// 1. 在符号表中定义变量，获得索引
+		symbol := c.symbolTable.Define(node.Name.Value)
+
+		// 2. 编译右边的表达式（值），结果会留在栈顶
 		err := c.Compile(node.Value)
 		if nil != err {
 			return err
 		}
-
-		// 2. 在符号表中定义变量，获得索引
-		symbol := c.symbolTable.Define(node.Name.Value)
 
 		// 3. 根据作用域生成对应的指令
 		switch symbol.Scope {
@@ -251,6 +252,8 @@ func (c *Compiler) Compile(node ast.Node) error {
 				c.instructions = append(c.instructions, code.Make(code.OpGetGlobal, sym.Index)...)
 			case LocalScope:
 				c.instructions = append(c.instructions, code.Make(code.OpGetLocal, sym.Index)...)
+			case FreeScope:
+				c.instructions = append(c.instructions, code.Make(code.OpGetFree, sym.Index)...)
 			default:
 				return fmt.Errorf("local variables not implemented yet")
 			}
@@ -280,7 +283,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 			new_compiler.symbolTable.DefineLocal(param.Value)
 		}
 
-		// 编译函数体（参数列表暂不处理，将在后续步骤添加）
+		// 编译函数体
 		for _, statement := range node.Body.Statements {
 			err := new_compiler.Compile(statement)
 			if err != nil {
@@ -294,6 +297,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 			// 空函数体 → 返回 null
 			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpNull)...)
 			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturn)...)
+			fmt.Printf("FunctionLiteral body Empty\n")
 		} else {
 			last_statement := node.Body.Statements[body_len-1]
 			switch last_statement.(type) {
@@ -309,16 +313,35 @@ func (c *Compiler) Compile(node ast.Node) error {
 			}
 		}
 
+		// 获取自由变量
+		numFree := len(new_compiler.symbolTable.freeSymbols)
 		// 将编译后的函数对象存入当前编译器的常量池
 		fn := &object.CompiledFunction{
 			Instructions: new_compiler.instructions,
 			Constants:    new_compiler.constants,
 			NumLocals:    new_compiler.symbolTable.numDefinitions, // 后续实现局部变量时更新
 			NumParams:    len(node.Parameters),
+			NumFree:      numFree,
+		}
+
+		// 加载自由变量，将入到栈顶。
+		for _, freeSymbol := range new_compiler.symbolTable.freeSymbols {
+			if LocalScope == freeSymbol.Scope {
+				c.instructions = append(c.instructions, code.Make(code.OpGetLocal, freeSymbol.Index)...)
+			} else if FreeScope == freeSymbol.Scope {
+				newFreeSymbol, ok := c.symbolTable.Resolve(freeSymbol.Name)
+				if !ok {
+					return fmt.Errorf("Get freeSymbols freeScope wrong")
+				}
+
+				c.instructions = append(c.instructions, code.Make(code.OpGetFree, newFreeSymbol.Index)...)
+			} else {
+				return fmt.Errorf("wrong freeSymbols type")
+			}
 		}
 
 		fnIndex := c.addConstant(fn)
-		c.instructions = append(c.instructions, code.Make(code.OpClosure, fnIndex)...)
+		c.instructions = append(c.instructions, code.Make(code.OpClosure, fnIndex, numFree)...)
 		return nil
 
 	case *ast.ReturnStatement:
@@ -367,6 +390,7 @@ func (c *Compiler) replaceJumpOperand(pos int, offset int) {
 
 // Bytecode 返回生成的字节码
 func (c *Compiler) ByteCode() []byte {
+
 	return c.instructions
 }
 
