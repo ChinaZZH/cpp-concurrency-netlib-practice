@@ -25,9 +25,6 @@ type VM struct {
 	stack     []object.Object // 操作数栈
 	sp        int             // 栈指针
 	framePool sync.Pool       // 内存池
-
-	// 测试使用
-	//run_insrtuctions []byte
 }
 
 func New(bytecode []byte, constants []interface{}) *VM {
@@ -42,21 +39,16 @@ func New(bytecode []byte, constants []interface{}) *VM {
 	}
 
 	vm := &VM{
-		//instructions: bytecode, // 存储字节
 		globals:   make([]object.Object, GlobalsSize),
 		frames:    []*Frame{},
 		frameIdex: 0,
 		stack:     make([]object.Object, 0, 2048), // 预分配栈空间
 		sp:        0,
 		framePool: sync.Pool{New: func() interface{} { return &Frame{locals: make([]object.Object, 0, 8)} }},
-
-		//run_insrtuctions: make([]byte, 0, 1024),
 	}
 
 	mainParam := []object.Object{}
 	vm.newFrame(mainClosure, 0, mainParam)
-	//vm.frames = append(vm.frames, mainFrame)
-	//vm.frameIdex = 0
 	return vm
 }
 
@@ -108,11 +100,9 @@ func (vm *VM) Run() error {
 	for {
 		frame := vm.currentFrame()
 		if frame.ip >= len(frame.fn.Fn.Instructions) {
-			//fmt.Printf("end vm run frame_index := %d frame_ip:=%d, len_of_instructions:=%d\n", vm.frameIdex, frame.ip, len(frame.fn.Fn.Instructions))
 			break
 		}
 
-		//start_index := frame.ip
 		frame_instructions := frame.fn.Fn.Instructions
 		op := code.Opcode(frame_instructions[frame.ip])
 		frame.ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
@@ -222,7 +212,6 @@ func (vm *VM) Run() error {
 			if object.INTEGER_OBJ == left.Type() && object.INTEGER_OBJ == right.Type() {
 				sum := left.(*object.Integer).Value + right.(*object.Integer).Value
 				vm.push(&object.Integer{Value: sum})
-				//fmt.Printf("code.OpAdd left:=%d right:=%d sum:=%d", left.(*object.Integer).Value, right.(*object.Integer).Value, sum)
 			} else if object.STRING_OBJ == left.Type() && object.STRING_OBJ == right.Type() {
 				new_string := left.(*object.String).Value + right.(*object.String).Value
 				vm.push(&object.String{Value: new_string})
@@ -333,15 +322,6 @@ func (vm *VM) Run() error {
 			// ========== 前缀运算符 ==========
 		case code.OpBang:
 			operand := vm.pop()
-			/*
-				truthy := isTruthy(operand)
-				if truthy {
-					vm.push(False)
-				} else {
-					vm.push(True)
-				}
-			*/
-
 			result_obj := bangOperatorToBooleanObject(operand)
 			vm.push(result_obj)
 
@@ -473,9 +453,6 @@ func (vm *VM) Run() error {
 			return fmt.Errorf("unknown opcode: %d", op)
 
 		}
-
-		//end_index := frame.ip
-		//vm.run_insrtuctions = append(vm.run_insrtuctions, frame_instructions[start_index:end_index]...)
 	}
 
 	return nil
