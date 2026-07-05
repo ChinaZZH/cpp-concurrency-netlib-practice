@@ -4,11 +4,19 @@ import (
 	"fmt"
 	"monkey/code"
 	"monkey/object"
+	"sync"
 )
 
 // GlobalsSize 定义全局变量最大数量
 
 const GlobalsSize = 65536
+
+// Frame 表示一个函数调用帧
+type Frame struct {
+	fn     *object.Closure // 指向被调用的闭包
+	ip     int             // 指令指针（当前执行位置）
+	locals []object.Object //局部变量
+}
 
 type VM struct {
 	globals   []object.Object // 全局变量存储
@@ -16,9 +24,7 @@ type VM struct {
 	frameIdex int             // 当前帧索引
 	stack     []object.Object // 操作数栈
 	sp        int             // 栈指针
-
-	// 测试使用
-	run_insrtuctions []byte
+	framePool sync.Pool       // 内存池
 }
 
 func New(bytecode []byte, constants []interface{}) *VM {
@@ -32,17 +38,18 @@ func New(bytecode []byte, constants []interface{}) *VM {
 		Free: []object.Object{},
 	}
 
-	mainFrame := NewFrame(mainClosure, 0)
-	return &VM{
-		//instructions: bytecode, // 存储字节
+	vm := &VM{
 		globals:   make([]object.Object, GlobalsSize),
-		frames:    []*Frame{mainFrame},
+		frames:    []*Frame{},
 		frameIdex: 0,
 		stack:     make([]object.Object, 0, 2048), // 预分配栈空间
 		sp:        0,
-		//locals: make([]object.Object, 2048), // 初始容量
-		run_insrtuctions: make([]byte, 0, 1024),
+		framePool: sync.Pool{New: func() interface{} { return &Frame{locals: make([]object.Object, 0, 8)} }},
 	}
+
+	mainParam := []object.Object{}
+	vm.newFrame(mainClosure, 0, mainParam)
+	return vm
 }
 
 // 栈操作辅助方法
@@ -93,11 +100,9 @@ func (vm *VM) Run() error {
 	for {
 		frame := vm.currentFrame()
 		if frame.ip >= len(frame.fn.Fn.Instructions) {
-			//fmt.Printf("end vm run frame_index := %d frame_ip:=%d, len_of_instructions:=%d\n", vm.frameIdex, frame.ip, len(frame.fn.Fn.Instructions))
 			break
 		}
 
-		start_index := frame.ip
 		frame_instructions := frame.fn.Fn.Instructions
 		op := code.Opcode(frame_instructions[frame.ip])
 		frame.ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
@@ -207,7 +212,6 @@ func (vm *VM) Run() error {
 			if object.INTEGER_OBJ == left.Type() && object.INTEGER_OBJ == right.Type() {
 				sum := left.(*object.Integer).Value + right.(*object.Integer).Value
 				vm.push(&object.Integer{Value: sum})
-				//fmt.Printf("code.OpAdd left:=%d right:=%d sum:=%d", left.(*object.Integer).Value, right.(*object.Integer).Value, sum)
 			} else if object.STRING_OBJ == left.Type() && object.STRING_OBJ == right.Type() {
 				new_string := left.(*object.String).Value + right.(*object.String).Value
 				vm.push(&object.String{Value: new_string})
@@ -318,15 +322,6 @@ func (vm *VM) Run() error {
 			// ========== 前缀运算符 ==========
 		case code.OpBang:
 			operand := vm.pop()
-			/*
-				truthy := isTruthy(operand)
-				if truthy {
-					vm.push(False)
-				} else {
-					vm.push(True)
-				}
-			*/
-
 			result_obj := bangOperatorToBooleanObject(operand)
 			vm.push(result_obj)
 
@@ -441,13 +436,9 @@ func (vm *VM) Run() error {
 			switch funcObj := funcObj.(type) {
 			case *object.Closure:
 				// 创建新帧
-				numLocals := funcObj.Fn.NumLocals
 				// 注意：NumLocals 包含参数和局部变量，目前我们只设置参数，局部变量后续实现
 				// 为了简单，我们假设 NumLocals 至少等于参数个数，并将参数放入 locals
-				closureFrame := NewFrame(funcObj, numLocals)
-				// 绑定参数到局部变量（索引从0开始）
-				copy(closureFrame.locals, params)
-				vm.pushFrame(closureFrame)
+				vm.newFrame(funcObj, funcObj.Fn.NumLocals, params)
 			case *object.Builtin:
 				reusltObj := funcObj.Fn(params...)
 				vm.push(reusltObj)
@@ -462,48 +453,43 @@ func (vm *VM) Run() error {
 			return fmt.Errorf("unknown opcode: %d", op)
 
 		}
-
-		end_index := frame.ip
-		vm.run_insrtuctions = append(vm.run_insrtuctions, frame_instructions[start_index:end_index]...)
 	}
 
 	return nil
 }
 
-/*
-func (vm *VM) setLocal(idx int, obj object.Object) {
-	if idx >= len(vm.locals) {
-		new_len := max(2*len(vm.locals), idx+1)
-		newLocal := make([]object.Object, new_len)
-		copy(newLocal, vm.locals)
-		vm.locals = newLocal
-	}
-
-	vm.locals[idx] = obj
-}
-
-func (vm *VM) getLocal(idx int) object.Object {
-	if idx >= len(vm.locals) {
-		return nil
-	}
-
-	return vm.locals[idx]
-}
-*/
-
 func (vm *VM) currentFrame() *Frame {
 	return vm.frames[vm.frameIdex]
 }
 
-func (vm *VM) pushFrame(frame *Frame) {
+func (vm *VM) newFrame(closure *object.Closure, numlocal int, closureParam []object.Object) {
+	frame := vm.framePool.Get().(*Frame)
+	frame.fn = closure
+	frame.ip = 0
+
+	if cap(frame.locals) < numlocal {
+		frame.locals = make([]object.Object, 0, numlocal)
+	}
+
+	frame.locals = frame.locals[:numlocal]
+	for i := 0; i < numlocal; i++ {
+		frame.locals[i] = nil
+	}
+
+	copy(frame.locals, closureParam)
 	vm.frames = append(vm.frames, frame)
-	vm.frameIdex += 1
-	//vm.frameIdex = len(vm.frames)-1
+	vm.frameIdex = len(vm.frames) - 1
 }
 
 func (vm *VM) popFrame() {
+	current_frame := vm.currentFrame()
+	for i := range current_frame.locals {
+		current_frame.locals[i] = nil
+	}
+	current_frame.locals = current_frame.locals[:0]
+	vm.framePool.Put(current_frame)
+
 	vm.frames = vm.frames[:vm.frameIdex]
-	//fmt.Printf("popFrame current len(frameslist):=%d current_frame_idx:=%d", len(vm.frames), vm.frameIdex-1)
 	vm.frameIdex -= 1
 }
 

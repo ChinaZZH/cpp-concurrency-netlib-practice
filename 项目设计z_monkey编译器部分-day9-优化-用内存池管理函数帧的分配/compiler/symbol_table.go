@@ -74,7 +74,6 @@ func (s *SymbolTable) DefineFree(original Symbol) Symbol {
 	symbol := Symbol{Name: original.Name, Index: len(s.freeSymbols) - 1, Scope: FreeScope}
 	s.store[original.Name] = symbol
 
-	//fmt.Printf("DefineFree name:=%s, index=%d scope=%d free_offset=%d\n", original.Name, original.Index, original.Scope, symbol.Index)
 	return symbol
 }
 
