@@ -33,23 +33,28 @@ type Parser struct {
 	errors    []string    // 错误信息
 }
 
+// 这个是整个语法分析的核心和主框架
 func (p *Parser) parseExpression(precedence int) ast.Expression {
+	// 先从前缀表达式解析函数表中找对应的前缀表达式解析函数
 	prefixFn, ok := prefixParseFns[p.curToken.Type]
 	if !ok || nil == prefixFn {
 		p.noPrefixParseFnError(p.curToken.Type)
 		return nil
 	}
 
+	// 找到了前缀表达式解析函数，调用解析函数做语法分析，然后返回对应的表达式
 	leftExp := prefixFn(p)
 
-	// 循环处理中缀运算符
+	// 循环判断：当前优先级低于后面运算符优先级时，继续深入解析右子树；
+	// 否则右子树闭合，返回当前表达式，让上层处理后续（不高于当前优先级的）运算符。
 	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
 		infixFn, ok := infixParseFns[p.peekToken.Type]
 		if !ok || nil == infixFn {
 			return nil
 		}
 
-		p.nextToken()
+		// 下一个运算符优先级高于当前优先级，说明它应该成为当前表达式的父辈节点；
+		// 因此进入下一层解析，让 infixFn 处理这个更高优先级的运算。
 		leftExp = infixFn(p, leftExp)
 	}
 
