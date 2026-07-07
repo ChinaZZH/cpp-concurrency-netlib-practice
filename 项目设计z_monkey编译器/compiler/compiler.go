@@ -8,11 +8,11 @@ import (
 	"monkey/object"
 )
 
+// 编译器对象 存储着编译完成的指令序列 同时还有编译时候就确认的常量表和符号表(做变量的映射)
 type Compiler struct {
 	instructions []byte
 	constants    []interface{} // 常量池
 	symbolTable  *SymbolTable
-	depthTest    int // 测试使用
 }
 
 func New() *Compiler {
@@ -24,6 +24,7 @@ func New() *Compiler {
 }
 
 // addConstant 向常量池添加一个常量，返回其索引
+// 索引从 0 开始，与 OpConstant 的操作数对应
 func (c *Compiler) addConstant(obj interface{}) int {
 	c.constants = append(c.constants, obj)
 	return len(c.constants) - 1
@@ -178,6 +179,8 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 
+		// 往指令序列集合筛入条件跳转语句，在运行的时候再操作数栈弹出来的对象判断为false的时候就跳到相对应的偏移地址
+		// 由于当前不知道偏移地址在哪里，需要等待编译到Consequence结束才能确定回填这个条件为假的跳转地址。
 		jumpNotTruthPos := len(c.instructions)
 		c.instructions = append(c.instructions, code.Make(code.OpJumpNotTruthy, 0xFFFF)...)
 
@@ -187,9 +190,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 
+		// 这个是只有条件为真才能执行到这边，然后执行到这儿的时候要跳过else{} 的语句，相当于if() {} else{} 整个if表达式结束了。
 		jumpPos := len(c.instructions)
 		c.instructions = append(c.instructions, code.Make(code.OpJump, 0xFFFF)...)
 
+		// 确定了else的跳转的地址，回填到code.OpJumpNotTruthy后面跟着的偏移地址上
 		afterConsequencePos := len(c.instructions)
 		offset := afterConsequencePos - (jumpNotTruthPos + 3)
 		c.replaceJumpOperand(jumpNotTruthPos, offset)
@@ -201,9 +206,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 				return err
 			}
 		} else {
+			// if语句要返回值，所以运行到没有else的时候人为的制造else分支跟他筛一个opNull数据。
 			c.instructions = append(c.instructions, code.Make(code.OpNull)...)
 		}
 
+		// 将if指令需要跳转的偏移地址回填到code.OpJump上。
 		afterExpressionPos := len(c.instructions)
 		offset = afterExpressionPos - (jumpPos + 3)
 		c.replaceJumpOperand(jumpPos, offset)
@@ -297,7 +304,6 @@ func (c *Compiler) Compile(node ast.Node) error {
 			// 空函数体 → 返回 null
 			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpNull)...)
 			new_compiler.instructions = append(new_compiler.instructions, code.Make(code.OpReturn)...)
-			fmt.Printf("FunctionLiteral body Empty\n")
 		} else {
 			last_statement := node.Body.Statements[body_len-1]
 			switch last_statement.(type) {
@@ -383,6 +389,7 @@ func (c *Compiler) Compile(node ast.Node) error {
 	return fmt.Errorf("unsupported node type: %T", node)
 }
 
+// 操作数占 2 字节，采用大端序
 func (c *Compiler) replaceJumpOperand(pos int, offset int) {
 	c.instructions[pos+1] = byte(offset >> 8)
 	c.instructions[pos+2] = byte(offset & 0xFF)

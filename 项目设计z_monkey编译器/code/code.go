@@ -8,6 +8,7 @@ import (
 // opcode 字节码指令类型
 type Opcode byte
 
+// 定义的字节码类型枚举值
 const (
 	OpConstant Opcode = iota // 加载常量到栈
 	OpAdd
@@ -40,7 +41,7 @@ const (
 	OpGetFree
 )
 
-// Definition 指令定义：名称 + 操作数数量
+// Definition 指令定义：名称 + 操作数数量 存储名称主要用于反汇编的时候根据枚举值反推出指令的字符串形式
 type Definition struct {
 	Name          string
 	OperandWidths []int // 每个操作数的字节宽度

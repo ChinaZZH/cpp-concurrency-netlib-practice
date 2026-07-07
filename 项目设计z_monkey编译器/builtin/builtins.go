@@ -16,11 +16,13 @@ var builtin_table = map[string]*object.Builtin{
 	"puts":  &object.Builtin{Fn: builtinPuts},
 }
 
+// 根据内置函数表返回对应的内置对象
 func LookUp(name string) (*object.Builtin, bool) {
 	builtinObj, ok := builtin_table[name]
 	return builtinObj, ok
 }
 
+// 以下是内置对象的Fn函数成员变量，获取到这个object.Builtin之后，就可以通过 resultObj := object.Builtin.Fn(param...) 了
 func builtinLen(args ...object.Object) object.Object {
 	if len(args) != 1 {
 		return newError("wrong number of arguments, got=%d, want=1", len(args))
@@ -96,6 +98,7 @@ func builtinPush(args ...object.Object) object.Object {
 	return &object.Array{Element: newElement}
 }
 
+// 直接根据参数打印到标准输出，然后返回空对象 null
 func builtinPuts(args ...object.Object) object.Object {
 	for _, arg := range args {
 		fmt.Println(arg.Inspect())

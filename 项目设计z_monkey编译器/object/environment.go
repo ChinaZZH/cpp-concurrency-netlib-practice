@@ -2,8 +2,8 @@ package object
 
 // Environment 表示一个作用域环境
 type Environment struct {
-	store map[string]Object
-	outer *Environment // 外层环境，用于作用域链
+	store map[string]Object // 相当于编译器的符号表，存储变量或者函数的表示以及对应的具体字面值的object
+	outer *Environment      // 外层环境，用于作用域链
 }
 
 // NewEnvironment 创建一个新的顶层环境

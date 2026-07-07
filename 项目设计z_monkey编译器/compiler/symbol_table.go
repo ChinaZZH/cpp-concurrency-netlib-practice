@@ -22,7 +22,7 @@ type SymbolTable struct {
 	store          map[string]Symbol
 	outer          *SymbolTable
 	numDefinitions int      // 当前作用域定义的符号数量
-	freeSymbols    []Symbol // 存储捕获的自由变量
+	freeSymbols    []Symbol // 存储捕获的自由变量,用于生成 CompiledFunction.NumFree的个数，同时给传递给Object.Closure中的free
 }
 
 // NewSymbolTable 创建一个新的顶层符号表

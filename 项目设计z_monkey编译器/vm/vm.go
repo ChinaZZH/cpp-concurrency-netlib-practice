@@ -38,6 +38,7 @@ func New(bytecode []byte, constants []interface{}) *VM {
 		Free: []object.Object{},
 	}
 
+	// 创建虚拟机并且将主函数变成主闭包函数放入函数调用栈中
 	vm := &VM{
 		globals:   make([]object.Object, GlobalsSize),
 		frames:    []*Frame{},
@@ -52,7 +53,7 @@ func New(bytecode []byte, constants []interface{}) *VM {
 	return vm
 }
 
-// 栈操作辅助方法
+// 数据栈操作辅助方法 入栈和出栈
 func (vm *VM) push(obj object.Object) {
 	vm.stack = append(vm.stack, obj)
 	vm.sp++
@@ -86,6 +87,7 @@ func (vm *VM) showStackInfo() {
 	}
 }
 
+// 获取数据栈的top元素
 func (vm *VM) LastPoppedStackElem() object.Object {
 	if vm.sp > 0 {
 		return vm.stack[vm.sp-1]
@@ -97,25 +99,30 @@ func (vm *VM) LastPoppedStackElem() object.Object {
 // Run 执行字节码
 func (vm *VM) Run() error {
 
+	// 取出当前函数帧的指令集，按照指令集取出操作数和操作码，按照顺序执行
 	for {
 		frame := vm.currentFrame()
 		if frame.ip >= len(frame.fn.Fn.Instructions) {
 			break
 		}
 
+		// 取出当前的指令操作码
 		frame_instructions := frame.fn.Fn.Instructions
 		op := code.Opcode(frame_instructions[frame.ip])
-		frame.ip += 1 // 转移到下一条字节码(操作数或者下一条指令)
+		// 转移到下一条字节码(操作数或者下一条指令)
+		frame.ip += 1
 
 		switch op {
 		// ========== 常量与字面量 ==========
 		case code.OpConstant:
+			// 根据操作数计算出常量在当前函数常量池中的索引位置，并且将指令地址往后移2位
 			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
 			frame.ip += 2
 
 			var obj object.Object
 			raw := frame.fn.Fn.Constants[idx]
 
+			// 取出常量并且转化为object放入操作数栈
 			switch v := raw.(type) {
 			case int64:
 				obj = &object.Integer{Value: v}
@@ -132,6 +139,8 @@ func (vm *VM) Run() error {
 			}
 
 			vm.push(obj)
+
+		// code.OpTrue code.OpFalse code.OpNull 将操作数推入到操作数栈中
 		case code.OpTrue:
 			vm.push(True)
 		case code.OpFalse:
@@ -139,9 +148,11 @@ func (vm *VM) Run() error {
 		case code.OpNull:
 			vm.push(Null)
 		case code.OpArray:
+			// 根据操作数计算出数组长度，并且将指令地址往后移2位
 			array_len := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
 			frame.ip += 2
 
+			// 根据操作数栈弹出对应的数组元素，并且按照栈的顺序还原。然后将ArrayObject放入操作数栈中
 			array_obj := &object.Array{Element: make([]object.Object, array_len)}
 			for i := array_len - 1; i >= 0; i-- {
 				array_obj.Element[i] = vm.pop()
@@ -337,9 +348,11 @@ func (vm *VM) Run() error {
 
 			// ========== 条件跳转 ==========
 		case code.OpJumpNotTruthy:
+			// 取出跳转的相对偏移地址offset
 			offset := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
 			frame.ip += 2
 
+			// 当条件为假的时候，指令寄存器的地址偏移位置+offset.即frame.ip += offset
 			condition := vm.pop()
 			if !isTruthy(condition) {
 				frame.ip += offset
@@ -397,6 +410,7 @@ func (vm *VM) Run() error {
 			vm.push(frame.fn.Free[idx])
 			// ========== 函数相关 ==========
 		case code.OpClosure:
+			// 获取常量的索引值和对应的自由变量的个数
 			idx := int(frame_instructions[frame.ip])<<8 | int(frame_instructions[frame.ip+1])
 			numFree := int(frame_instructions[frame.ip+2])
 			frame.ip += 3
@@ -406,6 +420,7 @@ func (vm *VM) Run() error {
 				return fmt.Errorf("code.OpClosure get function error, got %t", frame.fn.Fn.Constants[idx])
 			}
 
+			// 通过操作数栈stack弹出对应的自由变量
 			free := make([]object.Object, numFree)
 			for i := numFree - 1; i >= 0; i-- {
 				free[i] = vm.pop()
@@ -440,13 +455,16 @@ func (vm *VM) Run() error {
 				// 为了简单，我们假设 NumLocals 至少等于参数个数，并将参数放入 locals
 				vm.newFrame(funcObj, funcObj.Fn.NumLocals, params)
 			case *object.Builtin:
+				// 调用内置函数
 				reusltObj := funcObj.Fn(params...)
 				vm.push(reusltObj)
 			default:
 				return fmt.Errorf("code.Closure get type error, got %t", funcObj)
 			}
+		// 会弹出一个object.value返回值对象，然后压入一个objetc.value返回值对象，相互抵消则不进行入栈出栈的操作
 		case code.OpReturnVal:
 			vm.popFrame()
+		// 会弹出一个null对象，然后压入一个null对象，相互抵消则不进行入栈出栈的操作
 		case code.OpReturn:
 			vm.popFrame()
 		default:
@@ -458,10 +476,13 @@ func (vm *VM) Run() error {
 	return nil
 }
 
+// 返回当前正在执行的函数帧 栈帧通过vm.frameIdex表示当前所正在使用的函数帧
 func (vm *VM) currentFrame() *Frame {
 	return vm.frames[vm.frameIdex]
 }
 
+// 当开始调用新的函数的时候就会创建新的函数帧并且将其放入到函数栈中。
+// 使用sync.Pool对象池技术进行管理
 func (vm *VM) newFrame(closure *object.Closure, numlocal int, closureParam []object.Object) {
 	frame := vm.framePool.Get().(*Frame)
 	frame.fn = closure
@@ -481,6 +502,8 @@ func (vm *VM) newFrame(closure *object.Closure, numlocal int, closureParam []obj
 	vm.frameIdex = len(vm.frames) - 1
 }
 
+// 函数调用结束，则将函数从函数栈中出栈
+// 使用sync.Pool对象池技术进行管理
 func (vm *VM) popFrame() {
 	current_frame := vm.currentFrame()
 	for i := range current_frame.locals {
@@ -501,6 +524,7 @@ var (
 	False = &object.Boolean{Value: false}
 )
 
+// bool为true返回True对象，否则返回false对象
 func nativeBoolToBooleanObject(b bool) *object.Boolean {
 	if b {
 		return True
@@ -508,6 +532,7 @@ func nativeBoolToBooleanObject(b bool) *object.Boolean {
 	return False
 }
 
+// 判断是非的逻辑
 func isTruthy(obj object.Object) bool {
 	switch obj := obj.(type) {
 	case *object.Null:
@@ -523,6 +548,7 @@ func isTruthy(obj object.Object) bool {
 // 如果 object.Null 已存在，可以直接引用，这里为了独立定义
 var Null = &object.Null{}
 
+// 根据object来进行取反
 func bangOperatorToBooleanObject(obj object.Object) *object.Boolean {
 	if isTruthy(obj) {
 		return False

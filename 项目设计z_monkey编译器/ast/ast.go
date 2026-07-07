@@ -36,6 +36,7 @@ type Program struct {
 	StatementList []Statement
 }
 
+// 仅用于接口实现，实际很少使用
 func (p *Program) TokenLiteral() string {
 	if len(p.StatementList) > 0 {
 		return p.StatementList[0].TokenLiteral()
@@ -89,7 +90,7 @@ func (ls *LetStatement) String() string {
 // ReturnStatement 表示返回语句: return <expression>;
 type ReturnStatement struct {
 	Token       token.Token // token.RETURN
-	ReturnValue Expression
+	ReturnValue Expression  // 这个returnValue可以为nil
 }
 
 func (rs *ReturnStatement) statementNode() {
@@ -113,6 +114,7 @@ func (rs *ReturnStatement) String() string {
 }
 
 // ExpressionStatement 表示一个仅包含表达式的语句: <expression>;
+// 则任何的表示式都可以通过重新拼装变成语句，就是除了return , let ， {} ， program, 其他表示式都㐓以expressionStatemtn语句的形式出现
 type ExpressionStatement struct {
 	Token      token.Token // 表达式的第一个 Token
 	Expression Expression

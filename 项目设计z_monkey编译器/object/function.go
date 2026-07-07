@@ -21,7 +21,7 @@ func (f *Function) Type() objectType {
 }
 
 func (f *Function) Inspect() string {
-	return "fn(" + f.parametersString() + ") { ... }"
+	return "fn(" + f.parametersString() + ") " + f.Body.String()
 }
 
 func (f *Function) parametersString() string {

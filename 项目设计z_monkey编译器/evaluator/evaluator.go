@@ -107,6 +107,7 @@ func evalProgram(program *ast.Program, env *object.Environment) object.Object {
 	var result object.Object
 	for _, statement := range program.StatementList {
 		result = Eval(statement, env)
+		// 如果执行了return语句，则提前结束
 		returnVal, ok := result.(*object.ReturnValue)
 		if ok {
 			return returnVal.Value
@@ -258,6 +259,7 @@ func evalBlockStatement(node *ast.BlockStatement, env *object.Environment) objec
 	var result object.Object
 	for _, tt := range node.Statements {
 		result = Eval(tt, env)
+		// 如果有return语句则提前结束
 		if nil != result && object.RETURN_VALUE_OBJ == result.Type() {
 			return result
 		}
