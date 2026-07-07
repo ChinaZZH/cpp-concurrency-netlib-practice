@@ -21,11 +21,12 @@ TcpServer::TcpServer(EventLoop* loop, int nPort)
 ,closeCallBack_(nullptr)
 ,connectionCallBack_(nullptr)
 {
+
     if(mainLoop_)
     {
         mainLoop_->InitServer(this);
     }
-
+    
    // 1.创建socket
     listenSocket_ = std::make_unique<ListenSocket>();
     if(!listenSocket_->IsValid())
@@ -68,6 +69,8 @@ TcpServer::~TcpServer()
 
 void TcpServer::Start()
 {
+    
+
     auto& cfg = ConfigManager::getInstance();
     int nEventLoopThread = cfg.getInt("EventLoop", "sub_event_loop_count", 6);
     {

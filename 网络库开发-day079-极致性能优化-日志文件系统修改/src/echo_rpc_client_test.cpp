@@ -20,7 +20,7 @@ int ObjectPool_test()
     };
 
     ObjectPool<Test> pool(100);
-    Test* t1 = pool.Allocate(1,3);
+    //Test* t1 = pool.Allocate(1,3);
     return 0;
 }
 

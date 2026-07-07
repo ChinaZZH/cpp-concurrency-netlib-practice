@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <unordered_set>
 #include <functional>
+#include <iostream>
 
 template<typename T>
 class ObjectPool
@@ -37,24 +38,6 @@ public:
         }
     }
 
-    // 分配对象(从空闲队列取内存， 然后构造)
-    template<typename... Args>
-    T* Allocate(Args&&... args)
-    {
-        T* ptr = nullptr;
-        if(!free_list_.empty())
-        {
-            ptr = free_list_.back();
-            free_list_.pop_back();
-        }else{
-             ptr = static_cast<T*>(::operator new(sizeof(T)));
-             allocated_.push_back(ptr);
-        }
-
-        ::new (ptr) T(std::forward<Args>(args)...);
-        return ptr; 
-    }
-
 
     // 归还对象
     bool Deallocate(T* ptr)
@@ -64,11 +47,15 @@ public:
             return false;
         }
 
+        // 校验消耗性能，这边只是为了查问题
         // 没有分配过这一块内存 校验1
+        /*
+        
         {
             auto itr_allocated = std::find(allocated_.begin(), allocated_.end(), ptr);
             if(itr_allocated == allocated_.end())
             {
+                std::cout << "no allocated ptr" << ptr << std::endl;
                 return false;
             }
         }
@@ -78,10 +65,11 @@ public:
             auto itr_free_list = std::find(free_list_.begin(), free_list_.end(), ptr);
             if(itr_free_list != free_list_.end())
             {
+                std::cout << "in on itr_free_list" << ptr << std::endl;
                 return false;
             }
         }
-        
+        */
 
         ptr->~T();
         free_list_.push_back(ptr);
@@ -113,6 +101,26 @@ public:
     ObjectPool(const ObjectPool& pool) = delete;
     
     ObjectPool& operator=(const ObjectPool& pool) = delete;
+
+private:
+    // 暂时不开放，从 GetSharedObj 和 GetUniqueObj获取。
+    // 分配对象(从空闲队列取内存， 然后构造)
+    template<typename... Args>
+    T* Allocate(Args&&... args)
+    {
+        T* ptr = nullptr;
+        if(!free_list_.empty())
+        {
+            ptr = free_list_.back();
+            free_list_.pop_back();
+        }else{
+             ptr = static_cast<T*>(::operator new(sizeof(T)));
+             allocated_.push_back(ptr);
+        }
+
+        ::new (ptr) T(std::forward<Args>(args)...);
+        return ptr; 
+    }
 
 private:
     std::vector<T*>            free_list_;     // 空闲内存空间(已析构，可以取出直接进行构造使用)

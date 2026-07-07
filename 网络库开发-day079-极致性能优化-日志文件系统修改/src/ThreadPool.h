@@ -23,13 +23,9 @@ public:
         {
             concurrentQueue_.Start(threadCount);
         }
-        else if(2 == option_)
-        {
-            blockingConcurrentQueue_.Start(threadCount);
-        }
         else
         {
-            hazardMpmcQueue_.Start(threadCount);
+            blockingConcurrentQueue_.Start(threadCount);
         }
     }
 
@@ -46,11 +42,8 @@ public:
         {
             return concurrentQueue_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
         }
-        else if(2 == option_){
+        else {
            return blockingConcurrentQueue_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
-        }
-        else{
-            return hazardMpmcQueue_.AddTask(std::forward<F>(f), std::forward<Args>(args)...);
         }
        
     }
