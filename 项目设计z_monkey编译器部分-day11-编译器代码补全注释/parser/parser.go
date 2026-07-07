@@ -315,6 +315,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 
 		// 下一个运算符优先级高于当前优先级，说明它应该成为当前表达式的父辈节点；
 		// 因此进入下一层解析，让 infixFn 处理这个更高优先级的运算。
+		p.nextToken()
 		leftExp = infixFn(p, leftExp)
 	}
 
