@@ -175,7 +175,7 @@ type HashKey struct {
 	Value uint64
 }
 
-// Hasher 接口：可哈希的对象必须实现此方法
+// Hasher 接口：可哈希的对象必须实现此方法 FNV 算法可以简单注明是用于确保键的唯一性
 type Hasher interface {
 	HashKey() HashKey
 }
@@ -234,11 +234,11 @@ func (b *Builtin) Inspect() string {
 // 编译后的函数体（字节码 + 元信息），是“函数定义”的静态表示。
 // ============================================================
 type CompiledFunction struct {
-	Instructions []byte
-	Constants    []interface{}
-	NumLocals    int
-	NumParams    int
-	NumFree      int
+	Instructions []byte        // 编译完成的指令序列集合
+	Constants    []interface{} // 常量集合
+	NumLocals    int           // 变量个数
+	NumParams    int           // 函数参数个数
+	NumFree      int           // 自由变量个数
 }
 
 func (cf *CompiledFunction) Type() objectType {
@@ -251,6 +251,7 @@ func (cf *CompiledFunction) Inspect() string {
 
 // ============================================================
 // 闭包，是“函数定义 + 捕获的变量”的运行时组合，是实际执行时的函数对象。
+// 闭包和普通函数的区别在于有没有自由变量，没有自由变量的为Free.
 // ============================================================
 type Closure struct {
 	Fn   *CompiledFunction //指向编译后的函数体

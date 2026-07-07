@@ -29,6 +29,7 @@ func New(input string) *Lexer {
 	return l
 }
 
+// 读取一个字符
 func (l *Lexer) readChar() {
 	if l.readPosition >= len(l.input) {
 		l.ch = 0
@@ -40,6 +41,7 @@ func (l *Lexer) readChar() {
 	l.readPosition += 1
 }
 
+// 获取下一个字符的byte内容
 func (l *Lexer) peekChar() byte {
 	if l.readPosition >= len(l.input) {
 		return 0
@@ -48,12 +50,15 @@ func (l *Lexer) peekChar() byte {
 	return l.input[l.readPosition]
 }
 
+// 跳过空格 tab键 和 换行符
 func (l *Lexer) skipWhiteSpace() {
 	for ' ' == l.ch || '\t' == l.ch || '\r' == l.ch || '\n' == l.ch {
 		l.readChar()
 	}
 }
 
+// 读取标识符，这边标识符的定义是 a——z, A-Z和-三种字符组成的。
+// 可以修改readIdentifier 支持其他规则
 func (l *Lexer) readIdentifier() string {
 	start_position := l.positon
 	for isLetter(l.ch) {
@@ -63,6 +68,7 @@ func (l *Lexer) readIdentifier() string {
 	return l.input[start_position:l.positon]
 }
 
+// 支持数字型常量
 func (l *Lexer) readNumber() string {
 	start_positon := l.positon
 	for isDigit(l.ch) {
@@ -72,6 +78,7 @@ func (l *Lexer) readNumber() string {
 	return l.input[start_positon:l.positon]
 }
 
+// 支持字符串常量
 func (l *Lexer) readString() string {
 	start_positon := l.positon + 1
 	for {
@@ -84,6 +91,8 @@ func (l *Lexer) readString() string {
 	return l.input[start_positon:l.positon]
 }
 
+// 做词法分析，获取下一个token. 根据开头的字符进行token类型的预判
+// 然后进行整个token类型内容的完整获取。再进行下一个开头字符的token处理直到字节流结束。
 func (l *Lexer) NextToken() token.Token {
 	readNextChar := true
 	var tok token.Token
@@ -148,6 +157,7 @@ func (l *Lexer) NextToken() token.Token {
 		}
 
 	default:
+		// 是否是以字母或者-打头，是的话则要么是标识符要么是关键字
 		if isLetter(l.ch) {
 			literal := l.readIdentifier()
 			tokenType := token.LookupIdent(literal)
