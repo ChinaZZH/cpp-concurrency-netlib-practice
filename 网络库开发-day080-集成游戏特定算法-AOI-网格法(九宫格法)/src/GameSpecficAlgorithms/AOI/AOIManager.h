@@ -16,6 +16,9 @@ struct EntityInfo
 {
     int x;
     int y;
+
+    int gridX;
+    int gridY;
 };
 
 // ============================================================
@@ -48,7 +51,7 @@ public:
     std::vector<int> GetNeighbors(int entityId, int radius = 1) const; 
 
     // 辅助，根据实体坐标转换为网格坐标
-    std::pair<int, int> GetGridPostion(int entityId) const;
+    std::pair<bool,std::pair<int, int>> GetGridPostion(int entityId) const;
 
 private:
     std::pair<int, int> GetGridCoord(int x, int y) const;

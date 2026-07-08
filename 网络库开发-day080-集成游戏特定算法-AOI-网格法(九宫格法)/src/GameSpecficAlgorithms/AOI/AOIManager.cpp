@@ -5,10 +5,13 @@
 
  void AOIManager::AddEntity(int entityId, int x, int y)
  {
+    // 支持坐标为负数
+    /*
     if(!this->CheckPositionIsValid(x, y, "AOIManager::AddEntity"))
     {
         return;
     }
+    */
 
     auto itr = entityMap_.find(entityId);
     if(itr != entityMap_.end())
@@ -17,13 +20,16 @@
         return ;
     }
 
+    auto gridPostion = this->GetGridCoord(x, y);
     EntityInfo entity;
     entity.x = x;
     entity.y = y;
+    entity.gridX = gridPostion.first;
+    entity.gridY = gridPostion.second;
     entityMap_[entityId] = entity;
 
     //std::cout << "add entity map" << std::endl;
-    auto gridPostion = this->GetGridCoord(entity.x, entity.y);
+    
     auto& setEntityId = gridMap_[gridPostion];
     setEntityId.insert(entityId);
 
@@ -54,7 +60,7 @@ void AOIManager::RemoveEntity(int entityId)
     }
 
     const EntityInfo& entity = (itrEntity->second);
-    auto gridPostion = this->GetGridCoord(entity.x, entity.y);
+    std::pair<int, int> gridPostion(entity.gridX, entity.gridY);
     entityMap_.erase(itrEntity);
 
 
@@ -63,16 +69,24 @@ void AOIManager::RemoveEntity(int entityId)
     {
         auto& setEntityId = (itrGrid->second);
         setEntityId.erase(entityId);
+
+        if(setEntityId.empty())
+        {
+            gridMap_.erase(gridPostion);
+        }
     }
 }
 
 
 void AOIManager::MoveEntity(int entityId, int newX, int newY)
 {
+    // 支持坐标为负数
+    /*
     if(!this->CheckPositionIsValid(newX, newY, "AOIManager::MoveEntity"))
     {
         return;
     }
+    */
 
     // 移动entity的前提是 原先entityId就已经在了。
     auto itrEntity = entityMap_.find(entityId);
@@ -90,7 +104,7 @@ void AOIManager::MoveEntity(int entityId, int newX, int newY)
     }
 
     // 网格坐标没有发生变化则进行九宫格同步坐标变化即可
-    auto oldGridPos = this->GetGridCoord(entityInfo.x, entityInfo.y);
+    auto oldGridPos = std::pair(entityInfo.gridX, entityInfo.gridY);
     auto oldNeighborsEntitys = this->GetNeighbors(entityId);
 
 
@@ -110,11 +124,18 @@ void AOIManager::MoveEntity(int entityId, int newX, int newY)
     }
 
     // 网格坐标发生变化，则需要先从旧的网格列表中删除该实体id
+    entityInfo.gridX = newGridPos.first;
+    entityInfo.gridY = newGridPos.second;
     auto itr_old_grid = gridMap_.find(oldGridPos);
     if(itr_old_grid != gridMap_.end())
     {
         auto& setOldEntityId = (itr_old_grid->second);
         setOldEntityId.erase(entityId);
+
+        if(setOldEntityId.empty())
+        {
+            gridMap_.erase(oldGridPos);
+        }
     }
 
     auto& setNewEntityId = gridMap_[newGridPos];
@@ -148,8 +169,8 @@ void AOIManager::MoveEntity(int entityId, int newX, int newY)
 std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) const
 {
     std::vector<int> vecNeighbors;
-    auto pairGridPos = this->GetGridPostion(entityId);
-    if (pairGridPos.first < 0 || pairGridPos.second < 0) 
+    auto entityGridPos = this->GetGridPostion(entityId);
+    if(false == entityGridPos.first) 
     {
         std::stringstream ss;
         ss << "AOIManager::GetNeighbors Get entity position error entityid: id" << entityId << std::endl;
@@ -159,12 +180,12 @@ std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) cons
         return vecNeighbors;
     }
 
+    // 支持坐标为负数
+    auto pairGridPos = entityGridPos.second;
     int nMinX = pairGridPos.first - radius;
-    nMinX = ((nMinX < 0) ? 0 : nMinX); 
     int nMaxX = pairGridPos.first + radius;
 
     int nMinY = pairGridPos.second - radius;
-    nMinY = ((nMinY < 0) ? 0 : nMinY); 
     int nMaxY = pairGridPos.second + radius;
 
     for(int gridX = nMinX; gridX <= nMaxX; gridX += 1)
@@ -193,16 +214,16 @@ std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) cons
 }
 
 // 辅助，根据实体坐标转换为网格坐标(物理坐标)
-std::pair<int, int> AOIManager::GetGridPostion(int entityId) const
+std::pair<bool,std::pair<int, int>> AOIManager::GetGridPostion(int entityId) const
 {
     auto itr = entityMap_.find(entityId);
     if(itr == entityMap_.end()) 
     {
-        return std::pair(-1, -1);
+        return std::pair(false, std::pair(0, 0));
     }
 
     const EntityInfo& entity = (itr->second);
-    return GetGridCoord(entity.x, entity.y);
+    return std::pair(true, std::pair(entity.gridX, entity.gridY));
 }
 
 
