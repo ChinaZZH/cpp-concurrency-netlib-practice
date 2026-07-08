@@ -24,8 +24,8 @@
 
     //std::cout << "add entity map" << std::endl;
     auto gridPostion = this->GetGridCoord(entity.x, entity.y);
-    auto& vecEntityId = gridMap_[gridPostion];
-    vecEntityId.push_back(entityId);
+    auto& setEntityId = gridMap_[gridPostion];
+    setEntityId.insert(entityId);
 
     // 同时进行九宫格广播加入的消息
     auto neighborsEntityList = this->GetNeighbors(entityId);
@@ -61,12 +61,8 @@ void AOIManager::RemoveEntity(int entityId)
     auto itrGrid = gridMap_.find(gridPostion);
     if(itrGrid != gridMap_.end())
     {
-        auto& vecEntityId = (itrGrid->second);
-        auto itrRemove = std::remove(vecEntityId.begin(), vecEntityId.end(), entityId);
-        if(itrRemove != vecEntityId.end())
-        {
-            vecEntityId.erase(itrRemove, vecEntityId.end());
-        }
+        auto& setEntityId = (itrGrid->second);
+        setEntityId.erase(entityId);
     }
 }
 
@@ -117,16 +113,12 @@ void AOIManager::MoveEntity(int entityId, int newX, int newY)
     auto itr_old_grid = gridMap_.find(oldGridPos);
     if(itr_old_grid != gridMap_.end())
     {
-        auto& vecOldEntityId = (itr_old_grid->second);
-        auto itrRemove = std::remove(vecOldEntityId.begin(), vecOldEntityId.end(), entityId);
-        if(itrRemove != vecOldEntityId.end())
-        {
-            vecOldEntityId.erase(itrRemove, vecOldEntityId.end());
-        }
+        auto& setOldEntityId = (itr_old_grid->second);
+        setOldEntityId.erase(entityId);
     }
 
-    auto& vecNewEntityId = gridMap_[newGridPos];
-    vecNewEntityId.push_back(entityId);
+    auto& setNewEntityId = gridMap_[newGridPos];
+    setNewEntityId.insert(entityId);
     auto newNeighborsEntitys = this->GetNeighbors(entityId);
 
     // 假设add， remove， change坐标 发的是不同的消息，则需要先算出old和new的交集
@@ -187,12 +179,12 @@ std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) cons
             }
 
            
-            const std::vector<int>& vecEntityIds = (itr->second);
+            const std::unordered_set<int>& setEntityIds = (itr->second);
             if(pairGridPos == neighborGridPos)
             {
-                std::copy_if(vecEntityIds.begin(), vecEntityIds.end(), std::back_inserter(vecNeighbors), [entityId](int id){ return id != entityId; });
+                std::copy_if(setEntityIds.begin(), setEntityIds.end(), std::back_inserter(vecNeighbors), [entityId](int id){ return id != entityId; });
             }else{
-                std::copy(vecEntityIds.begin(), vecEntityIds.end(), std::back_inserter(vecNeighbors));
+                std::copy(setEntityIds.begin(), setEntityIds.end(), std::back_inserter(vecNeighbors));
             }
         }
     }

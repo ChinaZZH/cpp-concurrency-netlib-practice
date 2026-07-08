@@ -62,7 +62,6 @@ private:
     std::unordered_map<int, EntityInfo> entityMap_;
     
     // 网格坐标 (gridX, gridY) → 该网格内的实体ID集合
-    // 这边使用vector, 每一个网格不允许有太多的的人站在里面，且使用vector的连续内存可以更好的提高cache的命中率
-    std::unordered_map<std::pair<int, int>, std::vector<int>, PairHash> gridMap_;
-    //std::map<std::pair<int, int>, std::vector<int>> gridMap_;
+    // 优化成使用unordered_set
+    std::unordered_map<std::pair<int, int>, std::unordered_set<int>, PairHash> gridMap_;
 };
