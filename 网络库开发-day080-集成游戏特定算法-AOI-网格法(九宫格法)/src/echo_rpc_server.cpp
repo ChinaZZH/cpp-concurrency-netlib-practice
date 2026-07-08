@@ -9,6 +9,7 @@
 #include "Common/ProtoMethod.h"
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcConnectionPool.h"
+#include "GameSpecficAlgorithms/AlgorithmsUnitTesting.h"
 #include "TcpClient.h"
 #include <iostream>
 #include <chrono>
@@ -18,10 +19,18 @@
 #include <thread>
 
 
+int UnitTesting()
+{
+    AlgorithmsUnitTesting gameAlgorighm;
+    gameAlgorighm.TestAoiManager();
+    return 0;
+}
 
 int main()
 {
-    
+    std::cout << "start unit testing" << std::endl;
+    UnitTesting();
+    std::cout << "start rpc server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
     
     auto& cfg = ConfigManager::getInstance();
