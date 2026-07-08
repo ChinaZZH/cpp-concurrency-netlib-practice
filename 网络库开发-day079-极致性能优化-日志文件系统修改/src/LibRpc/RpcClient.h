@@ -10,7 +10,6 @@
 #include <nlohmann/json.hpp>
 #include <condition_variable>
 #include <absl/container/flat_hash_map.h>
-#include "../Coroutine/CoroutineTask.h"
 
 
 class TcpConnection;
@@ -69,9 +68,6 @@ public:
     bool IsConnected() const { return bConnected_.load(std::memory_order_acquire); }
 
     // void LoopQuit() { if(loop_) {loop_->Quit();}  io_thread.join(); }
-
-    // 支持协程
-    //CoroutineTask<std::string> CallAsyncCoroutine(const std::string& method, const std::string& params, int timeout_ms = 5000);
 
 private:
     static std::string GenerateTraceId();

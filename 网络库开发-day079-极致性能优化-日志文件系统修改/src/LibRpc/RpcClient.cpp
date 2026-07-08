@@ -18,7 +18,6 @@
 #include <coroutine>
 #include "../Decoder/LengthPrefixDecoder.h"
 #include "../TcpClient.h"
-#include "../Coroutine/AwaitableCallback.h"
 
 
 RpcClient::RpcClient(TcpConnectionPtr con)
@@ -417,25 +416,3 @@ uint64_t RpcClient::GetMachineId() {
     return machine_id;
 }
 
-
-// 支持协程
-/*
-CoroutineTask<std::string> RpcClient::CallAsyncCoroutine(const std::string& method, const std::string& params, int timeout_ms = 5000)
-{
-    AwaitableCallback<std::string> awaiter;
-    awaiter.async_operation = [this, method, params, timeout_ms](auto&& callback, auto&& errorCallback){
-        CallAsync(method, params, [callback = std::move(callback), err_cb = std::move(errorCallback)] (const std::string& result, int32_t error){
-            std::cout << "RpcClient::CallAsyncCoroutine_CallAsync" << std::endl;
-            if(eRpcCode_Success == error){
-                callback(result);
-            }else{
-                err_cb(std::make_exception_ptr(std::runtime_error("RPC error code:" + std::to_string(error))));
-            }
-
-        }, timeout_ms);
-    };
-
-    std::cout << "RpcClient::CallAsyncCoroutine end" << std::endl;
-    co_return co_await awaiter;
-}
-*/

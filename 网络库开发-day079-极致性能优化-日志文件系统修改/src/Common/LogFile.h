@@ -45,8 +45,9 @@ private:
     moodycamel::BlockingConcurrentQueue<std::pair<std::string, std::string>> log_content_task_;
     std::atomic<bool>  stop_flag_ = false;
 
-
-    absl::flat_hash_map<std::string, std::ofstream>  log_file_system_;
+    // 给每个文件配一把小锁
+    using LogStructData = std::pair<std::ofstream, std::mutex>; 
+    std::map<std::string, LogStructData> log_file_system_;
     std::mutex mtx_;
 };
 

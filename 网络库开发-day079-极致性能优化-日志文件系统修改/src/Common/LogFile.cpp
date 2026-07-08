@@ -45,13 +45,13 @@ void LogFile::Release()
         }
     }
 
-    std::lock_guard<std::mutex> lock(mtx_);
     for(auto& itr:log_file_system_)
     {
-        auto& logfile = (itr.second);
-        if(logfile.is_open())
+        auto& logStruct = (itr.second);
+        std::lock_guard<std::mutex> lock(logStruct.second);
+        if(logStruct.first.is_open())
         {
-            logfile.close();
+            logStruct.first.close();
         }
     }
 }
@@ -76,14 +76,24 @@ bool LogFile::HelpToAppendLog(const std::string& fileName, const std::string& co
         return false;
     }
 
-    std::lock_guard<std::mutex> lock(mtx_);
-    auto& logfile = log_file_system_[fileName];
-    if(!logfile.is_open())
+    
+    LogStructData* ptrLogStruct;
     {
-        logfile.open(fileName.c_str(), std::ios::app);
+        std::lock_guard<std::mutex> lock(mtx_);
+        auto& logStructData = log_file_system_[fileName];
+        if(!logStructData.first.is_open())
+        {
+            logStructData.first.open(fileName.c_str(), std::ios::app);
+        }
+
+        ptrLogStruct = &logStructData;
+    }
+    
+    if(ptrLogStruct)
+    {
+        std::lock_guard<std::mutex> lock(ptrLogStruct->second);
+        (ptrLogStruct->first) << context << std::endl;
     }
 
-
-    logfile << context << std::endl;
     return true;
 }
