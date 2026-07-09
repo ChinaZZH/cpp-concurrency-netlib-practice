@@ -1,11 +1,12 @@
 #include "ProtoMethod.h"
+#include "../TcpConnection.h"
 #include "../../build/proto_gen/add.pb.h"
 #include "../../build/proto_gen/rpc.pb.h"
 #include "../../build/proto_gen/login.pb.h"
 
 namespace ProtoMethod
 {
-    std::string add(const std::string& params)
+    std::string add(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& params)
     {
         AddRequest req;
         if(!req.ParseFromString(params))

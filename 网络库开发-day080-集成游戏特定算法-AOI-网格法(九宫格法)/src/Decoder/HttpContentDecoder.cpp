@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 
 // 当前只解析头部的 head. 没解析body的
-bool HttpContentDecoder::Decode(Buffer& input, std::string& msg)
+bool HttpContentDecoder::Decode(Buffer& input, std::string& msg, uint32_t& msgType)
 {
     if(input.ReadableBytes() <= 4)
     {

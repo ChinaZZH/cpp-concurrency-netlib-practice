@@ -4,11 +4,14 @@
 #include "LibRpc/RpcConnectionPool.h"
 #include "LibRpc/RpcClient.h"
 #include "../build/proto_gen/add.pb.h"
+#include "../build/proto_gen/aoi.pb.h"
 #include "LibRpc/RpcErrorCodeDef.h"
 #include "Common/ProtoMethod.h"
 #include "Common/ConfigManager.h"
 #include "Common/ObjectPool.h"
 #include "EventLoop.h"
+#include "Decoder/LengthAndTypePrefixDecoder.h"
+#include "GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
 
 
 int ObjectPool_test()
@@ -53,6 +56,7 @@ int echo_rpc_client_test()
         loop.Loop();
     });
 
+    /*
     AddRequest req;
     req.set_a(1);
     req.set_b(0);
@@ -76,7 +80,61 @@ int echo_rpc_client_test()
 
         }, 5000);
     }
+    */
+
+    aoi::EntityEnterRequest newRequest;
+    newRequest.set_map_id(100);
+    aoi::EntityInfo* pEntity = newRequest.mutable_new_entity();
+
+    pEntity->set_entity_id(1);
+    pEntity->set_x(50);
+    pEntity->set_y(50);
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+   
+    //aoi.AddEntity(2, 120, 50);
+    pEntity->set_entity_id(2);
+    pEntity->set_x(120);
+    pEntity->set_y(50);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+
+    pEntity->set_entity_id(3);
+    pEntity->set_x(50);
+    pEntity->set_y(120);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+  
+    pEntity->set_entity_id(4);
+    pEntity->set_x(200);
+    pEntity->set_y(200);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+    // 移动实体
+    aoi::EntityMoveRequest moveReq;
+    moveReq.set_map_id(100);
+    moveReq.set_entity_id(2);
+    moveReq.set_new_x(100);
+    moveReq.set_new_y(50);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(moveReq.SerializeAsString(), GSMT_MoveEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
     
+    moveReq.set_new_x(300);
+    moveReq.set_new_y(300);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(moveReq.SerializeAsString(), GSMT_MoveEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+    // 删除实体
+    aoi::EntityLeaveRequest removeReq;
+    removeReq.set_map_id(100);
+    removeReq.set_entity_id(3);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(removeReq.SerializeAsString(), GSMT_RemoveEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+    std::this_thread::sleep_for(std::chrono::seconds(60));
     // 不能让他马上结束
     io_thread.join();
     return 0;

@@ -69,6 +69,8 @@ public:
 
     // void LoopQuit() { if(loop_) {loop_->Quit();}  io_thread.join(); }
 
+    void CallAsyncIgnoreResponse(const std::string& msgContent);
+
 private:
     static std::string GenerateTraceId();
 

@@ -18,7 +18,9 @@
 #include <coroutine>
 #include "../Decoder/LengthPrefixDecoder.h"
 #include "../TcpClient.h"
-
+#include "../Decoder/LengthAndTypePrefixDecoder.h"
+#include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
+#include "../../build/proto_gen/aoi.pb.h"
 
 RpcClient::RpcClient(TcpConnectionPtr con)
 {
@@ -69,7 +71,7 @@ bool RpcClient::AutoConnect()
         con_promise.set_value();
     });
 
-    tcp_client_->SetMessageCallBack([weakRpcPtr](const TcpConnectionPtr&, std::string& msg) {
+    tcp_client_->SetMessageCallBack([weakRpcPtr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
         auto rpcClient = weakRpcPtr.lock();
         if(rpcClient)
         {
@@ -183,10 +185,6 @@ std::string RpcClient::Call(const std::string& method, const std::string& params
 // 处理响应(由网络消息回调调用)
 void RpcClient::OnResponse(const std::string& data)
 {
-    
-    //Buffer buf;
-    //buf.Append(data);
-
     uint64_t res_id = 0;
     int32_t code = 0;
     std::string result;
@@ -416,3 +414,15 @@ uint64_t RpcClient::GetMachineId() {
     return machine_id;
 }
 
+void RpcClient::CallAsyncIgnoreResponse(const std::string& msgContent)
+{
+    std::weak_ptr<TcpConnection> weakCon = con_->shared_from_this();
+    loop_->RunInLoop([weakCon, strData = std::move(msgContent)](){
+        auto conn = weakCon.lock();
+        if(conn)
+        {
+            //std::cout << "RpcClient::CallAsync thread_id:=" << std::this_thread::get_id() << " connection thread_id:= " << event_loop->GetThreadId() << std::endl;
+            conn->Send(strData);
+        }
+    });
+}

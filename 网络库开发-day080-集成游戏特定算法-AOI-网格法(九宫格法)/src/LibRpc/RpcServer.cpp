@@ -16,7 +16,8 @@ RpcServer::RpcServer(EventLoop* loop, int nPort)
 {
     server_.SetMessageCallBack(std::bind(&RpcServer::OnMessage, 
         this, std::placeholders::_1, 
-        std::placeholders::_2)
+        std::placeholders::_2,
+        std::placeholders::_3)
     );
 
     server_.SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
@@ -43,7 +44,7 @@ void RpcServer::RegisterMethod(const std::string& strMethod, Handler handler)
 }
 
 
-void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
+void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType)
 {
     EventLoop* loop_ptr = con->GetLoop();
     assert(loop_ptr);
@@ -83,7 +84,7 @@ void RpcServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string
         std::string result;
         try{
             Handler handler = (itr->second);
-            result = handler(strParams);
+            result = handler(weak_connection_ptr, strParams);
         }
         catch(const std::exception& e)
         {

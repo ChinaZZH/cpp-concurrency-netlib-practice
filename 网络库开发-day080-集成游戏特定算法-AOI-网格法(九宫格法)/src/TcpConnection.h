@@ -26,7 +26,7 @@ public:
     EventLoop* GetLoop() const { return loop_; }
     int GetFd() const { return fd_; }
 
-    using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&)>;
+    using MessageCallBack = std::function<void(const std::shared_ptr<TcpConnection>&, std::string&, uint32_t)>;
     using CloseCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
     using ConnectionCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
     using HighWaterMarkCallback = std::function<void(const std::shared_ptr<TcpConnection>&)>;

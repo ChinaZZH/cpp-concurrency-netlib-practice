@@ -15,7 +15,7 @@ class ServiceRegistry;
 class RpcServer
 {
 public:
-    using Handler = std::function<std::string(const std::string&)>;
+    using Handler = std::function<std::string(const std::weak_ptr<TcpConnection>& , const std::string&)>;
 
     RpcServer(EventLoop* loop, int nPort);
 
@@ -30,11 +30,11 @@ public:
 
 private:
     // 同步处理，不走任务线程池
-    void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
+    void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType);
 
     void HandlerResultResponse(EventLoop* loop_ptr, const std::weak_ptr<TcpConnection>& weak_con,  uint64_t id, int32_t code, const std::string& strResult, const std::string& trace_id);
 
-private:
+protected:
     TcpServer server_;
     absl::flat_hash_map<std::string, Handler> methods_;
 

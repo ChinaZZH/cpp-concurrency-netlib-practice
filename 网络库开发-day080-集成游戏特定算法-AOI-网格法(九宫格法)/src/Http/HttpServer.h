@@ -44,12 +44,12 @@ public:
 
 private:
     // 同步 
-    void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
+    void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType);
 
     void SendHttpResponse(const std::shared_ptr<TcpConnection>& con, const std::string& strContent, int nStatusCode, bool bKeepAlive);
 
     // 通过线程池异步执行
-    void AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg);
+    void AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType);
 
     void AsyncSendHttpResponse(EventLoop* loop, const std::weak_ptr<TcpConnection>& conWeakPtr, const std::string& strContent, int nStatusCode, bool bKeepAlive);
 

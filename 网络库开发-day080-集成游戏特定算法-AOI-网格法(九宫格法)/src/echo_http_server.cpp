@@ -38,7 +38,8 @@ int echo_http_server()
     TcpServer server(&loop, PORT);
     server.SetMessageCallBack(std::bind(&TcpServer::HandleOnMessage, 
         &server, std::placeholders::_1, 
-        std::placeholders::_2)
+        std::placeholders::_2,
+        std::placeholders::_3)
     );
     server.Start(0, 6);
     */

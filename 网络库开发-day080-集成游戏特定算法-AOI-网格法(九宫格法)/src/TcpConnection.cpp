@@ -306,17 +306,18 @@ void TcpConnection::ProcessInputBuffer()
         if(messageCallBack_)
         {
             std::string strLineMsg = inputBuffer_.RetrieveAllAsString();
-            messageCallBack_(shared_from_this(), strLineMsg);
+            messageCallBack_(shared_from_this(), strLineMsg, 0);
         }
         
     }
     else{
         std::string msg;
-        while(decoder_->Decode(inputBuffer_, msg))
+        uint32_t msgType = 0;
+        while(decoder_->Decode(inputBuffer_, msg, msgType))
         {
             if(messageCallBack_)
             {
-                messageCallBack_(shared_from_this(), msg);
+                messageCallBack_(shared_from_this(), msg, msgType);
             }
         }
     }

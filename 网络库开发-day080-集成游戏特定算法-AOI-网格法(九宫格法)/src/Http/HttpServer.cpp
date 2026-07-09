@@ -20,13 +20,15 @@ HttpServer::HttpServer(EventLoop* loop, int nPort)
     // 由于httpServer 计算很少，以读写io为主，则让计算和消息都在io线程处理(不要放入任务线程池反而性能更低)。
     server_.SetMessageCallBack(std::bind(&HttpServer::OnMessage, 
         this, std::placeholders::_1, 
-        std::placeholders::_2)
+        std::placeholders::_2,
+        std::placeholders::_3)
     );
 
     /*
     server_.SetMessageCallBack(std::bind(&HttpServer::AsyncOnMessage, 
-        this, std::placeholders::_1, 
-        std::placeholders::_2)
+       this, std::placeholders::_1, 
+        std::placeholders::_2,
+        std::placeholders::_3)
     );
     */
 
@@ -48,7 +50,7 @@ void HttpServer::Start()
 
 
 // 异步实现 注释版本同步实现 因为解析这个过程计算过程很快，所以这个仅仅是用来学习，实际过程中应该使用同步
-void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
+void HttpServer::AsyncOnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType)
 {
     ThreadPool* pool = server_.GetThreadPool();
     if(!pool)
@@ -194,7 +196,7 @@ void HttpServer::SyncResponseToClient(const std::shared_ptr<TcpConnection>& con,
 
 
 // 同步实现版本
-void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg)
+void HttpServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType)
 {
     http_server_context_.Reset();
     bool bOk = http_server_context_.ParseRequest(strMsg);

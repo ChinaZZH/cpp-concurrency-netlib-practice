@@ -6,7 +6,7 @@
 
 static const size_t MAX_PACKET_SIZE = 10 * 1024 * 1024; // 10MB
 
-bool LengthPrefixDecoder::Decode(Buffer& input, std::string& msg) 
+bool LengthPrefixDecoder::Decode(Buffer& input, std::string& msg, uint32_t& msgType) 
 {
     // 需要至少4字节读取包头长度
     if(input.ReadableBytes() < sizeof(uint32_t))

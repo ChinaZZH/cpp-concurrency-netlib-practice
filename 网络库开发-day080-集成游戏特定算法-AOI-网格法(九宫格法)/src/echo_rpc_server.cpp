@@ -14,6 +14,7 @@
 #include <iostream>
 #include <chrono>
 #include <iostream>
+#include "GameSpecficAlgorithms/GameServer.h"
 
 #include <signal.h>
 #include <thread>
@@ -28,9 +29,9 @@ int UnitTesting()
 
 int main()
 {
-    std::cout << "start unit testing" << std::endl;
-    UnitTesting();
-    std::cout << "start rpc server " << std::endl;
+    //std::cout << "start unit testing" << std::endl;
+    //UnitTesting();
+    //std::cout << "start rpc server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
     
     auto& cfg = ConfigManager::getInstance();
@@ -46,7 +47,8 @@ int main()
     TcpServer server(&loop, PORT);
     server.SetMessageCallBack(std::bind(&TcpServer::HandleOnMessage, 
         &server, std::placeholders::_1, 
-        std::placeholders::_2)
+        std::placeholders::_2,
+        std::placeholders::_3)
     );
     server.Start(0, 6);
     */
@@ -56,19 +58,20 @@ int main()
 
     // rpcServer
     int my_port = cfg.getInt("Rpc", "listen_port", 8888);
-    RpcServer server(&loop, my_port);
-    server.RegisterMethod("add", ProtoMethod::add);
+    //RpcServer server(&loop, my_port);
+    //server.RegisterMethod("add", ProtoMethod::add);
+    GameServer server(&loop, my_port);
     server.Start();
 
     // 不向服务注册中心注册了。
-    /*
+    
     std::string my_ip = cfg.getString("Rpc", "server_ip", "127.0.0.1");
     std::string registry_host = cfg.getString("RegisterCenter", "ip", "127.0.0.1");
     int registry_port = cfg.getInt("RegisterCenter", "port", 8888);
     int ttl_sec = cfg.getInt("RegisterCenter", "ttl_sec", 30);
 
     server.EnableServiceDiscovery(registry_host, registry_port, "rpc_server", my_ip, my_port, ttl_sec);
-    */
+    
 
     loop.Loop();
     return 0;

@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 
 
-bool LineDecoder::Decode(Buffer& input, std::string& msg)
+bool LineDecoder::Decode(Buffer& input, std::string& msg, uint32_t& msgType)
 {
     const char* crlf = static_cast<const char*>(memchr(input.Peek(), '\n', input.ReadableBytes()));
     if(!crlf)

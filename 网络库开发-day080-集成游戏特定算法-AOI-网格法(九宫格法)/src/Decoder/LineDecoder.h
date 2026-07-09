@@ -7,5 +7,5 @@ class LineDecoder : public Decoder {
 public:
     virtual ~LineDecoder() = default;
 
-    virtual bool Decode(Buffer& input, std::string& msg) override;
+    virtual bool Decode(Buffer& input, std::string& msg, uint32_t& msgType) override;
 };

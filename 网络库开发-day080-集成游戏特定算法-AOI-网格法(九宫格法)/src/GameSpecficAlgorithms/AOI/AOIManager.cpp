@@ -2,8 +2,9 @@
 #include <iostream>
 #include <sstream>
 #include "../../Common/LogFile.h"
+#include "../../../build/proto_gen/aoi.pb.h"
 
- void AOIManager::AddEntity(int entityId, int x, int y)
+ bool AOIManager::AddEntity(int entityId, int x, int y)
  {
     // 支持坐标为负数
     /*
@@ -16,69 +17,82 @@
     auto itr = entityMap_.find(entityId);
     if(itr != entityMap_.end())
     {
+        std::stringstream ss;
+        ss << "AOIManager::AddEntity error entityID:=" << entityId << std::endl; 
+        LogFile& logfile = LogFile::getInstance();
+        logfile.AppendContent("AOIManager.txt", ss.str());
+
         std::cout << "AOIManager::AddEntity error entityID:=" << entityId << std::endl; 
-        return ;
+        return false;
     }
 
-    auto gridPostion = this->GetGridCoord(x, y);
+    // 存储数据修改
     EntityInfo entity;
     entity.x = x;
     entity.y = y;
+    auto gridPostion = this->GetGridCoord(x, y);
     entity.gridX = gridPostion.first;
     entity.gridY = gridPostion.second;
-    entityMap_[entityId] = entity;
 
-    //std::cout << "add entity map" << std::endl;
-    
-    auto& setEntityId = gridMap_[gridPostion];
-    setEntityId.insert(entityId);
-
-    // 同时进行九宫格广播加入的消息
-    auto neighborsEntityList = this->GetNeighbors(entityId);
-    for(const auto& neighborsId : neighborsEntityList)
     {
-        // 广播有新entity消息下发，发送entityId, x, y
+        entityMap_[entityId] = entity;
+        auto& setEntityId = gridMap_[gridPostion];
+        setEntityId.insert(entityId);
     }
+    
 
+    // 广播有新entity消息下发newEntityResponse，发送entityId, x, y
+    auto neighborsEntityList = this->GetNeighbors(entityId);
+    EnterNewGridPosMsgNotify(entityId, entity, neighborsEntityList);
+    return true;
  }
 
 
-void AOIManager::RemoveEntity(int entityId)
+bool AOIManager::RemoveEntity(int entityId)
 {
     auto itrEntity = entityMap_.find(entityId);
     if(itrEntity == entityMap_.end())
     {
+        std::stringstream ss;
+        ss << "AOIManager::RemoveEntity error entityID:=" << entityId << std::endl;
+        LogFile& logfile = LogFile::getInstance();
+        logfile.AppendContent("AOIManager.txt", ss.str());
+
         std::cout << "AOIManager::RemoveEntity error entityID:=" << entityId << std::endl; 
-        return ;
+        return false;
     }
 
-    // 同时进行九宫格广播离开的消息
     auto neighborsEntityList = this->GetNeighbors(entityId);
-    for(const auto& neighborsId : neighborsEntityList)
+    // 存储数据修改
     {
-        // 广播有删除entity消息下发，发送entityId, x, y
-    }
-
-    const EntityInfo& entity = (itrEntity->second);
-    std::pair<int, int> gridPostion(entity.gridX, entity.gridY);
-    entityMap_.erase(itrEntity);
+        const EntityInfo& entity = (itrEntity->second);
+        std::pair<int, int> gridPostion(entity.gridX, entity.gridY);
+        entityMap_.erase(itrEntity);
 
 
-    auto itrGrid = gridMap_.find(gridPostion);
-    if(itrGrid != gridMap_.end())
-    {
-        auto& setEntityId = (itrGrid->second);
-        setEntityId.erase(entityId);
-
-        if(setEntityId.empty())
+        auto itrGrid = gridMap_.find(gridPostion);
+        if(itrGrid != gridMap_.end())
         {
-            gridMap_.erase(gridPostion);
+            auto& setEntityId = (itrGrid->second);
+            setEntityId.erase(entityId);
+
+            if(setEntityId.empty())
+            {
+                gridMap_.erase(gridPostion);
+            }
         }
     }
+    
+
+    // 消息同步
+    aoi::EntityLeaveNotifyResponse entityLeaveResponse;
+    entityLeaveResponse.set_entity_id(entityId);
+    BroadEntityList(neighborsEntityList, entityLeaveResponse.SerializeAsString(), GSMT_RemoveEntity);
+    return true;
 }
 
 
-void AOIManager::MoveEntity(int entityId, int newX, int newY)
+bool AOIManager::MoveEntity(int entityId, int newX, int newY)
 {
     // 支持坐标为负数
     /*
@@ -92,85 +106,150 @@ void AOIManager::MoveEntity(int entityId, int newX, int newY)
     auto itrEntity = entityMap_.find(entityId);
     if(itrEntity == entityMap_.end())
     {
+        std::stringstream ss;
+        ss << "AOIManager::MoveEntity error entityID:=" << entityId << std::endl;
+        LogFile& logfile = LogFile::getInstance();
+        logfile.AppendContent("AOIManager.txt", ss.str());
+
         std::cout << "AOIManager::MoveEntity error entityID:=" << entityId << std::endl; 
-        return ;
+        return false;
     }
 
     // 位置没有发生变化的时候，直接返回
     EntityInfo& entityInfo = (itrEntity->second);
     if(entityInfo.x == newX && entityInfo.y == newY)
     {
-        return;
+        return true;
     }
 
     // 网格坐标没有发生变化则进行九宫格同步坐标变化即可
     auto oldGridPos = std::pair(entityInfo.gridX, entityInfo.gridY);
     auto oldNeighborsEntitys = this->GetNeighbors(entityId);
 
-
-    auto newGridPos = this->GetGridCoord(newX, newY);
-
     // 更新entityInfo
     entityInfo.x = newX;
     entityInfo.y = newY;
+    auto newGridPos = this->GetGridCoord(newX, newY);
+
+    // 实际物理坐标改变，但是网格坐标没有改变，则向邻居同步最新的坐标
     if(oldGridPos == newGridPos)
     {
-        for(const auto& neighborsId : oldNeighborsEntitys)
-        {
-            // 广播entity 实体坐标 x, y 发生变化，发送entityId, x, y
-        }
-
-        return;
+        aoi::EntityMoveNotifyResponse moveResponse;
+        moveResponse.set_entity_id(entityId);
+        moveResponse.set_new_x(newX);
+        moveResponse.set_new_y(newY);
+        BroadEntityList(oldNeighborsEntitys, moveResponse.SerializeAsString(), GSMT_MoveEntity);
+        return true;
     }
 
     // 网格坐标发生变化，则需要先从旧的网格列表中删除该实体id
-    entityInfo.gridX = newGridPos.first;
-    entityInfo.gridY = newGridPos.second;
-    auto itr_old_grid = gridMap_.find(oldGridPos);
-    if(itr_old_grid != gridMap_.end())
+    // 存储数据修改
     {
-        auto& setOldEntityId = (itr_old_grid->second);
-        setOldEntityId.erase(entityId);
-
-        if(setOldEntityId.empty())
+        entityInfo.gridX = newGridPos.first;
+        entityInfo.gridY = newGridPos.second;
+        auto itr_old_grid = gridMap_.find(oldGridPos);
+        if(itr_old_grid != gridMap_.end())
         {
-            gridMap_.erase(oldGridPos);
+            auto& setOldEntityId = (itr_old_grid->second);
+            setOldEntityId.erase(entityId);
+
+            if(setOldEntityId.empty())
+            {
+                gridMap_.erase(oldGridPos);
+            }
         }
+
+        auto& setNewEntityId = gridMap_[newGridPos];
+        setNewEntityId.insert(entityId);
     }
-
-    auto& setNewEntityId = gridMap_[newGridPos];
-    setNewEntityId.insert(entityId);
+    
     auto newNeighborsEntitys = this->GetNeighbors(entityId);
-
-    // 假设add， remove， change坐标 发的是不同的消息，则需要先算出old和new的交集
     std::vector<int> vecAllNeighbors;
     std::set_intersection(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), newNeighborsEntitys.begin(), newNeighborsEntitys.end(), back_inserter(vecAllNeighbors));
-    for(const auto& allEntityId : vecAllNeighbors)
+
+    // 网格坐标变化前和变化后都在entity视野的九宫格内, 则发送change positon消息
     {
-        // 网格坐标变化前和变化后都在九宫格内, 则发送change positon消息
+        aoi::EntityMoveNotifyResponse moveResponse;
+        moveResponse.set_entity_id(entityId);
+        moveResponse.set_new_x(newX);
+        moveResponse.set_new_y(newY);
+        BroadEntityList(vecAllNeighbors, moveResponse.SerializeAsString(), GSMT_MoveEntity);
     }
 
-    std::vector<int> vecNewNeighbors;
-    std::set_intersection(newNeighborsEntitys.begin(), newNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecNewNeighbors));
-    for(const auto& EntityId : vecNewNeighbors)
+    
+    // 离开玩家九宫格视野的人, 广播离开的消息
     {
-        // 网格坐标变化前不在九宫格内， 变化后再九宫格内，则发送新增消息
-    }
+        aoi::EntityLeaveNotifyResponse entityLeaveResponse;
+        entityLeaveResponse.set_entity_id(entityId);
 
-    std::vector<int> vecRemoveNeighbors;
-    std::set_intersection(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecRemoveNeighbors));
-    for(const auto& EntityId : vecRemoveNeighbors)
-    {
-        // 网格坐标变化在九宫格内， 变化后不在九宫格内，则发送移除消息
+        std::vector<int> vecRemoveNeighbors;
+        std::set_difference(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecRemoveNeighbors));
+        BroadEntityList(vecRemoveNeighbors, entityLeaveResponse.SerializeAsString(), GSMT_RemoveEntity);
     }
+    
+    
+    // 处理新进入视野的人
+    std::vector<int> vecAddNewNeighbors;
+    std::set_difference(newNeighborsEntitys.begin(), newNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecAddNewNeighbors));
+    EnterNewGridPosMsgNotify(entityId, entityInfo, vecAddNewNeighbors);
+    return true;
 }
     
+
+void AOIManager::EnterNewGridPosMsgNotify(int entityId, const EntityInfo& newEntity, const std::vector<int>& neighborsEntityList)
+{
+    {
+        aoi::EntityEnterNotifyResponse newEntityResponse;
+        aoi::EntityInfo* pNewEntity = newEntityResponse.mutable_new_entity();
+        if(pNewEntity)
+        {
+            pNewEntity->set_entity_id(entityId);
+            pNewEntity->set_x(newEntity.x);
+            pNewEntity->set_y(newEntity.y);
+        }
+
+        BroadEntityList(neighborsEntityList, newEntityResponse.SerializeAsString(), GSMT_AddEntity);
+    }
+    
+
+
+    // 同时进行九宫格广播有新的人进入视野的消息给邻居
+    aoi::InitAroundEntitiesNotifyResponse aroundResponse;
+    for(const auto& neighborsId : neighborsEntityList)
+    {
+       // 将neighborsId 压入到数据包中，然后结束后发给新进入者
+       auto neighborsInfo = this->GetEntityPostion(neighborsId);
+       if(!neighborsInfo.valid)
+       {
+            continue;
+       }
+       
+       aoi::EntityInfo* pAroundEntity =  aroundResponse.add_around_entities();
+       if(!pAroundEntity)
+       {
+            continue;
+       }
+       
+
+       pAroundEntity->set_entity_id(neighborsId);
+       pAroundEntity->set_x(neighborsInfo.x);
+       pAroundEntity->set_y(neighborsInfo.y);
+    }
+
+    // 将aroundResponse发送给进入新进入者
+    if(sendMsgCallBack_)
+    {
+        sendMsgCallBack_(entityId, aroundResponse.SerializeAsString(), GSMT_SyncNeighborsEntity);
+    }   
+}
+
+
 // 获取周围实体列表（默认九宫格，radius 可扩展）
 std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) const
 {
     std::vector<int> vecNeighbors;
     auto entityGridPos = this->GetGridPostion(entityId);
-    if(false == entityGridPos.first) 
+    if(false == entityGridPos.valid) 
     {
         std::stringstream ss;
         ss << "AOIManager::GetNeighbors Get entity position error entityid: id" << entityId << std::endl;
@@ -181,27 +260,27 @@ std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) cons
     }
 
     // 支持坐标为负数
-    auto pairGridPos = entityGridPos.second;
-    int nMinX = pairGridPos.first - radius;
-    int nMaxX = pairGridPos.first + radius;
+   // 支持坐标为负数
+    int nMinX = entityGridPos.gridX - radius;
+    int nMaxX = entityGridPos.gridX + radius;
 
-    int nMinY = pairGridPos.second - radius;
-    int nMaxY = pairGridPos.second + radius;
+    int nMinY = entityGridPos.gridY - radius;
+    int nMaxY = entityGridPos.gridY + radius;
 
     for(int gridX = nMinX; gridX <= nMaxX; gridX += 1)
     {
         for(int gridY = nMinY; gridY <= nMaxY; gridY += 1)
         {
-            auto neighborGridPos = std::pair(gridX, gridY);
-            auto itr = gridMap_.find(neighborGridPos);
+            //auto neighborGridPos = std::pair(gridX, gridY);
+            auto itr = gridMap_.find(std::pair(gridX, gridY));
             if(itr == gridMap_.end())
             {
                 continue;
             }
 
            
-            const std::unordered_set<int>& setEntityIds = (itr->second);
-            if(pairGridPos == neighborGridPos)
+            const std::set<int>& setEntityIds = (itr->second);
+            if(gridX == entityGridPos.gridX && gridY == entityGridPos.gridY)
             {
                 std::copy_if(setEntityIds.begin(), setEntityIds.end(), std::back_inserter(vecNeighbors), [entityId](int id){ return id != entityId; });
             }else{
@@ -213,19 +292,47 @@ std::vector<int> AOIManager::GetNeighbors(int entityId, int radius /*= 1*/) cons
     return vecNeighbors;
 }
 
+
+
 // 辅助，根据实体坐标转换为网格坐标(物理坐标)
-std::pair<bool,std::pair<int, int>> AOIManager::GetGridPostion(int entityId) const
+GridCoordResult AOIManager::GetGridPostion(int entityId) const
 {
+    GridCoordResult result;
+    result.valid = false;
+    result.gridX = 0;
+    result.gridY = 0;
     auto itr = entityMap_.find(entityId);
     if(itr == entityMap_.end()) 
     {
-        return std::pair(false, std::pair(0, 0));
+        return result;
     }
 
     const EntityInfo& entity = (itr->second);
-    return std::pair(true, std::pair(entity.gridX, entity.gridY));
+    result.valid = true;
+    result.gridX = entity.gridX;
+    result.gridY = entity.gridY;
+    return result;
 }
 
+
+EntityPositionResult AOIManager::GetEntityPostion(int entityId) const
+{
+    EntityPositionResult result;
+    result.valid = false;
+    result.x = 0;
+    result.y = 0;
+    auto itr = entityMap_.find(entityId);
+    if(itr == entityMap_.end()) 
+    {
+        return result;
+    }
+
+    const EntityInfo& entity = (itr->second);
+    result.valid = true;
+    result.x = entity.x;
+    result.y = entity.y;
+    return result;
+}
 
 std::pair<int, int> AOIManager::GetGridCoord(int x, int y) const
 {
@@ -245,4 +352,22 @@ bool AOIManager::CheckPositionIsValid(int x, int y, const std::string& strLogCon
     }
 
     return true;
+}
+
+
+void AOIManager::BroadNeighborsEntityList(int entityId, const std::string& strMsg, GameServerMsgType msgType)
+{
+    auto neighborsEntityList = this->GetNeighbors(entityId);
+    BroadEntityList(neighborsEntityList, strMsg, msgType);
+}
+
+void AOIManager::BroadEntityList(const std::vector<int>& entityList, const std::string& strMsg, GameServerMsgType msgType)
+{
+    for(const auto& neighborsId : entityList)
+    {
+        if(sendMsgCallBack_)
+        {
+            sendMsgCallBack_(neighborsId, strMsg, msgType);
+        }
+    }
 }

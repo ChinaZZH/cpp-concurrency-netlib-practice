@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <mutex>
-//#include <nlohmann/json.hpp>
+#include <coroutine>
 
 
 
@@ -147,7 +147,7 @@ void client_work_function(bool async_call, int id, int task_count, std::vector<u
         cv.notify_one();
     });
     
-    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg) {
+    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
         auto rpcClient = rpcPtr.lock();
         if(rpcClient)
         {
@@ -298,6 +298,10 @@ void client_work_function(bool async_call, int id, int task_count, std::vector<u
     io_thread.join();
     //return 0;
 }
+
+
+
+
 
 
 
