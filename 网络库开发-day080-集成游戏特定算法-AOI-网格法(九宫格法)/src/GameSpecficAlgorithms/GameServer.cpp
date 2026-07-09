@@ -59,7 +59,6 @@
 
 void GameServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType)
 {
-    std::cout << "GameServer::OnMessage msgType:=" << msgType << std::endl; 
     std::weak_ptr<TcpConnection> weak_connection_ptr = con;
     auto MessageHandlerFunc = [this, strMsg=std::move(strMsg), msgType, weak_connection_ptr](){
             auto itr = methods_handler_.find(static_cast<GameServerMsgType>(msgType));
@@ -98,7 +97,6 @@ void GameServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
     if(mapId >= 0)
     {
         int idx = mapId % parititionedPool_->GetParitionedCount();
-         std::cout << "GameServer::OnMessage parititionedPool_ index:=" << idx << std::endl; 
         parititionedPool_->CommitTask(idx, MessageHandlerFunc);
     }
     else
@@ -219,11 +217,11 @@ void GameServer::SendMessage(int entityId, const std::string& strMsgContent, Gam
     // 则发送数据到对应的客户端
     const TcpConnectionInfo& connectionInfo = (itr->second);
     std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(strMsgContent, msgType));
-    connectionInfo.loop_ptr->RunInLoop([weak_con = connectionInfo.weakPtrCon, strMsgContent=std::move(strContent)](){
+    connectionInfo.loop_ptr->RunInLoop([weak_con = connectionInfo.weakPtrCon, strContent=std::move(strContent)](){
         auto con = weak_con.lock();
         if(con)
         {
-            con->Send(strMsgContent);
+            con->Send(strContent);
         }
     });
 }
@@ -269,8 +267,10 @@ int GameServer::TryExtractMapId(const std::string& strMsg, uint32_t msgType)
 
 void GameServer::PrintNeighbors(std::shared_ptr<AOIManager> aoi, int id)
 {
+    /*
     auto neighbors = aoi->GetNeighbors(id);
     std::cout << "Entity " << id << " neighbors: ";
     for (int n : neighbors) std::cout << n << " ";
     std::cout << std::endl;
+    */
 }

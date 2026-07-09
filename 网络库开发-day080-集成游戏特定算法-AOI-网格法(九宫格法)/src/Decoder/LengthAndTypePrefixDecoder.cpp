@@ -9,8 +9,9 @@ static const size_t MAX_PACKET_SIZE = 10 * 1024 * 1024; // 10MB
 bool LengthAndTypePrefixDecoder::Decode(Buffer& input, std::string& msg, uint32_t& msgType) 
 {
     // 需要至少8字节读取包头长度和消息类型
-    if(input.ReadableBytes() < 2*sizeof(uint32_t))
+    if(input.ReadableBytes() < sizeof(uint32_t) + sizeof(uint32_t))
     {
+        //std::cout << "LengthAndTypePrefixDecoder::Decode false 1111 readableByte:="  << std::endl;
         return false;
     }
 
@@ -19,11 +20,12 @@ bool LengthAndTypePrefixDecoder::Decode(Buffer& input, std::string& msg, uint32_
    ::memcpy(&netLen, input.Peek(), sizeof(uint32_t));
    uint32_t msg_len = ntohl(netLen);
 
-    // 合法性检查
-    if(0 == msg_len || msg_len > MAX_PACKET_SIZE)
+    // 合法性检查 msg_len 是可以为0的 
+    if(msg_len > MAX_PACKET_SIZE)
     {
         // 非法连接，关闭
         //HandleClose("Invalid packet length"); // 先屏蔽后期看怎么穿给tcpConnection
+        std::cout << "LengthAndTypePrefixDecoder::Decode false 2222 msg_len:="  << msg_len << std::endl;
         return false;
     }
 
@@ -35,14 +37,19 @@ bool LengthAndTypePrefixDecoder::Decode(Buffer& input, std::string& msg, uint32_
     // 检查数据是否足够, 不够则继续等待
     if(input.ReadableBytes() < (msg_len + sizeof(uint32_t) + sizeof(uint32_t)))
     {
+        std::cout << "LengthAndTypePrefixDecoder::Decode false 3333"  << std::endl;
         return false;
     }
 
     // 足够，则进行解包，跳过包头
     input.Retrieve(sizeof(uint32_t)+sizeof(uint32_t));
+    msg.clear();
+    if(msg_len > 0)
+    {
+        msg.assign(input.Peek(), msg_len);
+        input.Retrieve(msg_len);
+    }
 
-    msg.assign(input.Peek(), msg_len);
-    input.Retrieve(msg_len);
     return true;
 }
 
@@ -53,11 +60,12 @@ std::string LengthAndTypePrefixDecoder::MakeRequestString(const std::string&strC
     //request.SerializeToString(&strData);
 
     uint32_t len = strContent.size();
+
     uint32_t net_len = htonl(len);
     uint32_t net_msg_type = htonl(msgType);
     
     std::string strEncodeResult;
-    strEncodeResult.reserve(len + sizeof(net_len) + sizeof(uint32_t));
+    strEncodeResult.reserve(len + sizeof(uint32_t) + sizeof(uint32_t));
     strEncodeResult.append(reinterpret_cast<const char*>(&net_len), sizeof(net_len));
     strEncodeResult.append(reinterpret_cast<const char*>(&net_msg_type), sizeof(net_msg_type));
     strEncodeResult.append(strContent);

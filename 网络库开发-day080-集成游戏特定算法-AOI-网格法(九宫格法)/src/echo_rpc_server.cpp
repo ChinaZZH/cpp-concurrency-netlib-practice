@@ -27,7 +27,7 @@ int UnitTesting()
     return 0;
 }
 
-int main()
+int echo_rpc_server()
 {
     //std::cout << "start unit testing" << std::endl;
     //UnitTesting();
@@ -64,14 +64,14 @@ int main()
     server.Start();
 
     // 不向服务注册中心注册了。
-    
+    /*
     std::string my_ip = cfg.getString("Rpc", "server_ip", "127.0.0.1");
     std::string registry_host = cfg.getString("RegisterCenter", "ip", "127.0.0.1");
     int registry_port = cfg.getInt("RegisterCenter", "port", 8888);
     int ttl_sec = cfg.getInt("RegisterCenter", "ttl_sec", 30);
 
     server.EnableServiceDiscovery(registry_host, registry_port, "rpc_server", my_ip, my_port, ttl_sec);
-    
+    */
 
     loop.Loop();
     return 0;

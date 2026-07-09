@@ -87,7 +87,10 @@ bool AOIManager::RemoveEntity(int entityId)
     // 消息同步
     aoi::EntityLeaveNotifyResponse entityLeaveResponse;
     entityLeaveResponse.set_entity_id(entityId);
-    BroadEntityList(neighborsEntityList, entityLeaveResponse.SerializeAsString(), GSMT_RemoveEntity);
+    
+    std::string strData;
+    entityLeaveResponse.SerializeToString(&strData);
+    BroadEntityList(neighborsEntityList, strData, GSMT_RemoveEntity);
     return true;
 }
 
@@ -138,7 +141,10 @@ bool AOIManager::MoveEntity(int entityId, int newX, int newY)
         moveResponse.set_entity_id(entityId);
         moveResponse.set_new_x(newX);
         moveResponse.set_new_y(newY);
-        BroadEntityList(oldNeighborsEntitys, moveResponse.SerializeAsString(), GSMT_MoveEntity);
+        
+        std::string strData;
+        moveResponse.SerializeToString(&strData);
+        BroadEntityList(oldNeighborsEntitys, strData, GSMT_MoveEntity);
         return true;
     }
 
@@ -173,7 +179,10 @@ bool AOIManager::MoveEntity(int entityId, int newX, int newY)
         moveResponse.set_entity_id(entityId);
         moveResponse.set_new_x(newX);
         moveResponse.set_new_y(newY);
-        BroadEntityList(vecAllNeighbors, moveResponse.SerializeAsString(), GSMT_MoveEntity);
+
+        std::string strData;
+        moveResponse.SerializeToString(&strData);
+        BroadEntityList(vecAllNeighbors, strData, GSMT_MoveEntity);
     }
 
     
@@ -181,10 +190,12 @@ bool AOIManager::MoveEntity(int entityId, int newX, int newY)
     {
         aoi::EntityLeaveNotifyResponse entityLeaveResponse;
         entityLeaveResponse.set_entity_id(entityId);
+        std::string strData;
+        entityLeaveResponse.SerializeToString(&strData);
 
         std::vector<int> vecRemoveNeighbors;
         std::set_difference(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecRemoveNeighbors));
-        BroadEntityList(vecRemoveNeighbors, entityLeaveResponse.SerializeAsString(), GSMT_RemoveEntity);
+        BroadEntityList(vecRemoveNeighbors, strData, GSMT_RemoveEntity);
     }
     
     
@@ -208,7 +219,9 @@ void AOIManager::EnterNewGridPosMsgNotify(int entityId, const EntityInfo& newEnt
             pNewEntity->set_y(newEntity.y);
         }
 
-        BroadEntityList(neighborsEntityList, newEntityResponse.SerializeAsString(), GSMT_AddEntity);
+        std::string strData;
+        newEntityResponse.SerializeToString(&strData);
+        BroadEntityList(neighborsEntityList, strData, GSMT_AddEntity);
     }
     
 
@@ -239,7 +252,9 @@ void AOIManager::EnterNewGridPosMsgNotify(int entityId, const EntityInfo& newEnt
     // 将aroundResponse发送给进入新进入者
     if(sendMsgCallBack_)
     {
-        sendMsgCallBack_(entityId, aroundResponse.SerializeAsString(), GSMT_SyncNeighborsEntity);
+        std::string strData;
+        aroundResponse.SerializeToString(&strData);
+        sendMsgCallBack_(entityId, strData, GSMT_SyncNeighborsEntity);
     }   
 }
 

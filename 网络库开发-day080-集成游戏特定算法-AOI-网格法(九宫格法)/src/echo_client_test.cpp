@@ -31,7 +31,7 @@ int ClientPressTest(int threads, int req_per_threads, bool async_call)
     for(int i = 0; i < threads; ++i)
     {
         thread_pool.emplace_back(
-			client_work_function, 
+			test_game_server_aoi_function, 
             async_call,
 			i, 
 			req_per_threads, 
@@ -225,7 +225,7 @@ int test_http_client()
     return 0;
 }
 
-int echo_client_test()
+int main()
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {
@@ -233,7 +233,7 @@ int echo_client_test()
         return -1;
     }
 
-
+ /*
     std::cout << "start Async Call 100 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(100, 10000, true);
     std::cout << std::endl << std::endl;
@@ -251,7 +251,7 @@ int echo_client_test()
     ClientPressTest(50, 10000, false);
     std::cout << std::endl << std::endl;
 
-    /*
+   
     std::cout << "start 20 thread and req_per_threads 10000: " << std::endl;
     ClientPressTest(20, 10000);
     std::cout << std::endl << std::endl;
@@ -270,6 +270,10 @@ int echo_client_test()
     ClientPressTest(1, 10000);
     std::cout << std::endl << std::endl;
     */
+
+    std::cout << "start 1 thread and req_per_threads 1: " << std::endl;
+    ClientPressTest(1, 1, false);
+    std::cout << std::endl << std::endl;
 
     return 0;
 }

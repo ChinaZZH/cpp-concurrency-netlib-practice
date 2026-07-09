@@ -6,9 +6,12 @@
 #include "../TcpClient.h"
 #include "../TcpConnection.h"
 #include "../Decoder/LengthPrefixDecoder.h"
+#include "../Decoder/LengthAndTypePrefixDecoder.h"
 #include "../Common/JsonMethod.h"
 #include "../LibRpc/RpcConnectionPool.h"
 #include "../../build/proto_gen/add.pb.h"
+#include "../../build/proto_gen/aoi.pb.h"
+#include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
 
 #include <iostream>
 #include <chrono>
@@ -300,6 +303,191 @@ void client_work_function(bool async_call, int id, int task_count, std::vector<u
 }
 
 
+
+
+void test_game_server_aoi_function(bool async_call, int id, int task_count, std::vector<uint64_t>& latencies, std::atomic<uint64_t>& timeout_cnt) {
+    // 创建 EventLoop 对象（将在独立线程中运行）
+    EventLoop loop;
+
+    // 创建 TcpClient 和 RpcClient
+    auto client = std::make_shared<TcpClient>(&loop, "127.0.0.1", 8888);
+    auto rpcClient = std::make_shared<RpcClient>(nullptr);
+
+    // 用于等待连接建立的同步
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool connected = false;
+
+    std::weak_ptr<RpcClient> rpcPtr = rpcClient->shared_from_this();
+    client->SetConnectionCallBack([&, rpcPtr](const TcpConnectionPtr& conn) {
+        auto rpcClient = rpcPtr.lock();
+        if(rpcClient)
+        {
+            //std::cout << "Connected to server" << std::endl;
+            auto msg_type_decoder = std::make_unique<LengthAndTypePrefixDecoder>();
+            conn->SetDecoder(std::move(msg_type_decoder));
+            rpcClient->SetConnection(conn);
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                connected = true;
+            }
+        }
+        
+
+        cv.notify_one();
+    });
+    
+    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+        std::cout << "onMessageCallBack:=" << msgType << std::endl;
+        switch(msgType)
+        {
+            case GSMT_AddEntity:
+            {
+                aoi::EntityEnterNotifyResponse response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_AddEntity error!!!" << std::endl;
+                }
+                else{
+                    std::cout << "new entity id:=" << response.new_entity().entity_id();
+                    std::cout << " position x:=" << response.new_entity().x() << " position y:=" << response.new_entity().y() << std::endl;
+                }
+            }
+            break;
+                
+            case GSMT_RemoveEntity:
+            {
+                aoi::EntityLeaveNotifyResponse response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_RemoveEntity error!!!" << std::endl;
+                }
+                else{
+                    std::cout << "remove entity id:=" << response.entity_id() << std::endl;
+                }
+            }
+            break;
+
+            case GSMT_MoveEntity:
+             {
+                aoi::EntityMoveNotifyResponse response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_MoveEntity error!!!" << std::endl;
+                }
+                else{
+                     std::cout << "move entity id:=" << response.entity_id();
+                    std::cout << " position x:=" << response.new_x() << " position y:=" << response.new_y() << std::endl;
+                }
+            }
+            break;
+
+            case GSMT_SyncNeighborsEntity:
+            {
+                aoi::InitAroundEntitiesNotifyResponse response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_SyncNeighborsEntity error!!!" << std::endl;
+                }
+                else{
+                    for(int i = 0; i < response.around_entities_size(); i = i + 1)
+                    {
+                        std::cout << i << ":Sync index entity id:=" << response.around_entities(i).entity_id();
+                        std::cout << " position x:=" << response.around_entities(i).x() << " position y:=" << response.around_entities(i).y() << std::endl;
+                    }
+                }
+            }
+            break;
+            default:
+                break;
+        }
+    });
+
+    client->Connect();
+
+    // 启动 I/O 线程
+    std::thread io_thread([&loop]() {
+        //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
+        loop.Loop();
+    });
+    
+    // 等待连接建立
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&] { return connected; });
+    }
+
+
+
+    std::atomic<size_t> pending{0};
+    latencies.reserve(task_count);
+
+    int add_num = id * task_count;
+    AddRequest req;
+    req.set_a(add_num);
+    req.set_b(0);
+
+    pending = task_count;
+    
+    aoi::EntityEnterRequest newRequest;
+    newRequest.set_map_id(100);
+    aoi::EntityInfo* pEntity = newRequest.mutable_new_entity();
+
+    pEntity->set_entity_id(1);
+    pEntity->set_x(50);
+    pEntity->set_y(50);
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+   
+    //aoi.AddEntity(2, 120, 50);
+    pEntity->set_entity_id(2);
+    pEntity->set_x(120);
+    pEntity->set_y(50);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+
+    pEntity->set_entity_id(3);
+    pEntity->set_x(50);
+    pEntity->set_y(120);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+  
+    pEntity->set_entity_id(4);
+    pEntity->set_x(200);
+    pEntity->set_y(200);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+    // 移动实体
+    aoi::EntityMoveRequest moveReq;
+    moveReq.set_map_id(100);
+    moveReq.set_entity_id(2);
+    moveReq.set_new_x(100);
+    moveReq.set_new_y(50);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(moveReq.SerializeAsString(), GSMT_MoveEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+    
+    moveReq.set_new_x(300);
+    moveReq.set_new_y(300);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(moveReq.SerializeAsString(), GSMT_MoveEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+    // 删除实体
+    aoi::EntityLeaveRequest removeReq;
+    removeReq.set_map_id(100);
+    removeReq.set_entity_id(3);
+    strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(removeReq.SerializeAsString(), GSMT_RemoveEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+
+    std::this_thread::sleep_for(std::chrono::seconds(60));
+    std::cout << "end !!!!" << std::endl;
+    loop.Quit();
+    io_thread.join();
+    //return 0;
+}
 
 
 
