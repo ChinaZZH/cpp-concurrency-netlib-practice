@@ -26,7 +26,7 @@ markdown
 ###  Protobuf 协议设计
 -- 1.  定义了 4 个消息类型：EntityEnterNotifyResponse、InitAroundEntitiesNotifyResponse、EntityLeaveNotifyResponse、EntityMoveNotifyResponse
 
-区分了两个方向：新实体→周围实体（通知“我来了”），周围实体→新实体（通知“你周围有谁”）
+-- 2. 区分了两个方向：新实体→周围实体（通知“我来了”），周围实体→新实体（通知“你周围有谁”）
 
 ###  GameServer 集成层
 -- 1.  GameServer 继承自 RpcServer，复用网络库的消息解码和 RPC 框架
