@@ -7,7 +7,7 @@
 
 class EventLoop;
 class TcpConnection;
-class AOIManager;
+class IAOIManager;
 
 class GameServer : public RpcServer
 {
@@ -34,10 +34,10 @@ public:
 private:
     int TryExtractMapId(const std::string& strMsg, uint32_t msgType);
 
-    void PrintNeighbors(std::shared_ptr<AOIManager> aoi, int id);
+    void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
 
 private:
-    std::map<int, std::shared_ptr<AOIManager>> aoiMap_; // 默认只有一张地图
+    std::map<int, std::shared_ptr<IAOIManager>> aoiMap_; // 默认只有一张地图
 
     // 存储地图上的连接信息
     struct TcpConnectionInfo

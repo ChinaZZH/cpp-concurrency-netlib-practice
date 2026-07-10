@@ -29,9 +29,9 @@ int UnitTesting()
 
 int main()
 {
-    std::cout << "start unit testing" << std::endl;
-    UnitTesting();
-    std::cout << "start rpc server " << std::endl;
+    //std::cout << "start unit testing" << std::endl;
+    //UnitTesting();
+    std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
     
     auto& cfg = ConfigManager::getInstance();

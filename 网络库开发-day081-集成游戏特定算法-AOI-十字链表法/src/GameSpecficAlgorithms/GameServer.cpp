@@ -1,7 +1,10 @@
 #include "GameServer.h"
 #include <sstream>
 #include "../Common/LogFile.h"
-#include "AOI/AOIManager.h"
+#include "AOI/IAOIManager.h"
+#include "AOI/BaseAOIManager.h"
+#include "AOI/GridAOI.h"
+#include "AOI/CrossListAOI.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/LengthAndTypePrefixDecoder.h"
@@ -26,7 +29,7 @@
 
     for(int idMap = 100; idMap < 200; idMap += 1)
     {
-        auto ptrAoiMap = std::make_shared<AOIManager>();
+        auto ptrAoiMap = std::make_shared<CrossListAOI>();
         // 设置aoi回调函数
         ptrAoiMap->SetSendMessageCallBack(std::bind(&GameServer::SendMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
@@ -265,12 +268,10 @@ int GameServer::TryExtractMapId(const std::string& strMsg, uint32_t msgType)
 }
 
 
-void GameServer::PrintNeighbors(std::shared_ptr<AOIManager> aoi, int id)
+void GameServer::PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id)
 {
-    /*
     auto neighbors = aoi->GetNeighbors(id);
     std::cout << "Entity " << id << " neighbors: ";
     for (int n : neighbors) std::cout << n << " ";
     std::cout << std::endl;
-    */
 }

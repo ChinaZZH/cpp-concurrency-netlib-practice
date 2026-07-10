@@ -2,9 +2,12 @@
 
 #include <iostream>
 #include <chrono>
+#include <memory>
 
-class AOIManager;
+//class AOIManager;
 class CrossListAOI;
+class GridAOI;
+class IAOIManager;
 class AlgorithmsUnitTesting
 {
 public:
@@ -14,5 +17,5 @@ public:
     void TestAoiManager();  // 测试aoi算法九宫格
 
 private:
-    void PrintNeighbors(const CrossListAOI& aoi, int id);
+    void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
 };

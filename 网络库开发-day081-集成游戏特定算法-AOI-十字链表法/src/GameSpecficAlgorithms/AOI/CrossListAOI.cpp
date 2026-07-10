@@ -6,19 +6,6 @@
 #include "../../../build/proto_gen/aoi.pb.h"
 
 
-CrossListAOI::CrossListAOI(int gridSize /*= 100*/)
-:gridSize_(gridSize)
-{ 
-
-}
-
-
-
-CrossListAOI::~CrossListAOI()
-{
-
-}
-
 // 接口
 bool CrossListAOI::AddEntity(int entityId, int x, int y)
 {
@@ -29,7 +16,8 @@ bool CrossListAOI::AddEntity(int entityId, int x, int y)
         return false;
     }
 
-    std::shared_ptr<CrossListNode> newNode = std::make_shared<CrossListNode>(entityId, x, y);
+    auto gridPositon = BaseAOIManager::GetGridCoord(x, y);
+    std::shared_ptr<CrossListNode> newNode = std::make_shared<CrossListNode>(entityId, x, y, gridPositon.first, gridPositon.second);
     if(!newNode)
     {
         return false;
@@ -39,7 +27,13 @@ bool CrossListAOI::AddEntity(int entityId, int x, int y)
     InsertNodeForY(newNode);
     nodeMap_[entityId] = newNode;
 
-    // 数据同步部分由后面的将和九宫格法相同的代码抽象成基类，那时候又基类实现。
+   // 广播有新entity消息下发newEntityResponse，发送entityId, x, y
+    if(msgNotifyer_)
+    {
+        auto neighborsEntityList = this->GetNeighbors(entityId);
+        msgNotifyer_->EnterNewGridPosMsgNotify(entityId, x, y, neighborsEntityList);
+    }
+
     return true;
 }
 
@@ -53,8 +47,16 @@ bool CrossListAOI::RemoveEntity(int entityId)
         return false;
     }
 
+   auto neighborsEntityList = this->GetNeighbors(entityId);
    RemoveNodeForX(entityId);
    RemoveNodeForY(entityId);
+   
+ 
+   if(msgNotifyer_)
+   {
+        msgNotifyer_->LeaveGridToMsgNotify(entityId, neighborsEntityList);
+   }
+
    nodeMap_.erase(entityId);
    return true;
 }
@@ -68,13 +70,28 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
         return false;
     }
 
+    // 位置没有发生变化的时候，直接返回
+     std::shared_ptr<CrossListNode> moveEntity = (itr->second);
+    if(moveEntity->x == newX && moveEntity->y == newY)
+    {
+        return true;
+    }
+
+
+    std::pair<int, int> oldGridPos(moveEntity->gridX, moveEntity->gridY);
+    auto oldNeighborsEntitys = this->GetNeighbors(entityId);
+
     // 先移除
     RemoveNodeForX(entityId);
     RemoveNodeForY(entityId);
 
-    std::shared_ptr<CrossListNode> moveEntity = (itr->second);
+   
     moveEntity->x = newX;
     moveEntity->y = newY;
+    auto newGridPos = BaseAOIManager::GetGridCoord(newX, newY);
+    moveEntity->gridX = newGridPos.first;
+    moveEntity->gridY = newGridPos.second; 
+
     moveEntity->prevX = nullptr;
     moveEntity->nextX = nullptr;
     moveEntity->prevY = nullptr;
@@ -82,6 +99,19 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
 
     InsertNodeForX(moveEntity);
     InsertNodeForY(moveEntity);
+
+    if(msgNotifyer_)
+    {
+        if(oldGridPos == newGridPos)
+        {
+            msgNotifyer_->MovePostionToMsgNotify(entityId, newX, newY, oldNeighborsEntitys);
+        }
+        else{
+            auto newNeighborsEntitys = this->GetNeighbors(entityId);
+            msgNotifyer_->MovePositionToMsgNotifyForGridChange(entityId, newX, newY, oldNeighborsEntitys, newNeighborsEntitys);
+        }
+    }
+    
     return true;
 }
 
@@ -103,7 +133,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> preNode = node->prevX;
          while(preNode)
          {
-            if(!IsInRange(node->x, node->y, preNode->x, preNode->y, radius))
+            if(!IsInRange(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
             {
                 break;
             }
@@ -118,7 +148,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> nextNode = node->nextX;
          while(nextNode)
          {
-            if(!IsInRange(node->x, node->y, nextNode->x, nextNode->y, radius))
+            if(!IsInRange(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
             {
                 break;
             }
@@ -133,7 +163,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> preNode = node->prevY;
          while(preNode)
          {
-            if(!IsInRange(node->x, node->y, preNode->x, preNode->y, radius))
+            if(!IsInRange(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
             {
                 break;
             }
@@ -148,7 +178,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> nextNode = node->nextY;
          while(nextNode)
          {
-            if(!IsInRange(node->x, node->y, nextNode->x, nextNode->y, radius))
+            if(!IsInRange(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
             {
                 break;
             }
@@ -167,22 +197,12 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
 
 
 
-void CrossListAOI::RemoveNode(std::shared_ptr<CrossListNode> node)
+  
+bool CrossListAOI::IsInRange(int gridX1, int gridY1, int gridX2, int gridY2, int radius) const
 {
-
-}
-    
-bool CrossListAOI::IsInRange(int x1, int y1, int x2, int y2, int radius) const
-{
-    auto firstGrid = this->GetGridCoord(x1, y1);
-    auto secondtGrid = this->GetGridCoord(x2, y2);
-    return std::abs(firstGrid.first - secondtGrid.first) <= radius && std::abs(firstGrid.second - secondtGrid.second) <= radius;
+    return std::abs(gridX1 - gridX2) <= radius && std::abs(gridY1 - gridY2) <= radius;
 }
 
-std::pair<int, int> CrossListAOI::GetGridCoord(int x, int y) const
-{
-    return std::pair(x / gridSize_, y / gridSize_);
-}
 
 bool CrossListAOI::InsertNodeForX(std::shared_ptr<CrossListNode> node)
 {
@@ -194,7 +214,7 @@ bool CrossListAOI::InsertNodeForX(std::shared_ptr<CrossListNode> node)
     }
 
     // 如果headX的本身就大于node的X值
-    if((headY_->x) > (node->x))
+    if((headX_->x) > (node->x))
     {
         node->nextX = headX_;
         headX_->prevX = node;
@@ -408,4 +428,42 @@ bool CrossListAOI::RemoveNodeForY(int entityId)
     findNode->prevY = nullptr;
     findNode->nextY = nullptr;
     return true; 
+}
+
+GridCoordResult CrossListAOI::GetGridPosition(int entityId) const 
+{
+    GridCoordResult result;
+    result.valid = false;
+    result.gridX = 0;
+    result.gridY = 0;
+    auto itr = nodeMap_.find(entityId);
+    if(itr == nodeMap_.end()) 
+    {
+        return result;
+    }
+
+    const auto& entity = (itr->second);
+    result.valid = true;
+    result.gridX = entity->gridX;
+    result.gridY = entity->gridY;
+    return result;
+}
+
+EntityPositionResult CrossListAOI::GetEntityPosition(int entityId) const 
+{
+    EntityPositionResult result;
+    result.valid = false;
+    result.x = 0;
+    result.y = 0;
+    auto itr = nodeMap_.find(entityId);
+    if(itr == nodeMap_.end()) 
+    {
+        return result;
+    }
+
+    const auto& entity = (itr->second);
+    result.valid = true;
+    result.x = entity->x;
+    result.y = entity->y;
+    return result;
 }
