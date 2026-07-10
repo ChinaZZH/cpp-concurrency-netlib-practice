@@ -1,5 +1,6 @@
 #include "AlgorithmsUnitTesting.h"
 #include "AOI/AOIManager.h"
+#include "AOI/CrossListAOI.h"
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
  {
@@ -9,7 +10,8 @@
  // 测试aoi算法九宫格
 void AlgorithmsUnitTesting::TestAoiManager()
 {
-    AOIManager aoi(100);
+    //AOIManager aoi(100);
+    CrossListAOI aoi(100);
 
     aoi.AddEntity(1, 50, 50);
     aoi.AddEntity(2, 120, 50);
@@ -29,7 +31,7 @@ void AlgorithmsUnitTesting::TestAoiManager()
     PrintNeighbors(aoi, 1);
 }
 
-void AlgorithmsUnitTesting::PrintNeighbors(const AOIManager& aoi, int id)
+void AlgorithmsUnitTesting::PrintNeighbors(const CrossListAOI& aoi, int id)
 {
     auto neighbors = aoi.GetNeighbors(id);
     std::cout << "Entity " << id << " neighbors: ";
