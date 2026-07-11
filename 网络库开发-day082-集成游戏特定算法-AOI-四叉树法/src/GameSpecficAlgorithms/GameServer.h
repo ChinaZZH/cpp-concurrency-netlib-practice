@@ -1,4 +1,5 @@
 #pragma once
+#include "../TcpServer.h"
 #include <memory>
 #include <string>
 #include "PartitionedPool.h"
@@ -8,8 +9,8 @@
 class EventLoop;
 class TcpConnection;
 class IAOIManager;
-
-class GameServer : public RpcServer
+class ServiceRegistry;
+class GameServer 
 {
 public:
     using GameHandler = std::function<bool(const std::weak_ptr<TcpConnection>& , const std::string&)>;
@@ -18,12 +19,17 @@ public:
     
     ~GameServer();
 
+    void Start();
+
     void OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType);
 
     void SendMessage(int entityId, const std::string& strMsgContent, GameServerMsgType msgType);
 
     void RegisterHandler(GameServerMsgType msgType, GameHandler handler);
 
+     void EnableServiceDiscovery(const std::string& registry_host, int registry_port, 
+        const std::string& service_name, const std::string& my_ip, int my_port, int ttl_sec);
+        
 public:
     bool AddEntity(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
 
@@ -37,6 +43,9 @@ private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
 
 private:
+    TcpServer server_;
+    std::unique_ptr<ServiceRegistry> service_registry_;
+
     std::map<int, std::shared_ptr<IAOIManager>> aoiMap_; // 默认只有一张地图
 
     // 存储地图上的连接信息

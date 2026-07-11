@@ -9,9 +9,12 @@
 #include "../EventLoop.h"
 #include "../Decoder/LengthAndTypePrefixDecoder.h"
 #include "../../build/proto_gen/aoi.pb.h"
+#include "../Http/SimpleHttpClient.h"
+#include "../ServiceDiscovery/ServiceRegistry.h"
 
  GameServer::GameServer(EventLoop* loop, int nPort)
- :RpcServer(loop, nPort)
+:server_(loop, nPort)
+,service_registry_(std::make_unique<ServiceRegistry>())
  ,parititionedPool_(std::make_unique<PartitionedPool>())
  {
     server_.SetMessageCallBack(std::bind(&GameServer::OnMessage, 
@@ -54,10 +57,25 @@
  }
 
 
+ void GameServer::Start()
+{
+    server_.Start();
+}
+
  void GameServer::RegisterHandler(GameServerMsgType msgType, GameHandler handler)
  {
     methods_handler_[msgType] = handler;
  }
+
+
+ void GameServer::EnableServiceDiscovery(const std::string& registry_host, int registry_port, 
+        const std::string& service_name, const std::string& my_ip, int my_port, int ttl_sec)
+{
+    if(service_registry_)
+    {
+        service_registry_->EnableServiceDiscovery(registry_host, registry_port, service_name, my_ip, my_port, ttl_sec);
+    }
+}
 
 
 void GameServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::string& strMsg, uint32_t msgType)
