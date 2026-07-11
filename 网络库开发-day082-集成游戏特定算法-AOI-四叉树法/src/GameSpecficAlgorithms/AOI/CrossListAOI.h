@@ -25,7 +25,7 @@ struct CrossListNode {
     }
 };
 
-
+// 十字链表方式实现aoi
 class CrossListAOI : public BaseAOIManager
 {
 public:
@@ -47,7 +47,7 @@ public:
     virtual bool MoveEntity(int entityId, int newX, int newY) override;
 
      // 获取周围实体列表（默认九宫格，radius 可扩展）
-    std::vector<int> GetNeighbors(int entityId, int radius = 1) const; 
+    std::vector<int> GetNeighbors(int entityId, int radius = 1) const override; 
 
     // 辅助，根据实体坐标转换为网格坐标
     virtual  GridCoordResult GetGridPosition(int entityId) const override;
@@ -55,8 +55,6 @@ public:
     virtual EntityPositionResult GetEntityPosition(int entityId) const override;
 
 private:
-    bool IsInRange(int gridX1, int gridY1, int gridX2, int gridY2, int radius) const;
-
     bool InsertNodeForX(std::shared_ptr<CrossListNode> node);
     bool InsertNodeForY(std::shared_ptr<CrossListNode> node);
 

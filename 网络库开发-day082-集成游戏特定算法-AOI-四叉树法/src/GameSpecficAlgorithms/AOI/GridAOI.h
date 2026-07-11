@@ -11,17 +11,7 @@
 #include <functional>
 #include "../GameServerMsgTypeDefine.h"
 #include "BaseAOIManager.h"
-// ============================================================
-// 实体信息
-// ============================================================
-struct EntityInfo
-{
-    int x;
-    int y;
 
-    int gridX;
-    int gridY;
-};
 
 // ============================================================
 // 哈希函数：支持 std::pair<int, int> 作为 unordered_map 的键
@@ -32,7 +22,7 @@ struct PairHash {
     }
 };
 
-
+// 九宫格方式实现aoi
 class GridAOI : public BaseAOIManager
 {
 public:
@@ -58,14 +48,10 @@ public:
     virtual EntityPositionResult GetEntityPosition(int entityId) const override;
 
 private:
-    //int gridSize_;
-
     // 实体ID → 实体信息（物理坐标）
     std::unordered_map<int, EntityInfo> entityMap_;
     
     // 网格坐标 (gridX, gridY) → 该网格内的实体ID集合
     // 优化成使用unordered_set
     std::unordered_map<std::pair<int, int>, std::set<int>, PairHash> gridMap_;
-
-    //SendMsgCallBack sendMsgCallBack_;
 };

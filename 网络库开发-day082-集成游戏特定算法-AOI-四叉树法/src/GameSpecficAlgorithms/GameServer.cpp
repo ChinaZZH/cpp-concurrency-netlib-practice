@@ -5,6 +5,7 @@
 #include "AOI/BaseAOIManager.h"
 #include "AOI/GridAOI.h"
 #include "AOI/CrossListAOI.h"
+#include "AOI/QuadTreeAOI.h"
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/LengthAndTypePrefixDecoder.h"
@@ -32,7 +33,7 @@
 
     for(int idMap = 100; idMap < 200; idMap += 1)
     {
-        auto ptrAoiMap = std::make_shared<CrossListAOI>();
+        auto ptrAoiMap = std::make_shared<QuadTreeAOI>(1000, 1000, 100, 2, 8); // 世界 1000x1000，网格 100
         // 设置aoi回调函数
         ptrAoiMap->SetSendMessageCallBack(std::bind(&GameServer::SendMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 

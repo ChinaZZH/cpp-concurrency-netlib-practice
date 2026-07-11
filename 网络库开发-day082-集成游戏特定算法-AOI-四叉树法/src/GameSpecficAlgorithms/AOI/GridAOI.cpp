@@ -12,7 +12,7 @@
         std::stringstream ss;
         ss << "GridAOI::AddEntity error entityID:=" << entityId << std::endl; 
         LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("AOIManager.txt", ss.str());
+        logfile.AppendContent("GridAOI.txt", ss.str());
 
         std::cout << "GridAOI::AddEntity error entityID:=" << entityId << std::endl; 
         return false;
@@ -52,7 +52,7 @@ bool GridAOI::RemoveEntity(int entityId)
         std::stringstream ss;
         ss << "GridAOI::RemoveEntity error entityID:=" << entityId << std::endl;
         LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("AOIManager.txt", ss.str());
+        logfile.AppendContent("GridAOI.txt", ss.str());
 
         std::cout << "GridAOI::RemoveEntity error entityID:=" << entityId << std::endl; 
         return false;
@@ -97,7 +97,7 @@ bool GridAOI::MoveEntity(int entityId, int newX, int newY)
         std::stringstream ss;
         ss << "GridAOI::MoveEntity error entityID:=" << entityId << std::endl;
         LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("AOIManager.txt", ss.str());
+        logfile.AppendContent("GridAOI.txt", ss.str());
 
         std::cout << "GridAOI::MoveEntity error entityID:=" << entityId << std::endl; 
         return false;
@@ -172,7 +172,7 @@ std::vector<int> GridAOI::GetNeighbors(int entityId, int radius /*= 1*/) const
         std::stringstream ss;
         ss << "GridAOI::GetNeighbors Get entity position error entityid: id" << entityId << std::endl;
         LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("AOIManager.txt", ss.str());
+        logfile.AppendContent("GridAOI.txt", ss.str());
 
         return vecNeighbors;
     }

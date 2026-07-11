@@ -39,4 +39,8 @@ public:
     virtual std::vector<int> GetNeighbors(int entityId, int radius = 1) const = 0;
     
     virtual std::pair<int, int> GetGridCoord(int x, int y) const = 0;
+
+    virtual bool IsInRangeForGridPosition(int gridX1, int gridY1, int gridX2, int gridY2, int radius) const = 0;
+
+    virtual bool IsInRange(int x1, int y1, int x2, int y2, int radius) const = 0;
 };

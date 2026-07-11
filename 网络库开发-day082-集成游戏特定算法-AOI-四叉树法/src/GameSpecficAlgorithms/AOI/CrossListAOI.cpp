@@ -133,7 +133,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> preNode = node->prevX;
          while(preNode)
          {
-            if(!IsInRange(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
             {
                 break;
             }
@@ -148,7 +148,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> nextNode = node->nextX;
          while(nextNode)
          {
-            if(!IsInRange(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
             {
                 break;
             }
@@ -163,7 +163,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> preNode = node->prevY;
          while(preNode)
          {
-            if(!IsInRange(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
             {
                 break;
             }
@@ -178,7 +178,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> nextNode = node->nextY;
          while(nextNode)
          {
-            if(!IsInRange(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
             {
                 break;
             }
@@ -193,14 +193,6 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
     std::vector<int> vecNeighborsId;
     std::copy(neighborsList.begin(), neighborsList.end(), std::back_inserter(vecNeighborsId));
     return vecNeighborsId;
-}
-
-
-
-  
-bool CrossListAOI::IsInRange(int gridX1, int gridY1, int gridX2, int gridY2, int radius) const
-{
-    return std::abs(gridX1 - gridX2) <= radius && std::abs(gridY1 - gridY2) <= radius;
 }
 
 
