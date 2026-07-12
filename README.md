@@ -18,6 +18,8 @@
  - [monkey解释器实现的说明文档](./docs/monkey_interpter.md)
  - [monkey编译器实现的说明文档](./docs/monkey_compiler.md)
 
+  ## 游戏特定算法
+  - [三种aoi算法的性能比对](./docs/aoi_performance_test.md)
  
 （C++并发基础 → 手写网络库 → monkey解释器和monkey编译器 → 游戏特定算法）
 
