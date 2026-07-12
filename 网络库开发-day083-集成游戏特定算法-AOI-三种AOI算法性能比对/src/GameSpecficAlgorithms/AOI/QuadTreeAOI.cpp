@@ -423,20 +423,6 @@ void QuadTreeNode::Query(const Rect& range, std::set<int>& result) const
     }
 }
 
-/*
- size_t QuadTreeNode::GetTotalEntityCount() const
- {
-
- }
- */ 
-
-
-/*
-void QuadTreeNode::CollectAllEntityId(std::vector<int>& result) const
-{
-
-}
-*/
 
 
 /*************************************************************************** */
@@ -454,10 +440,12 @@ QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int node
 
     // 将worldWidth转化成2的幂次方
     {
+        int depth = 0;
         int transformValue = 1;
-        while(transformValue < worldWidth)
+        while(transformValue < worldWidth && depth < maxDepth)
         {
             transformValue = transformValue << 1;
+            depth += 1;
         }
 
         worldWidth = transformValue;
@@ -466,10 +454,12 @@ QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int node
 
     // 将worldHeight转化成2的幂次方
     {
+        int depth = 0;
         int transformValue = 1;
-        while(transformValue < worldHeight)
+        while(transformValue < worldHeight && depth < maxDepth)
         {
             transformValue = transformValue << 1;
+            depth += 1;
         }
         
         worldHeight = transformValue;

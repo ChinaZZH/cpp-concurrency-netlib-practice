@@ -2,6 +2,7 @@
 #include "AOI/GridAOI.h"
 #include "AOI/CrossListAOI.h"
 #include "AOI/QuadTreeAOI.h"
+#include "AOI/AOIPerformanceTest.h"
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
  {
@@ -72,3 +73,5 @@ void AlgorithmsUnitTesting::PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int
     for (int n : neighbors) std::cout << n << " ";
     std::cout << std::endl;
 }
+
+

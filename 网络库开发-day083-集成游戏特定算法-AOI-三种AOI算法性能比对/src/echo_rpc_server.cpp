@@ -15,6 +15,7 @@
 #include <chrono>
 #include <iostream>
 #include "GameSpecficAlgorithms/GameServer.h"
+#include "GameSpecficAlgorithms/AOI/AOIPerformanceTest.h"
 
 #include <signal.h>
 #include <thread>
@@ -23,14 +24,23 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestAoiManager();
+    gameAlgorighm.TestQuadTreeAOI();
+    return 0;
+}
+
+int PerformanceTest()
+{
+    AOIPerformanceTest performance;
+    performance.PerformanceTest();
     return 0;
 }
 
 int main()
 {
-    //std::cout << "start unit testing" << std::endl;
-    //UnitTesting();
+    // std::cout << "start unit testing" << std::endl;
+    // UnitTesting();
+    std::cout << "start PerformanceTest " << std::endl;
+    PerformanceTest();
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
     
