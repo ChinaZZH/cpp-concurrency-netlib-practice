@@ -61,10 +61,11 @@ private:
     bool RemoveNodeForX(int entityId);
     bool RemoveNodeForY(int entityId);
 
-    //std::pair<int, int> GetGridCoord(int x, int y) const;
+    bool MoveNodeToNewX(int entityId, int newX, int newGridX);
+
+    bool MoveNodeToNewY(int entityId, int newY, int newGridY);
 
 private:
-    //int gridSize_;
     std::shared_ptr<CrossListNode> headX_ = nullptr;
     std::shared_ptr<CrossListNode> headY_ = nullptr;
     std::unordered_map<int, std::shared_ptr<CrossListNode>> nodeMap_;

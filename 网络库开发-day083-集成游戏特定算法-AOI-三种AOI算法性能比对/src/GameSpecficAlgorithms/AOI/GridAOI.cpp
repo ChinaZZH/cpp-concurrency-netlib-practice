@@ -58,7 +58,12 @@ bool GridAOI::RemoveEntity(int entityId)
         return false;
     }
 
-    auto neighborsEntityList = this->GetNeighbors(entityId);
+    std::vector<int> neighborsEntityList;
+    if(msgNotifyer_)
+    {
+        neighborsEntityList = this->GetNeighbors(entityId);
+    }
+     
     // 存储数据修改
     {
         const EntityInfo& entity = (itrEntity->second);
@@ -112,7 +117,12 @@ bool GridAOI::MoveEntity(int entityId, int newX, int newY)
 
     // 网格坐标没有发生变化则进行九宫格同步坐标变化即可
     auto oldGridPos = std::pair(entityInfo.gridX, entityInfo.gridY);
-    auto oldNeighborsEntitys = this->GetNeighbors(entityId);
+     std::vector<int> oldNeighborsEntitys;
+    if(msgNotifyer_)
+    {
+       oldNeighborsEntitys = this->GetNeighbors(entityId);
+    }
+     
 
     // 更新entityInfo
     entityInfo.x = newX;

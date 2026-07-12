@@ -532,7 +532,12 @@ bool QuadTreeAOI::RemoveEntity(int entityId)
         return false;
     }
 
-    auto neighborsEntityList = this->GetNeighbors(entityId);
+    std::vector<int> neighborsEntityList;
+    if(msgNotifyer_)
+    {
+       neighborsEntityList = this->GetNeighbors(entityId);
+    }
+
     // 存储数据修改
     {
         const EntityInfo& entity = (itrEntity->second);
@@ -571,7 +576,12 @@ bool QuadTreeAOI::MoveEntity(int entityId, int newX, int newY)
         return true;
     }
 
-    auto oldNeighborsList = this->GetNeighbors(entityId);
+    std::vector<int>  oldNeighborsList;
+    if(msgNotifyer_)
+    {
+        oldNeighborsList  = this->GetNeighbors(entityId);
+    }
+   
     if(false == root_->Update(entityId, newX, newY))
     {
         return false;
