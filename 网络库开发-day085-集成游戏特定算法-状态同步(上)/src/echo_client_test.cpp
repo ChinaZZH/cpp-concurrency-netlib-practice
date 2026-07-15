@@ -225,7 +225,7 @@ int test_http_client()
     return 0;
 }
 
-int echo_client_test()
+int main()
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {
@@ -271,9 +271,19 @@ int echo_client_test()
     std::cout << std::endl << std::endl;
     */
 
+    
     std::cout << "start 1 thread and req_per_threads 1: " << std::endl;
     ClientPressTest(1, 1, false);
     std::cout << std::endl << std::endl;
 
+    /*
+    ClientEntityMgr clientEntity(1); // 定义客户端为entityId为1, 这边只弄entityId为1的客户端，只看他的视野。
+    clientEntity.Start(); // 启动客户端实体管理器的更新循环
+    clientEntity.AddNewEntity(2, 100, 100);
+    clientEntity.MoveEntity(2, 150, 110);
+    std::this_thread::sleep_for(std::chrono::seconds(1)); 
+    clientEntity.MoveEntity(2, 120, 130);
+    std::this_thread::sleep_for(std::chrono::seconds(30)); 
+    */
     return 0;
 }

@@ -23,8 +23,12 @@ bool CrossListAOI::AddEntity(int entityId, int x, int y)
         return false;
     }
 
+
     InsertNodeForX(newNode);
     InsertNodeForY(newNode);
+    newNode->info.lastUpdateTime = std::chrono::steady_clock::now();
+    newNode->info.threadIdx = threadIdx_;
+    newNode->info.parititionedPool = parititionedPool_;
     nodeMap_[entityId] = newNode;
 
    // 广播有新entity消息下发newEntityResponse，发送entityId, x, y
@@ -77,33 +81,33 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
 
     // 位置没有发生变化的时候，直接返回
     std::shared_ptr<CrossListNode> moveEntity = (itr->second);
-    if(moveEntity->x == newX && moveEntity->y == newY)
+    if(moveEntity->info.x == newX && moveEntity->info.y == newY)
     {
         return true;
     }
 
     // 或者新的坐标值 也是需要实体待在当前位置上的。
     bool changePosForX = true;
-    if(moveEntity->x == newX)
+    if(moveEntity->info.x == newX)
     {
         changePosForX = false;
     }else {
         std::shared_ptr<CrossListNode> preX = moveEntity->prevX;
         std::shared_ptr<CrossListNode> nextX = moveEntity->nextX;
-        if(((nullptr == preX) || (preX && preX->x <= newX)) && (nullptr == nextX) || (nextX && nextX->x >= newX))
+        if(((nullptr == preX) || (preX && preX->info.x <= newX)) && (nullptr == nextX) || (nextX && nextX->info.x >= newX))
         {
             changePosForX = false;
         }
     }
 
     bool changePosForY = true;
-    if(moveEntity->y == newY)
+    if(moveEntity->info.y == newY)
     {
         changePosForY = false;
     }else {
         std::shared_ptr<CrossListNode> preY = moveEntity->prevY;
         std::shared_ptr<CrossListNode> nextY = moveEntity->nextY;
-        if(((nullptr == preY) || (preY && preY->y <= newY)) && (nullptr == nextY) || (nextY && nextY->y >= newY))
+        if(((nullptr == preY) || (preY && preY->info.y <= newY)) && (nullptr == nextY) || (nextY && nextY->info.y >= newY))
         {
             changePosForY = false;
         }
@@ -117,24 +121,28 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
         oldNeighborsEntitys = this->GetNeighbors(entityId);
     }
 
+   
     // x 和 y 的链表位置都不用修改，则直接更改x,y坐标值然后视野内同步
     if(false == changePosForX && false == changePosForY)
     {
         std::pair<int, int> pairGridPos = BaseAOIManager::GetGridCoord(newX, newY);
-        moveEntity->x = newX;
-        moveEntity->y = newY;
-        moveEntity->gridX = pairGridPos.first;
-        moveEntity->gridY = pairGridPos.second;
+        moveEntity->info.x = newX;
+        moveEntity->info.y = newY;
+        moveEntity->info.gridX = pairGridPos.first;
+        moveEntity->info.gridY = pairGridPos.second;
+        moveEntity->info.lastUpdateTime = std::chrono::steady_clock::now();
+        
+        
         if(msgNotifyer_)
         {
-            msgNotifyer_->MovePostionToMsgNotify(entityId, newX, newY, oldNeighborsEntitys);
+            ProcessMoveMessage(entityId, moveEntity->info, oldNeighborsEntitys);
         }
         
         return true;
     }
 
     
-    std::pair<int, int> oldGridPos(moveEntity->gridX, moveEntity->gridY);
+    std::pair<int, int> oldGridPos(moveEntity->info.gridX, moveEntity->info.gridY);
     auto newGridPos = BaseAOIManager::GetGridCoord(newX, newY);
 
     // 需要删除节点的情况下，判断是从头开始遍历还是当前节点开始遍历 
@@ -143,8 +151,8 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
     {
          /*
         RemoveNodeForX(entityId);
-        moveEntity->x = newX;
-        moveEntity->gridX = newGridPos.first;
+        moveEntity->info.x = newX;
+        moveEntity->info.gridX = newGridPos.first;
         InsertNodeForX(moveEntity);
         */
 
@@ -157,8 +165,8 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
     {
         /*
         RemoveNodeForY(entityId);
-        moveEntity->y = newY;
-        moveEntity->gridY = newGridPos.second;
+        moveEntity->info.y = newY;
+        moveEntity->info.gridY = newGridPos.second;
         InsertNodeForY(moveEntity);
         */
 
@@ -166,17 +174,10 @@ bool CrossListAOI::MoveEntity(int entityId, int newX, int newY)
         MoveNodeToNewY(entityId, newY, newGridPos.second);
     }
 
-
+    moveEntity->info.lastUpdateTime = std::chrono::steady_clock::now();
     if(msgNotifyer_)
     {
-        if(oldGridPos == newGridPos)
-        {
-            msgNotifyer_->MovePostionToMsgNotify(entityId, newX, newY, oldNeighborsEntitys);
-        }
-        else{
-            auto newNeighborsEntitys = this->GetNeighbors(entityId);
-            msgNotifyer_->MovePositionToMsgNotifyForGridChange(entityId, newX, newY, oldNeighborsEntitys, newNeighborsEntitys);
-        }
+        ProcessMoveMessage(entityId, moveEntity->info, oldNeighborsEntitys);
     }
     
     return true;
@@ -200,7 +201,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> preNode = node->prevX;
          while(preNode)
          {
-            if(!IsInRangeForGridPosition(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->info.gridX, node->info.gridY, preNode->info.gridX, preNode->info.gridY, radius))
             {
                 break;
             }
@@ -215,7 +216,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> nextNode = node->nextX;
          while(nextNode)
          {
-            if(!IsInRangeForGridPosition(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->info.gridX, node->info.gridY, nextNode->info.gridX, nextNode->info.gridY, radius))
             {
                 break;
             }
@@ -230,7 +231,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> preNode = node->prevY;
          while(preNode)
          {
-            if(!IsInRangeForGridPosition(node->gridX, node->gridY, preNode->gridX, preNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->info.gridX, node->info.gridY, preNode->info.gridX, preNode->info.gridY, radius))
             {
                 break;
             }
@@ -245,7 +246,7 @@ std::vector<int> CrossListAOI::GetNeighbors(int entityId, int radius /*= 1*/) co
          std::shared_ptr<CrossListNode> nextNode = node->nextY;
          while(nextNode)
          {
-            if(!IsInRangeForGridPosition(node->gridX, node->gridY, nextNode->gridX, nextNode->gridY, radius))
+            if(!IsInRangeForGridPosition(node->info.gridX, node->info.gridY, nextNode->info.gridX, nextNode->info.gridY, radius))
             {
                 break;
             }
@@ -273,7 +274,7 @@ bool CrossListAOI::InsertNodeForX(std::shared_ptr<CrossListNode> node)
     }
 
     // 如果headX的本身就大于node的X值
-    if((headX_->x) > (node->x))
+    if((headX_->info.x) > (node->info.x))
     {
         node->nextX = headX_;
         headX_->prevX = node;
@@ -286,13 +287,13 @@ bool CrossListAOI::InsertNodeForX(std::shared_ptr<CrossListNode> node)
     std::shared_ptr<CrossListNode> nodeNextX = headX_;
     while(nodeNextX)
     {
-        // 当前nodeNext的X数值比node->x的更大，则node需要挂在nodeNextX的前面
-        if((nodeNextX->x) > (node->x))
+        // 当前nodeNext的X数值比node->info.x的更大，则node需要挂在nodeNextX的前面
+        if((nodeNextX->info.x) > (node->info.x))
         {
             break;
         }
 
-        // 下面逻辑是nodeNext的X数值node->x的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，则break，将node挂在最后面
+        // 下面逻辑是nodeNext的X数值node->info.x的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，则break，将node挂在最后面
         if(!nodeNextX->nextX)
         {
             nodeNextX->nextX = node;
@@ -332,7 +333,7 @@ bool CrossListAOI::InsertNodeForY(std::shared_ptr<CrossListNode> node)
     }
 
     // 如果headY的本身就大于node的Y值
-    if((headY_->y) > (node->y))
+    if((headY_->info.y) > (node->info.y))
     {
         node->nextY = headY_;
         headY_->prevY = node;
@@ -345,13 +346,13 @@ bool CrossListAOI::InsertNodeForY(std::shared_ptr<CrossListNode> node)
     std::shared_ptr<CrossListNode> nodeNextY = headY_;
     while(nodeNextY)
     {
-        // 当前nodeNext的y数值比node->y的更大，则node需要挂在nodeNext的前面
-        if((nodeNextY->y) > (node->y))
+        // 当前nodeNext的y数值比node->info.y的更大，则node需要挂在nodeNext的前面
+        if((nodeNextY->info.y) > (node->info.y))
         {
             break;
         }
 
-        // 下面逻辑是nodeNext的y数值node->y的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，将新结点挂在node挂在最后面.
+        // 下面逻辑是nodeNext的y数值node->info.y的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，将新结点挂在node挂在最后面.
         if(!nodeNextY->nextY)
         {
             nodeNextY->nextY = node;
@@ -576,8 +577,8 @@ GridCoordResult CrossListAOI::GetGridPosition(int entityId) const
 
     const auto& entity = (itr->second);
     result.valid = true;
-    result.gridX = entity->gridX;
-    result.gridY = entity->gridY;
+    result.gridX = entity->info.gridX;
+    result.gridY = entity->info.gridY;
     return result;
 }
 
@@ -595,8 +596,9 @@ EntityPositionResult CrossListAOI::GetEntityPosition(int entityId) const
 
     const auto& entity = (itr->second);
     result.valid = true;
-    result.x = entity->x;
-    result.y = entity->y;
+    result.x = entity->info.x;
+    result.y = entity->info.y;
+    result.lastUpdateTime = entity->info.lastUpdateTime;
     return result;
 }
 
@@ -610,7 +612,7 @@ bool CrossListAOI::MoveNodeToNewX(int entityId, int newX, int newGridX)
     }
 
     auto moveNode = (itr->second);
-    if(moveNode->x == newX)
+    if(moveNode->info.x == newX)
     {
         return true;
     }
@@ -618,8 +620,8 @@ bool CrossListAOI::MoveNodeToNewX(int entityId, int newX, int newGridX)
      // 如果只有一个节点并且是head结点, 说明当前节点就是头结点，只要设置x,y的数值即可
     if(nullptr == headX_->nextX)
     {
-        moveNode->x = newX;
-        moveNode->gridX = newGridX;
+        moveNode->info.x = newX;
+        moveNode->info.gridX = newGridX;
         return true;
     }
 
@@ -627,12 +629,12 @@ bool CrossListAOI::MoveNodeToNewX(int entityId, int newX, int newGridX)
     
     // 统一都是从前往后找，不做从后往前找的优化
     std::shared_ptr<CrossListNode> newNextNode;
-    if(newX > (moveNode->x))
+    if(newX > (moveNode->info.x))
     {
         if(nullptr == moveNode->nextX)
         {
-            moveNode->x = newX;
-            moveNode->gridX = newGridX;
+            moveNode->info.x = newX;
+            moveNode->info.gridX = newGridX;
             return true;
         }
 
@@ -650,12 +652,12 @@ bool CrossListAOI::MoveNodeToNewX(int entityId, int newX, int newGridX)
         }
     }
 
-    moveNode->x = newX;
-    moveNode->gridX = newGridX;
+    moveNode->info.x = newX;
+    moveNode->info.gridX = newGridX;
     while(newNextNode)
     {
-        // 当前nodeNext的X数值比node->x的更大，则node需要挂在nodeNextX的前面
-        if((newNextNode->x) > newX)
+        // 当前nodeNext的X数值比node->info.x的更大，则node需要挂在nodeNextX的前面
+        if((newNextNode->info.x) > newX)
         {
             break;
         }
@@ -667,7 +669,7 @@ bool CrossListAOI::MoveNodeToNewX(int entityId, int newX, int newGridX)
            continue;
         }        
 
-        // 下面逻辑是nodeNext的X数值node->x的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，则break，将node挂在最后面
+        // 下面逻辑是nodeNext的X数值node->info.x的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，则break，将node挂在最后面
         newNextNode->nextX = moveNode;
         moveNode->prevX = newNextNode;
         return true;
@@ -704,7 +706,7 @@ bool CrossListAOI::MoveNodeToNewY(int entityId, int newY, int newGridY)
     }
 
     auto moveNode = (itr->second);
-    if(moveNode->y == newY)
+    if(moveNode->info.y == newY)
     {
         return true;
     }
@@ -712,8 +714,8 @@ bool CrossListAOI::MoveNodeToNewY(int entityId, int newY, int newGridY)
      // 如果只有一个节点并且是head结点, 说明当前节点就是头结点，只要设置x,y的数值即可
     if(nullptr == headY_->nextY)
     {
-        moveNode->y = newY;
-        moveNode->gridY = newGridY;
+        moveNode->info.y = newY;
+        moveNode->info.gridY = newGridY;
         return true;
     }
 
@@ -721,12 +723,12 @@ bool CrossListAOI::MoveNodeToNewY(int entityId, int newY, int newGridY)
     
     // 统一都是从前往后找，不做从后往前找的优化
     std::shared_ptr<CrossListNode> newNextNode;
-    if(newY > (moveNode->y))
+    if(newY > (moveNode->info.y))
     {
         if(nullptr == moveNode->nextY)
         {
-            moveNode->y = newY;
-            moveNode->gridY = newGridY;
+            moveNode->info.y = newY;
+            moveNode->info.gridY = newGridY;
             return true;
         }
 
@@ -744,12 +746,12 @@ bool CrossListAOI::MoveNodeToNewY(int entityId, int newY, int newGridY)
         }
     }
 
-    moveNode->y = newY;
-    moveNode->gridY = newGridY;
+    moveNode->info.y = newY;
+    moveNode->info.gridY = newGridY;
     while(newNextNode)
     {
-        // 当前nodeNext的X数值比node->x的更大，则node需要挂在nodeNextX的前面
-        if((newNextNode->y) > newY)
+        // 当前nodeNext的X数值比node->info.x的更大，则node需要挂在nodeNextX的前面
+        if((newNextNode->info.y) > newY)
         {
             break;
         }
@@ -761,7 +763,7 @@ bool CrossListAOI::MoveNodeToNewY(int entityId, int newY, int newGridY)
            continue;
         }        
 
-        // 下面逻辑是nodeNext的X数值node->x的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，则break，将node挂在最后面
+        // 下面逻辑是nodeNext的X数值node->info.x的更小的逻辑，如果已经没有办法往后走了，说明当前已经是最大值了，则break，将node挂在最后面
         newNextNode->nextY = moveNode;
         moveNode->prevY = newNextNode;
         return true;

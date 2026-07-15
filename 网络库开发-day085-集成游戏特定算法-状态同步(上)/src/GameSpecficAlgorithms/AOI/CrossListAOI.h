@@ -2,26 +2,41 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <chrono>
 #include "BaseAOIManager.h"
 
 struct CrossListNode {
-    int entityId;
+    /*
     int x;
     int y;
     int gridX;
     int gridY;
-
+    std::chrono::steady_clock::time_point lastUpdateTime;
+    int broadcastX;
+    int broadcastY;
+    */
+    int entityId;
+    EntityInfo info;
+    
     std::shared_ptr<CrossListNode> prevX;
     std::shared_ptr<CrossListNode> nextX;
     std::shared_ptr<CrossListNode> prevY;
     std::shared_ptr<CrossListNode> nextY;
 
     CrossListNode(int id, int px, int py, int gx, int gy)
-    :entityId(id), x(px), y(py), gridX(gx), gridY(gy)
+    :entityId(id)
+    ,info()
     ,prevX(nullptr), nextX(nullptr)
     ,prevY(nullptr), nextY(nullptr)
     {
-        
+        info.x = (px);
+        info.y = (py);
+        info.gridX = (gx);
+        info.gridY = (gy);
+        info.lastUpdateTime= std::chrono::steady_clock::now();
+        info.broadcastX = (px);
+        info.broadcastY = (py); 
+        info.timerId = (0);
     }
 };
 

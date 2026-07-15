@@ -17,6 +17,11 @@ void AOIMsgNotifyer::BroadcastToEntities(const std::vector<int>& entityList, con
 
  void AOIMsgNotifyer::EnterNewGridPosMsgNotify(int entityId, int entityX, int entityY, const std::vector<int>& newNeighborsEntitys)
  {
+    if(newNeighborsEntitys.empty() || !sendMsgCallBack_)
+    {
+        return;
+    }
+
     {
         aoi::EntityEnterNotifyResponse newEntityResponse;
         aoi::EntityInfo* pNewEntity = newEntityResponse.mutable_new_entity();
@@ -27,15 +32,21 @@ void AOIMsgNotifyer::BroadcastToEntities(const std::vector<int>& entityList, con
             pNewEntity->set_y(entityY);
         }
 
-        std::string strData;
-        newEntityResponse.SerializeToString(&strData);
-        BroadcastToEntities(newNeighborsEntitys, strData, GSMT_AddEntity);
+        for (int recv_id : newNeighborsEntitys) 
+        {
+           newEntityResponse.set_msg_client_id(recv_id);
+                
+            std::string strData;
+            newEntityResponse.SerializeToString(&strData);
+            sendMsgCallBack_(entityId, strData, GSMT_AddEntity);
+        }
     }
     
 
 
     // 同时进行九宫格广播有新的人进入视野的消息给邻居
     aoi::InitAroundEntitiesNotifyResponse aroundResponse;
+    aroundResponse.set_msg_client_id(entityId);
     for(const auto& neighborsId : newNeighborsEntitys)
     {
        // 将neighborsId 压入到数据包中，然后结束后发给新进入者
@@ -58,61 +69,84 @@ void AOIMsgNotifyer::BroadcastToEntities(const std::vector<int>& entityList, con
     }
 
     // 将aroundResponse发送给进入新进入者
-    if(sendMsgCallBack_)
-    {
-        std::string strData;
-        aroundResponse.SerializeToString(&strData);
-        sendMsgCallBack_(entityId, strData, GSMT_SyncNeighborsEntity);
-    }   
+    std::string strData;
+    aroundResponse.SerializeToString(&strData);
+    sendMsgCallBack_(entityId, strData, GSMT_SyncNeighborsEntity);
  }
 
 
  void AOIMsgNotifyer::LeaveGridToMsgNotify(int entityId, const std::vector<int>& neighborsEntitys)
  {
+    if(neighborsEntitys.empty() || !sendMsgCallBack_)
+    {
+        return;
+    }
+
     // 消息同步
     aoi::EntityLeaveNotifyResponse entityLeaveResponse;
     entityLeaveResponse.set_entity_id(entityId);
     
-    std::string strData;
-    entityLeaveResponse.SerializeToString(&strData);
-    this->BroadcastToEntities(neighborsEntitys, strData, GSMT_RemoveEntity);
+    for(int recv_id : neighborsEntitys) 
+    {
+        entityLeaveResponse.set_msg_client_id(recv_id);
+                
+        std::string strData;
+        entityLeaveResponse.SerializeToString(&strData);
+        sendMsgCallBack_(entityId, strData, GSMT_RemoveEntity);
+    }   
  }
 
 
  void AOIMsgNotifyer::MovePostionToMsgNotify(int entityId, int newX, int newY, const std::vector<int>& neighborsEntitys)
  {
+    if(neighborsEntitys.empty() || !sendMsgCallBack_)
+    {
+        return;
+    }
+
     aoi::EntityMoveNotifyResponse moveResponse;
     moveResponse.set_entity_id(entityId);
     moveResponse.set_new_x(newX);
     moveResponse.set_new_y(newY);
         
-    std::string strData;
-    moveResponse.SerializeToString(&strData);
-    this->BroadcastToEntities(neighborsEntitys, strData, GSMT_MoveEntity);
+    for(int recv_id : neighborsEntitys) 
+    {
+        moveResponse.set_msg_client_id(recv_id);
+                
+        std::string strData;
+        moveResponse.SerializeToString(&strData);
+        sendMsgCallBack_(entityId, strData, GSMT_MoveEntity);
+    }   
  }
 
 
- void AOIMsgNotifyer::MovePositionToMsgNotifyForGridChange(int entityId, int entityX, int entityY, const std::vector<int>& oldNeighborsEntitys, const std::vector<int>& newNeighborsEntitys)
+ void AOIMsgNotifyer::BroadcastMsgForMoveAction(int broadcastMask, int entityId, int entityX, int entityY, const std::vector<int>& oldNeighborsEntitys, const std::vector<int>& newNeighborsEntitys)
  {
-     std::vector<int> vecAllNeighbors;
-    std::set_intersection(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), newNeighborsEntitys.begin(), newNeighborsEntitys.end(), back_inserter(vecAllNeighbors));
+    std::vector<int> vecKeepInSightNeighbors;
+    std::set_intersection(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), newNeighborsEntitys.begin(), newNeighborsEntitys.end(), back_inserter(vecKeepInSightNeighbors));
 
     // 网格坐标变化前和变化后都在entity视野的九宫格内, 则发送change positon消息
-    this->MovePostionToMsgNotify(entityId, entityX, entityY, vecAllNeighbors);
-
+    // 移动距离超过阈值才同步
+    if(broadcastMask & AOI_MOVE)
+    {
+        this->MovePostionToMsgNotify(entityId, entityX, entityY, vecKeepInSightNeighbors);
+    }
     
+
     // 离开玩家九宫格视野的人, 广播离开的消息
+    if(broadcastMask & AOI_DEL)
     {
         std::vector<int> vecRemoveNeighbors;
-        std::set_difference(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecRemoveNeighbors));
+        std::set_difference(oldNeighborsEntitys.begin(), oldNeighborsEntitys.end(), vecKeepInSightNeighbors.begin(), vecKeepInSightNeighbors.end(), back_inserter(vecRemoveNeighbors));
         this->LeaveGridToMsgNotify(entityId, vecRemoveNeighbors);
     }
     
     
     // 处理新进入视野的人
+    if(broadcastMask & AOI_ADD)
     {
         std::vector<int> vecAddNewNeighbors;
-        std::set_difference(newNeighborsEntitys.begin(), newNeighborsEntitys.end(), vecAllNeighbors.begin(), vecAllNeighbors.end(), back_inserter(vecAddNewNeighbors));
+        std::set_difference(newNeighborsEntitys.begin(), newNeighborsEntitys.end(), vecKeepInSightNeighbors.begin(), vecKeepInSightNeighbors.end(), back_inserter(vecAddNewNeighbors));
         this->EnterNewGridPosMsgNotify(entityId, entityX, entityY, vecAddNewNeighbors);
     }
  }

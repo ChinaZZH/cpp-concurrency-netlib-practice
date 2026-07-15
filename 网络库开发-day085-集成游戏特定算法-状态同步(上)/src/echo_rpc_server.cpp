@@ -36,7 +36,7 @@ int PerformanceTest()
     return 0;
 }
 
-int main()
+int echo_rpc_server()
 {
     //std::cout << "start unit testing" << std::endl;
     // UnitTesting();
@@ -44,8 +44,8 @@ int main()
     //PerformanceTest();
     
     
-    Test_TimeWheel timeWheel;
-    timeWheel.TestAll();
+   // Test_TimeWheel timeWheel;
+    //timeWheel.TestAll();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

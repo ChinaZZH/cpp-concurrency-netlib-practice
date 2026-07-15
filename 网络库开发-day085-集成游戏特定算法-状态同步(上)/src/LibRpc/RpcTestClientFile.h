@@ -12,6 +12,7 @@
 #include "../../build/proto_gen/add.pb.h"
 #include "../../build/proto_gen/aoi.pb.h"
 #include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
+#include "../GameSpecficAlgorithms/ClientEntityMgr.h"
 
 #include <iostream>
 #include <chrono>
@@ -337,7 +338,10 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
         cv.notify_one();
     });
     
-    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+
+    ClientEntityMgr clientEntity(1); // 定义客户端为entityId为1, 这边只弄entityId为1的客户端，只看他的视野。
+    clientEntity.Start(); // 启动客户端实体管理器的更新循环
+    client->SetMessageCallBack([rpcPtr, &clientEntity](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
         std::cout << "onMessageCallBack:=" << msgType << std::endl;
         switch(msgType)
         {
@@ -349,8 +353,13 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
                     std::cout << "client onMessageCallBack parse GSMT_AddEntity error!!!" << std::endl;
                 }
                 else{
-                    std::cout << "new entity id:=" << response.new_entity().entity_id();
-                    std::cout << " position x:=" << response.new_entity().x() << " position y:=" << response.new_entity().y() << std::endl;
+                   
+                    // std::cout << " position x:=" << response.new_entity().x() << " position y:=" << response.new_entity().y() << std::endl;
+                    if(clientEntity.GetCurrentEntityId() == response.msg_client_id())
+                    {
+                         std::cout << "new entity id:=" << response.msg_client_id();
+                        clientEntity.AddNewEntity(response.new_entity().entity_id(), response.new_entity().x(), response.new_entity().y());
+                    }
                 }
             }
             break;
@@ -363,7 +372,12 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
                     std::cout << "client onMessageCallBack parse GSMT_RemoveEntity error!!!" << std::endl;
                 }
                 else{
-                    std::cout << "remove entity id:=" << response.entity_id() << std::endl;
+                    
+                    if(clientEntity.GetCurrentEntityId() == response.msg_client_id())
+                    {
+                        std::cout << "remove entity id:=" << response.msg_client_id();
+                        clientEntity.RemoveEntity(response.entity_id());
+                    }
                 }
             }
             break;
@@ -376,8 +390,14 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
                     std::cout << "client onMessageCallBack parse GSMT_MoveEntity error!!!" << std::endl;
                 }
                 else{
-                     std::cout << "move entity id:=" << response.entity_id();
-                    std::cout << " position x:=" << response.new_x() << " position y:=" << response.new_y() << std::endl;
+                    
+                     // std::cout << "move entity id:=" << response.entity_id();
+                    // std::cout << " position x:=" << response.new_x() << " position y:=" << response.new_y() << std::endl;
+                    if(clientEntity.GetCurrentEntityId() == response.msg_client_id())
+                    {
+                        std::cout << "move entity id:=" << response.msg_client_id();
+                        clientEntity.MoveEntity(response.entity_id(), response.new_x(), response.new_y());
+                    }
                 }
             }
             break;
@@ -390,11 +410,20 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
                     std::cout << "client onMessageCallBack parse GSMT_SyncNeighborsEntity error!!!" << std::endl;
                 }
                 else{
-                    for(int i = 0; i < response.around_entities_size(); i = i + 1)
+                    // 只打印特定玩家的视野
+                    
+                    if(clientEntity.GetCurrentEntityId() == response.msg_client_id())
                     {
-                        std::cout << i << ":Sync index entity id:=" << response.around_entities(i).entity_id();
-                        std::cout << " position x:=" << response.around_entities(i).x() << " position y:=" << response.around_entities(i).y() << std::endl;
+                        std::cout << "around msg entity id:=" << response.msg_client_id();
+                        for(int i = 0; i < response.around_entities_size(); i = i + 1)
+                        {
+                            const aoi::EntityInfo& info = response.around_entities(i);
+                            clientEntity.AddNewEntity(info.entity_id(), info.x(), info.y());
+                            // std::cout << i << ":Sync index entity id:=" << response.around_entities(i).entity_id();
+                            // std::cout << " position x:=" << response.around_entities(i).x() << " position y:=" << response.around_entities(i).y() << std::endl;
+                        }
                     }
+                    
                 }
             }
             break;
@@ -404,6 +433,7 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
     });
 
     client->Connect();
+    
 
     // 启动 I/O 线程
     std::thread io_thread([&loop]() {
@@ -469,8 +499,8 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
     strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(moveReq.SerializeAsString(), GSMT_MoveEntity));
     rpcClient->CallAsyncIgnoreResponse(strContent);
     
-    moveReq.set_new_x(300);
-    moveReq.set_new_y(300);
+    moveReq.set_new_x(120);
+    moveReq.set_new_y(120);
     strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(moveReq.SerializeAsString(), GSMT_MoveEntity));
     rpcClient->CallAsyncIgnoreResponse(strContent);
 

@@ -16,7 +16,7 @@
  GameServer::GameServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
 ,service_registry_(std::make_unique<ServiceRegistry>())
- ,parititionedPool_(std::make_unique<PartitionedPool>())
+ ,parititionedPool_(std::make_shared<PartitionedPool>())
  {
     server_.SetMessageCallBack(std::bind(&GameServer::OnMessage, 
         this, std::placeholders::_1, 
@@ -28,27 +28,7 @@
     server_.SetConnectionCallBack([](const std::shared_ptr<TcpConnection>& con){
         auto length_decoder = std::make_unique<LengthAndTypePrefixDecoder>();
         con->SetDecoder(std::move(length_decoder));
-    });
-
-
-    for(int idMap = 100; idMap < 200; idMap += 1)
-    {
-        auto ptrAoiMap = std::make_shared<QuadTreeAOI>(1000, 1000, 100, 2, 8); // 世界 1000x1000，网格 100
-        // 设置aoi回调函数
-        ptrAoiMap->SetSendMessageCallBack(std::bind(&GameServer::SendMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-
-        aoiMap_[idMap] = ptrAoiMap;
-    }
-
-
-         // 注册处理函数
-    RegisterHandler(GSMT_AddEntity, std::bind(&GameServer::AddEntity, this, std::placeholders::_1, std::placeholders::_2));
-    RegisterHandler(GSMT_RemoveEntity, std::bind(&GameServer::RemoveEntity, this, std::placeholders::_1, std::placeholders::_2));
-    RegisterHandler(GSMT_MoveEntity, std::bind(&GameServer::MoveEntity, this, std::placeholders::_1, std::placeholders::_2));
-
-
-    // 设置分区线程池个数
-    parititionedPool_->Start(std::thread::hardware_concurrency());
+    });    
  }
     
 
@@ -58,9 +38,38 @@
  }
 
 
- void GameServer::Start()
+void GameServer::Start()
 {
+    // 注册处理函数
+    //std::cout << "GameServer::Start  1111" << std::endl;
+    RegisterHandler(GSMT_AddEntity, std::bind(&GameServer::AddEntity, this, std::placeholders::_1, std::placeholders::_2));
+    RegisterHandler(GSMT_RemoveEntity, std::bind(&GameServer::RemoveEntity, this, std::placeholders::_1, std::placeholders::_2));
+    RegisterHandler(GSMT_MoveEntity, std::bind(&GameServer::MoveEntity, this, std::placeholders::_1, std::placeholders::_2));
+
+
+    // 设置分区线程池个数
+    //std::cout << "GameServer::Start  22222" << std::endl;
+    parititionedPool_->Start(std::thread::hardware_concurrency());
+
+    //std::cout << "GameServer::Start  33333" << std::endl;
+    for(int idMap = 100; idMap < 200; idMap += 1)
+    {
+        auto ptrAoiMap = std::make_shared<QuadTreeAOI>(1000, 1000, 100, 2, 8); // 世界 1000x1000，网格 100
+
+        // 设置移动的距离超过阈值才广播
+        int threadIdx = idMap % parititionedPool_->GetParitionedCount();
+        int forceMoveMsgDelaySeconds = 1;
+        ptrAoiMap->InitAoiData(threadIdx, MOVE_THRESHOLD, parititionedPool_, forceMoveMsgDelaySeconds);
+
+        // 设置aoi回调函数
+        ptrAoiMap->SetSendMessageCallBack(std::bind(&GameServer::SendMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
+        aoiMap_[idMap] = ptrAoiMap;
+    }
+
+    //std::cout << "GameServer::Start  44444" << std::endl;
     server_.Start();
+    //std::cout << "GameServer::Start  55555" << std::endl;
 }
 
  void GameServer::RegisterHandler(GameServerMsgType msgType, GameHandler handler)
@@ -140,13 +149,16 @@ bool GameServer::AddEntity(const std::weak_ptr<TcpConnection>& weak_connection_p
         throw std::runtime_error("parse AddEntity failed");
     }   
 
+    
     auto itr = aoiMap_.find(request.map_id());
     if(itr == aoiMap_.end())
     {
         throw std::runtime_error("mapid error failed");
     }
 
-     // 这边connection只是读取对应的eventLoop不会影响多线程的竞争问题
+    // 这边connection只是读取对应的eventLoop不会影响多线程的竞争问题
+    const aoi::EntityInfo& entityInfo = request.new_entity();
+     
     EventLoop* loop_ptr = nullptr;
     auto con = weak_connection_ptr.lock();
     if(con)
@@ -161,10 +173,9 @@ bool GameServer::AddEntity(const std::weak_ptr<TcpConnection>& weak_connection_p
 
     TcpConnectionInfo connectionInfo;
     connectionInfo.weakPtrCon = weak_connection_ptr;
-    connectionInfo.loop_ptr = loop_ptr;
-
-    const aoi::EntityInfo& entityInfo = request.new_entity();
+    connectionInfo.loop_ptr = loop_ptr;    
     onServerConnections_[entityInfo.entity_id()] = connectionInfo;
+
 
     bool bAddEntityResult = (itr->second)->AddEntity(entityInfo.entity_id(), entityInfo.x(), entityInfo.y());
     if(!bAddEntityResult)
@@ -207,16 +218,62 @@ bool GameServer::MoveEntity(const std::weak_ptr<TcpConnection>& weak_connection_
     aoi::EntityMoveRequest moveRequest;
     if(!moveRequest.ParseFromString(strParamData))
     {
-        throw std::runtime_error("parse MoveEntity failed");
+        throw std::runtime_error("GameServer::MoveEntity parse MoveEntity failed");
     } 
 
+    // 获取实体
     auto itr = aoiMap_.find(moveRequest.map_id());
     if(itr == aoiMap_.end())
     {
-        throw std::runtime_error("mapid error failed");
+        throw std::runtime_error("GameServer::MoveEntity mapid error failed");
     }
     
-    bool bAddEntityResult = (itr->second)->MoveEntity(moveRequest.entity_id(), moveRequest.new_x(), moveRequest.new_y());
+    // 计算移动距离， 通过两点式计算距离
+    int entityId = moveRequest.entity_id();
+    int newX = moveRequest.new_x();
+    int newY =  moveRequest.new_y();
+    std::shared_ptr<IAOIManager> aoiManager = (itr->second);
+    EntityPositionResult posResult = aoiManager->GetEntityPosition(entityId);
+    if(false == posResult.valid)
+    {
+        throw std::runtime_error("GameServer::MoveEntity not found entity");
+    }
+
+    
+    int deltaX = posResult.x - newX;
+    int deltaY = posResult.y - newY;
+    int squareDistance = (deltaX * deltaX) + (deltaY * deltaY);
+    float distance = sqrt(squareDistance);
+    
+
+    // 4. 校验：速度限制 + 防闪现  这边使用秒做计算，需要的时候再调整精度到毫秒或者微秒
+    {
+        // 校验速度是否超过限制
+        /*
+        auto now = std::chrono::steady_clock::now();
+        auto deltaSecs = std::chrono::duration<float>(now - posResult.lastUpdateTime).count();
+        if(deltaSecs > 0.00f && (distance / deltaSecs) > MAX_MOVE_SPEED)
+        {
+            std::cout << "GameServer::MoveEntity entityId:=" << entityId << " out of speed range speed:=" << MAX_MOVE_SPEED << " client speed:=" << (distance / deltaSecs) << std::endl;
+            return false;
+        }
+        */
+    }
+    
+
+    // 校验是否闪现
+    {
+        /*
+        if(distance > MAX_TELEPORT_DIST)
+        {
+            std::cout << "GameServer::MoveEntity entityId:=" << entityId << " out of distance:=" << MAX_TELEPORT_DIST << " client distance:=" << distance << std::endl;
+            return false;
+        }
+        */
+    }
+    
+
+    bool bAddEntityResult = (itr->second)->MoveEntity(entityId, newX, newY);
     if(!bAddEntityResult)
     {
         return false;

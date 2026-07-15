@@ -25,7 +25,16 @@ public:
 
     void MovePostionToMsgNotify(int entityId, int entityX, int entityY, const std::vector<int>& neighborsEntitys);
 
-    void MovePositionToMsgNotifyForGridChange(int entityId, int entityX, int entityY, const std::vector<int>& oldNeighborsEntitys, const std::vector<int>& newNeighborsEntitys);
+    enum AOI_BroadcastMoveAction
+    {
+        AOI_NONE    = 0,
+        AOI_ADD     = 0X001,
+        AOI_DEL     = 0X002,
+        AOI_MOVE    = 0X004,
+        AOI_ALL,
+    };
+
+    void BroadcastMsgForMoveAction(int broadcastMask, int entityId, int entityX, int entityY, const std::vector<int>& oldNeighborsEntitys, const std::vector<int>& newNeighborsEntitys);
 
 protected:
     SendMsgCallBack sendMsgCallBack_;

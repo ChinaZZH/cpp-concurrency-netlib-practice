@@ -1,10 +1,16 @@
 #pragma once
 #include "../TcpServer.h"
-#include <memory>
+#include <unordered_map>
+#include <functional>
 #include <string>
+#include <fstream>
+#include <thread>
+#include <memory>
+#include <atomic>
+#include <absl/container/flat_hash_map.h>
 #include "PartitionedPool.h"
 #include "GameServerMsgTypeDefine.h"
-#include "../LibRpc/RpcServer.h"
+
 
 class EventLoop;
 class TcpConnection;
@@ -59,5 +65,9 @@ private:
 
     absl::flat_hash_map<GameServerMsgType, GameHandler> methods_handler_;
 
-    std::unique_ptr<PartitionedPool> parititionedPool_; // 根据地图id分区线程池
+    std::shared_ptr<PartitionedPool> parititionedPool_; // 根据地图id分区线程池
+
+    const static int    MAX_MOVE_SPEED          = 50;        // 单位/秒
+    const static int    MAX_TELEPORT_DIST       = 100;       // 防闪现阈值
+    const static int    MOVE_THRESHOLD          = 10;        // 移动阈值（距离小于此值不广播）
 };

@@ -22,7 +22,8 @@ message EntityEnterRequest {
 }
 
 message EntityEnterNotifyResponse {
-    EntityInfo new_entity = 1;  // 新实体的信息
+    int32 msg_client_id = 1;  // 这条消息包所属对象
+    EntityInfo new_entity = 2;  // 新实体的信息
 }
 
 // ============================================================
@@ -31,7 +32,8 @@ message EntityEnterNotifyResponse {
 //    通知它：你周围有哪些实体
 // ============================================================
 message InitAroundEntitiesNotifyResponse {
-    repeated EntityInfo around_entities = 1;  // 新实体周围的已有实体列表
+    int32 msg_client_id = 1;  // 这条消息包所属对象
+    repeated EntityInfo around_entities = 2;  // 新实体周围的已有实体列表
 }
 
 // ============================================================
@@ -45,7 +47,8 @@ message EntityLeaveRequest {
 }
 
 message EntityLeaveNotifyResponse {
-    int32 entity_id = 1;  // 离开的实体ID
+    int32 msg_client_id = 1;  // 这条消息包所属对象
+    int32 entity_id = 2;  // 离开的实体ID
 }
 
 // ============================================================
@@ -58,10 +61,12 @@ message EntityMoveRequest {
     int32 entity_id = 2;
     int32 new_x = 3;
     int32 new_y = 4;
+    int64 timestamp = 5; //  客户端时间戳,发送当前时间时间戳，绝对时间。（用于延迟补偿，留作未来使用）
 }
 
 message EntityMoveNotifyResponse {
-    int32 entity_id = 1;
-    int32 new_x = 2;
-    int32 new_y = 3;
+    int32 msg_client_id = 1;  // 这条消息包所属对象
+    int32 entity_id = 2;
+    int32 new_x = 3;
+    int32 new_y = 4;
 }

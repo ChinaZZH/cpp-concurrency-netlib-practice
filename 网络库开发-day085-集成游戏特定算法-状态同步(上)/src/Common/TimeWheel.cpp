@@ -18,6 +18,7 @@ uint64_t TimeWheel::AddNewTimer(int delaySeconds, int loopCount, std::function<v
      // 当前定时器只支持24小时内的定时器，不支持更大跨度的定时器。
     if((delaySeconds <= 0) || (delaySeconds > DAY_KEEP_SECONDS))
     {
+        std::cout << "TimeWheel::AddNewTimer failed delaySeconds:=" << delaySeconds << std::endl;
         return 0;
     }
 
@@ -37,10 +38,12 @@ uint64_t TimeWheel::AddNewTimer(int delaySeconds, int loopCount, std::function<v
     newTimerNode->isValid = true;
     if(AddToTimerNodeList(currentTimePoint_, newTimerNode))
     {
+        // std::cout << "TimeWheel::AddNewTimer AddToTimerNodeList success timer_id:= " << nextTimerId_ << std::endl;
         activeTimers_[nextTimerId_] = newTimerNode;
         return nextTimerId_;
     }
 
+    std::cout << "TimeWheel::AddNewTimer AddToTimerNodeList failed " << std::endl;
     return 0;
 }
 
@@ -72,6 +75,8 @@ void TimeWheel::RunNexTick()
     {
         return;
     }
+
+    // std::cout << "TimeWheel::RunNexTick !!!!" <<  std::endl;
 
     // 时间往前走一格了
     int addSeconds = newCurrentTime - current_time;
@@ -108,6 +113,7 @@ void TimeWheel::RunNexTick()
                 continue;
             }
 
+            // std::cout << "TimeWheel::AddNewTimer callBack timer_id:= " << timerNode->timerId << std::endl;
             (timerNode->callBack_)();
             if(1 == timerNode->remainCount)
             {
@@ -129,6 +135,8 @@ void TimeWheel::RunNexTick()
     
 
     currentTimePoint_ = newTimePoint;
+    //std::cout << "TimeWheel::RunNexTick hourIdx:=" <<  hourIndex_;
+    //std::cout << " MinuteIdx:=" << minuteIndex_ << " SecondIdx:=" << secondIndex_ << std::endl;
 }
 
 void TimeWheel::NewHourStart()
@@ -209,7 +217,7 @@ bool TimeWheel::AddToTimerNodeList(std::chrono::steady_clock::time_point current
         }
     }
 
-    // std::cout << "TimeWheel::AddToTimerNodeList delayHourIdx:=" <<  delayHourIdx;
+    // std::cout << "TimeWheel::AddToTimerNodeList "<< timerNode->timerId << " delayHourIdx:=" <<  delayHourIdx;
     // std::cout << " delayMinuteIdx:=" << delayMinuteIdx << " delaySecondIdx:=" << delaySecondIdx << std::endl;
     return true;
 }

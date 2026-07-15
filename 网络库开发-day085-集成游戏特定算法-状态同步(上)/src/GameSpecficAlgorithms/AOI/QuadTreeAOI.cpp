@@ -495,11 +495,17 @@ bool QuadTreeAOI::AddEntity(int entityId, int x, int y)
 
     // 存储数据修改
     EntityInfo entity;
+    entity.threadIdx = threadIdx_;
+    entity.parititionedPool = parititionedPool_;
     entity.x = x;
     entity.y = y;
     auto gridPostion = this->GetGridCoord(x, y);
     entity.gridX = gridPostion.first;
     entity.gridY = gridPostion.second;
+    entity.lastUpdateTime = std::chrono::steady_clock::now();
+    entity.broadcastX = x;
+    entity.broadcastY = y;
+    entity.timerId = 0;
     entityMap_[entityId] = entity;
     
     // 广播有新entity消息下发newEntityResponse，发送entityId, x, y
@@ -594,12 +600,12 @@ bool QuadTreeAOI::MoveEntity(int entityId, int newX, int newY)
     entityInfo.y = newY;
     entityInfo.gridX = newGridPos.first;
     entityInfo.gridY = newGridPos.second;
+    entityInfo.lastUpdateTime = std::chrono::steady_clock::now();
 
     //同步数据
     if(msgNotifyer_)
     {
-        auto newNeighborsEntitys = this->GetNeighbors(entityId);
-        msgNotifyer_->MovePositionToMsgNotifyForGridChange(entityId, newX, newY, oldNeighborsList, newNeighborsEntitys);
+        ProcessMoveMessage(entityId, entityInfo, oldNeighborsList);
     }
 
     return true;
@@ -655,7 +661,7 @@ GridCoordResult QuadTreeAOI::GetGridPosition(int entityId) const
 
 EntityPositionResult QuadTreeAOI::GetEntityPosition(int entityId) const
 {
-     EntityPositionResult result;
+    EntityPositionResult result;
     result.valid = false;
     result.x = 0;
     result.y = 0;
@@ -669,5 +675,6 @@ EntityPositionResult QuadTreeAOI::GetEntityPosition(int entityId) const
     result.valid = true;
     result.x = entity.x;
     result.y = entity.y;
+    result.lastUpdateTime = entity.lastUpdateTime;
     return result;
 }

@@ -20,11 +20,17 @@
 
     // 存储数据修改
     EntityInfo entity;
+    entity.threadIdx = threadIdx_;
+    entity.parititionedPool = parititionedPool_;
     entity.x = x;
     entity.y = y;
     auto gridPostion = this->GetGridCoord(x, y);
     entity.gridX = gridPostion.first;
     entity.gridY = gridPostion.second;
+    entity.lastUpdateTime = std::chrono::steady_clock::now();
+    entity.broadcastX = x;
+    entity.broadcastY = y;
+    entity.timerId = 0;
 
     {
         entityMap_[entityId] = entity;
@@ -84,6 +90,7 @@ bool GridAOI::RemoveEntity(int entityId)
         }
     }
     
+
     if(msgNotifyer_)
     {
         msgNotifyer_->LeaveGridToMsgNotify(entityId, neighborsEntityList);
@@ -117,7 +124,7 @@ bool GridAOI::MoveEntity(int entityId, int newX, int newY)
 
     // 网格坐标没有发生变化则进行九宫格同步坐标变化即可
     auto oldGridPos = std::pair(entityInfo.gridX, entityInfo.gridY);
-     std::vector<int> oldNeighborsEntitys;
+    std::vector<int> oldNeighborsEntitys;
     if(msgNotifyer_)
     {
        oldNeighborsEntitys = this->GetNeighbors(entityId);
@@ -127,21 +134,13 @@ bool GridAOI::MoveEntity(int entityId, int newX, int newY)
     // 更新entityInfo
     entityInfo.x = newX;
     entityInfo.y = newY;
-    auto newGridPos = this->GetGridCoord(newX, newY);
+    entityInfo.lastUpdateTime = std::chrono::steady_clock::now();
 
-    // 实际物理坐标改变，但是网格坐标没有改变，则向邻居同步最新的坐标
-    if(oldGridPos == newGridPos)
-    {
-        if(msgNotifyer_)
-        {
-            msgNotifyer_->MovePostionToMsgNotify(entityId, newX, newY, oldNeighborsEntitys);
-        }
-        
-        return true;
-    }
+    auto newGridPos = this->GetGridCoord(newX, newY);
 
     // 网格坐标发生变化，则需要先从旧的网格列表中删除该实体id
     // 存储数据修改
+    if(oldGridPos != newGridPos)
     {
         entityInfo.gridX = newGridPos.first;
         entityInfo.gridY = newGridPos.second;
@@ -163,8 +162,7 @@ bool GridAOI::MoveEntity(int entityId, int newX, int newY)
     
     if(msgNotifyer_)
     {
-        auto newNeighborsEntitys = this->GetNeighbors(entityId);
-        msgNotifyer_->MovePositionToMsgNotifyForGridChange(entityId, newX, newY, oldNeighborsEntitys, newNeighborsEntitys);
+        ProcessMoveMessage(entityId, entityInfo, oldNeighborsEntitys);
     }
 
     return true;
@@ -259,6 +257,7 @@ EntityPositionResult GridAOI::GetEntityPosition(int entityId) const
     result.valid = true;
     result.x = entity.x;
     result.y = entity.y;
+    result.lastUpdateTime = entity.lastUpdateTime;
     return result;
 }
 

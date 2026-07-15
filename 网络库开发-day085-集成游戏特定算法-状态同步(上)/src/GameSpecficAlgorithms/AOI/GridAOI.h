@@ -32,7 +32,7 @@ public:
 
     }
 
-    virtual ~GridAOI() {}
+    virtual ~GridAOI() {} // 如果move消息广播定时器则关闭定时器
 
     // 接口
     virtual bool AddEntity(int entityId, int x, int y) override;
