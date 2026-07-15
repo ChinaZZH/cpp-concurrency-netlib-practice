@@ -249,7 +249,6 @@ bool GameServer::MoveEntity(const std::weak_ptr<TcpConnection>& weak_connection_
     // 4. 校验：速度限制 + 防闪现  这边使用秒做计算，需要的时候再调整精度到毫秒或者微秒
     {
         // 校验速度是否超过限制
-        /*
         auto now = std::chrono::steady_clock::now();
         auto deltaSecs = std::chrono::duration<float>(now - posResult.lastUpdateTime).count();
         if(deltaSecs > 0.00f && (distance / deltaSecs) > MAX_MOVE_SPEED)
@@ -257,19 +256,16 @@ bool GameServer::MoveEntity(const std::weak_ptr<TcpConnection>& weak_connection_
             std::cout << "GameServer::MoveEntity entityId:=" << entityId << " out of speed range speed:=" << MAX_MOVE_SPEED << " client speed:=" << (distance / deltaSecs) << std::endl;
             return false;
         }
-        */
     }
     
 
     // 校验是否闪现
     {
-        /*
         if(distance > MAX_TELEPORT_DIST)
         {
             std::cout << "GameServer::MoveEntity entityId:=" << entityId << " out of distance:=" << MAX_TELEPORT_DIST << " client distance:=" << distance << std::endl;
             return false;
         }
-        */
     }
     
 
