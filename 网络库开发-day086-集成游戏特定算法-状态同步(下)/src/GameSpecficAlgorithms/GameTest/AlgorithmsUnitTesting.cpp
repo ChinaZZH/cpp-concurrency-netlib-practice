@@ -1,8 +1,8 @@
 #include "AlgorithmsUnitTesting.h"
-#include "AOI/GridAOI.h"
-#include "AOI/CrossListAOI.h"
-#include "AOI/QuadTreeAOI.h"
-#include "AOI/AOIPerformanceTest.h"
+#include "../AOI/GridAOI.h"
+#include "../AOI/CrossListAOI.h"
+#include "../AOI/QuadTreeAOI.h"
+#include "../AOI/AOIPerformanceTest.h"
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
  {

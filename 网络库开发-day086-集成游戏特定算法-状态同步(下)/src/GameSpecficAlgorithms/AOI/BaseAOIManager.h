@@ -125,10 +125,11 @@ protected:
                 return;
             }
 
+            // 
             // 只同步新增和删除
             // std::cout << "ProcessMoveMessage delayBroadcast entityId:=" << entityId << std::endl;
-            int broadcastMask = (AOIMsgNotifyer::AOI_ADD | AOIMsgNotifyer::AOI_DEL);
-            msgNotifyer_->BroadcastMsgForMoveAction(broadcastMask, entityId, entityInfo.x, entityInfo.y, oldNeighborsEntitys, newNeighborsEntitys);
+            //int broadcastMask = (AOIMsgNotifyer::AOI_ADD | AOIMsgNotifyer::AOI_DEL);
+            //msgNotifyer_->BroadcastMsgForMoveAction(broadcastMask, entityId, entityInfo.x, entityInfo.y, oldNeighborsEntitys, newNeighborsEntitys);
 
             // 距离太近不需要同步的，设置一个定时器到时间了再同步
             auto delayMoveBroadcastFunc = [&entityInfo, entityId, &oldNeighborsEntitys, this](){
@@ -148,7 +149,7 @@ protected:
                 if(msgNotifyer_)
                 {
                     auto newNeighborsEntitys =  this->GetNeighbors(entityId);
-                    msgNotifyer_->BroadcastMsgForMoveAction(AOIMsgNotifyer::AOI_MOVE, entityId, entityInfo.x, entityInfo.y, oldNeighborsEntitys, newNeighborsEntitys);
+                    msgNotifyer_->BroadcastMsgForMoveAction(AOIMsgNotifyer::AOI_ALL, entityId, entityInfo.x, entityInfo.y, oldNeighborsEntitys, newNeighborsEntitys);
                 }
     
             };

@@ -1,6 +1,6 @@
 
 #include "Test_TimeWheel.h"
-#include "../Common/TimeWheel.h"
+#include "../../Common/TimeWheel.h"
 
 void Test_TimeWheel::TestAll() {
     std::cout << "========== TimeWheel Test Suite ==========" << std::endl << std::endl;

@@ -12,7 +12,7 @@
 #include "../../build/proto_gen/add.pb.h"
 #include "../../build/proto_gen/aoi.pb.h"
 #include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
-#include "../GameSpecficAlgorithms/ClientEntityMgr.h"
+#include "../GameSpecficAlgorithms/GameClient/ClientEntityMgr.h"
 
 #include <iostream>
 #include <chrono>

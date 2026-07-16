@@ -9,14 +9,14 @@
 #include "Common/ProtoMethod.h"
 #include "LibRpc/RpcServer.h"
 #include "LibRpc/RpcConnectionPool.h"
-#include "GameSpecficAlgorithms/AlgorithmsUnitTesting.h"
+#include "GameSpecficAlgorithms/GameTest/AlgorithmsUnitTesting.h"
 #include "TcpClient.h"
 #include <iostream>
 #include <chrono>
 #include <iostream>
 #include "GameSpecficAlgorithms/GameServer.h"
 #include "GameSpecficAlgorithms/AOI/AOIPerformanceTest.h"
-#include "GameSpecficAlgorithms/Test_TimeWheel.h"
+#include "GameSpecficAlgorithms/GameTest/Test_TimeWheel.h"
 
 #include <signal.h>
 #include <thread>

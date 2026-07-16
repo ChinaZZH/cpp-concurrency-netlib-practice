@@ -8,4 +8,6 @@ enum GameServerMsgType
     GSMT_RemoveEntity       = 2,
     GSMT_MoveEntity         = 3,
     GSMT_SyncNeighborsEntity         = 4,
+
+    GSMT_SyncAttributeDelta         = 11,
 };
