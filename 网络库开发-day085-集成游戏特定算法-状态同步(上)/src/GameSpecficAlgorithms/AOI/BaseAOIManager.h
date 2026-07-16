@@ -98,20 +98,20 @@ protected:
             return;
         }
 
-        // 如果有定时器则需要先关闭定时器
-        if(entityInfo.timerId > 0)
-        {
-            int64_t timer_id = entityInfo.timerId;
-            parititionedPool_->CancelTimer(threadIdx_, entityInfo.timerId);
-            entityInfo.timerId = 0;
-            // std::cout << "ProcessMoveMessage cancelTimer timerid:=" << timer_id << std::endl;
-        }
-
         // 判断是否需要同步, 需要则同步。
         auto newNeighborsEntitys = this->GetNeighbors(entityId);
         bool bBoradMoveMessage = this->IsBroadcastMoveMessage(entityInfo.x, entityInfo.y, entityInfo.broadcastX, entityInfo.broadcastY);
         if(bBoradMoveMessage)
         {
+            // 如果有定时器则需要先关闭定时器
+            if(entityInfo.timerId > 0)
+            {
+                int64_t timer_id = entityInfo.timerId;
+                parititionedPool_->CancelTimer(threadIdx_, entityInfo.timerId);
+                entityInfo.timerId = 0;
+                // std::cout << "ProcessMoveMessage cancelTimer timerid:=" << timer_id << std::endl;
+            }
+
             entityInfo.broadcastX = entityInfo.x;
             entityInfo.broadcastY = entityInfo.y;
            
@@ -119,14 +119,27 @@ protected:
         }
         else
         {
+            // 如果已经有定时器了，则等待定时器的到来，当前不做处理
+            if(entityInfo.timerId > 0)
+            {
+                return;
+            }
+
             // 只同步新增和删除
             // std::cout << "ProcessMoveMessage delayBroadcast entityId:=" << entityId << std::endl;
             int broadcastMask = (AOIMsgNotifyer::AOI_ADD | AOIMsgNotifyer::AOI_DEL);
             msgNotifyer_->BroadcastMsgForMoveAction(broadcastMask, entityId, entityInfo.x, entityInfo.y, oldNeighborsEntitys, newNeighborsEntitys);
 
             // 距离太近不需要同步的，设置一个定时器到时间了再同步
-            auto delayMoveBroadcastFunc = [&entityInfo, entityId, &oldNeighborsEntitys, &newNeighborsEntitys, this](){
+            auto delayMoveBroadcastFunc = [&entityInfo, entityId, &oldNeighborsEntitys, this](){
                 entityInfo.timerId = 0;
+                // 多次移动又重新移动会最开始的广播位置则不进行广播同步，避免频繁的广播
+                if(entityInfo.x == entityInfo.broadcastX && entityInfo.y == entityInfo.broadcastY)
+                {
+                    // std::cout << "ProcessMoveMessage delay broadcast Function entityId:=" << entityId << " no need broadcast" << std::endl;
+                    return;
+                }
+                
                 entityInfo.broadcastX = entityInfo.x;
                 entityInfo.broadcastY = entityInfo.y;
 
@@ -134,6 +147,7 @@ protected:
 
                 if(msgNotifyer_)
                 {
+                    auto newNeighborsEntitys =  this->GetNeighbors(entityId);
                     msgNotifyer_->BroadcastMsgForMoveAction(AOIMsgNotifyer::AOI_MOVE, entityId, entityInfo.x, entityInfo.y, oldNeighborsEntitys, newNeighborsEntitys);
                 }
     
