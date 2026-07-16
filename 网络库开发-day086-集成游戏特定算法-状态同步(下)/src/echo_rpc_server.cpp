@@ -17,6 +17,7 @@
 #include "GameSpecficAlgorithms/GameServer.h"
 #include "GameSpecficAlgorithms/AOI/AOIPerformanceTest.h"
 #include "GameSpecficAlgorithms/GameTest/Test_TimeWheel.h"
+#include "GameSpecficAlgorithms/GameClient/Test_Client_Entity.h"
 
 #include <signal.h>
 #include <thread>
@@ -36,7 +37,7 @@ int PerformanceTest()
     return 0;
 }
 
-int echo_rpc_server()
+int main()
 {
     //std::cout << "start unit testing" << std::endl;
     // UnitTesting();
@@ -46,6 +47,9 @@ int echo_rpc_server()
     
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
+
+    TestClientEntity test;
+    test.Test();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

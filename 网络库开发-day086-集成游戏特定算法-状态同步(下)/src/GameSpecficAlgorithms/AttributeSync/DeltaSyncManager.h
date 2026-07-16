@@ -12,39 +12,11 @@
 
 
 class IAOIManager; // 前向声明，避免循环依赖
+
+
 class DeltaSyncManager {
 public:
     static constexpr int HISTORY_VERSION_SIZE = 64; // 当前保存最多的历史版本数量，超过这个数量的历史版本将被丢弃
-    using SendCallback = std::function<void(uint32_t conn_id, const std::string& data, GameServerMsgType)>;
-
-    DeltaSyncManager(std::shared_ptr<IAOIManager> aoiManager, SendCallback sendCallback) 
-    : aoiManager_(aoiManager), sendCallback_(sendCallback) 
-    {
-
-    }
-    
-    ~DeltaSyncManager() = default;  
-
-public:
-    // 负责处理脏位的同步逻辑
-    void Tick(uint32_t tickMs);
-
-    // 因为调用层，当玩家属性变化发生时
-    void OnAttributeChanged(int entityId, int attributeIndex, int64_t value);
-
-    // 处理客户端的Nack的请求，客户端可能会因为网络丢包等原因没有收到某个版本的同步数据
-    void OnNackRequest(uint32_t conn_id, int entityId, uint32_t fromVersion);
-
-private:
-    bool BuildFullSnapshot(uint32_t entityId, AttributeDelta& outDelta);
-    void StoreHistory(uint32_t entityId, const AttributeDelta& delta);
-    void SendDeltaToView(uint32_t entityId, AttributeDelta& delta);
-    static uint32_t GetFieldPriority(uint8_t fieldId);
-
-private:
-    std::shared_ptr<IAOIManager> aoiManager_;
-    SendCallback sendCallback_;
-
     struct HistoryVersion {
         uint32_t current_version = 0;                            // 当前版本号
         //uint32_t baseVersionNo = 0;                                      // history 数组中下标 0 对应的版本号
@@ -61,7 +33,7 @@ private:
                 deltas.erase(deltas.begin());
             }
 
-            current_version = ver;
+            current_version = std::max(ver, current_version);
         }
 
         // 检查某版本是否还在历史窗口中
@@ -93,6 +65,39 @@ private:
             return result;
         }
     };
+
+public:
+    using SendCallback = std::function<void(uint32_t conn_id, const std::string& data, GameServerMsgType)>;
+
+    DeltaSyncManager(std::shared_ptr<IAOIManager> aoiManager, SendCallback sendCallback) 
+    : aoiManager_(aoiManager), sendCallback_(sendCallback) 
+    {
+
+    }
+    
+    ~DeltaSyncManager() = default;  
+
+public:
+    // 负责处理脏位的同步逻辑
+    void Tick(uint32_t tickMs);
+
+    // 因为调用层，当玩家属性变化发生时
+    void OnAttributeChanged(int entityId, int attributeIndex, int64_t value);
+
+    // 处理客户端的Nack的请求，客户端可能会因为网络丢包等原因没有收到某个版本的同步数据
+    void OnNackRequest(uint32_t conn_id, int entityId, uint32_t fromVersion);
+
+private:
+    bool BuildFullSnapshot(uint32_t entityId, AttributeDelta& outDelta);
+    void StoreHistory(uint32_t entityId, const AttributeDelta& delta);
+    void SendDeltaToView(uint32_t entityId, AttributeDelta& delta);
+    static uint32_t GetFieldPriority(uint8_t fieldId);
+
+private:
+    std::shared_ptr<IAOIManager> aoiManager_;
+    SendCallback sendCallback_;
+
+    
 
     struct EntitySyncInfo {
         DirtyTracker dirtyTracker;                          // 每个实体的脏位 

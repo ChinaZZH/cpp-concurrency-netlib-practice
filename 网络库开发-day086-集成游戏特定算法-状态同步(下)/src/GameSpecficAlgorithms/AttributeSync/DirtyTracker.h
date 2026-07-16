@@ -45,6 +45,12 @@ public:
         return dirtyBits_ != 0;
     }
 
+    uint64_t AcquireAndClear() 
+    {
+        uint64_t dirtyBit = GetDirtyBits();
+        ClearAll();
+        return dirtyBit;
+    }
     /*
     bool IsBeFallbackToFull() const {
         // 如果脏位数超过32个，则认为需要回退到全量同步

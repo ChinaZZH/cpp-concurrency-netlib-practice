@@ -155,7 +155,7 @@ void DeltaSyncManager::OnNackRequest(uint32_t conn_id, int entityId, uint32_t fr
     // 构建一个新的增量包，包含所有需要同步的字段
     AttributeDelta newDelta;
     newDelta.set_msg_client_id(conn_id);
-    newDelta.set_is_full_snapshot(false);
+    newDelta.set_is_full_snapshot(true);
     newDelta.set_entity_id(entityId);
     newDelta.set_version_no(syncDelta->HistoryVersion_.current_version);
     for(auto& [fieldId, value] : syncField)
@@ -186,6 +186,7 @@ void DeltaSyncManager::Tick(uint32_t tickMs)
 
         uint64_t dirtyBits = ptrSync->dirtyTracker.GetDirtyBits();
         ptrSync->dirtyTracker.ClearAll();
+
 
         AttributeDelta delta;
         delta.set_entity_id(entityId);

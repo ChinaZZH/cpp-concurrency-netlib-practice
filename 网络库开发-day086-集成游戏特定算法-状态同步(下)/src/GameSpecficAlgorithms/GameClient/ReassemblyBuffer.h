@@ -7,24 +7,11 @@
 
 class ReassemblyBuffer {
 public:
-    using NACKCallBack = std::function<void(uint32_t entityId, uint32_t fromVersion)>;
-    explicit ReassemblyBuffer(NACKCallBack nackCallback)
-        : nackCallback_(nackCallback) {}
-
     void PushDelta(uint32_t entityId, const AttributeDelta& delta);
 
 private:
     void ApplyDelta(uint32_t entity_id, const AttributeDelta& delta);
-    void CheckGapAndNACK(uint32_t entity_id, uint32_t received_version);
-
+    
 private:
-    NACKCallBack nackCallback_;
-
-    struct EntityBuffer {
-        std::map<uint32_t, AttributeDelta> pendingQueue_;   // 按版本号排序的积压库存
-        uint32_t expectedVersion = 0;                       // 期待的版本号
-        uint64_t lastNackTime = 0;                          // 上次收到增量包的时间戳
-    };
-
-    std::unordered_map<uint32_t, EntityBuffer> entityBuffers_; // 每个实体的缓冲区    
+   std::unordered_map<uint32_t, uint32_t> last_applied_version_; // 记录已应用的最大版本号
 };
