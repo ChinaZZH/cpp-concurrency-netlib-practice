@@ -9,5 +9,6 @@ enum GameServerMsgType
     GSMT_MoveEntity         = 3,
     GSMT_SyncNeighborsEntity         = 4,
 
-    GSMT_SyncAttributeDelta         = 11,
+    GSMT_SyncAttributeDelta = 11,
+    GSMT_NACK_REQUEST       = 12,
 };

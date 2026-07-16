@@ -16,6 +16,8 @@ class EventLoop;
 class TcpConnection;
 class IAOIManager;
 class ServiceRegistry;
+class DeltaSyncManager;
+
 class GameServer 
 {
 public:
@@ -43,6 +45,10 @@ public:
     
     bool MoveEntity(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
     
+    bool OnNackRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
+    void SetHp(int entityId, int64_t newHp);
+
 private:
     int TryExtractMapId(const std::string& strMsg, uint32_t msgType);
 
@@ -53,6 +59,8 @@ private:
     std::unique_ptr<ServiceRegistry> service_registry_;
 
     std::map<int, std::shared_ptr<IAOIManager>> aoiMap_; // 默认只有一张地图
+
+    std::map<int, std::shared_ptr<DeltaSyncManager>> deltaSyncManager_; // 默认只有一张地图
 
     // 存储地图上的连接信息
     struct TcpConnectionInfo

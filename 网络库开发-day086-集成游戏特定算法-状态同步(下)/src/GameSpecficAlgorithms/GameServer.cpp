@@ -9,9 +9,11 @@
 #include "../TcpConnection.h"
 #include "../EventLoop.h"
 #include "../Decoder/LengthAndTypePrefixDecoder.h"
-#include "../../build/proto_gen/aoi.pb.h"
 #include "../Http/SimpleHttpClient.h"
 #include "../ServiceDiscovery/ServiceRegistry.h"
+#include "AttributeSync/DeltaSyncManager.h"
+#include "../../build/proto_gen/aoi.pb.h"
+
 
  GameServer::GameServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
@@ -45,6 +47,8 @@ void GameServer::Start()
     RegisterHandler(GSMT_AddEntity, std::bind(&GameServer::AddEntity, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_RemoveEntity, std::bind(&GameServer::RemoveEntity, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_MoveEntity, std::bind(&GameServer::MoveEntity, this, std::placeholders::_1, std::placeholders::_2));
+    RegisterHandler(GSMT_NACK_REQUEST, std::bind(&GameServer::OnNackRequest, this, std::placeholders::_1, std::placeholders::_2));
+    
 
 
     // 设置分区线程池个数
@@ -52,20 +56,29 @@ void GameServer::Start()
     parititionedPool_->Start(std::thread::hardware_concurrency());
 
     //std::cout << "GameServer::Start  33333" << std::endl;
+    IAOIManager::SendMsgCallBack funcCallback = std::bind(&GameServer::SendMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
     for(int idMap = 100; idMap < 200; idMap += 1)
     {
         auto ptrAoiMap = std::make_shared<QuadTreeAOI>(1000, 1000, 100, 2, 8); // 世界 1000x1000，网格 100
+        {
+            // 设置移动的距离超过阈值才广播
+            int threadIdx = idMap % parititionedPool_->GetParitionedCount();
+            int forceMoveMsgDelaySeconds = 1;
+            ptrAoiMap->InitAoiData(threadIdx, MOVE_THRESHOLD, parititionedPool_, forceMoveMsgDelaySeconds);
 
-        // 设置移动的距离超过阈值才广播
-        int threadIdx = idMap % parititionedPool_->GetParitionedCount();
-        int forceMoveMsgDelaySeconds = 1;
-        ptrAoiMap->InitAoiData(threadIdx, MOVE_THRESHOLD, parititionedPool_, forceMoveMsgDelaySeconds);
-
-        // 设置aoi回调函数
-        ptrAoiMap->SetSendMessageCallBack(std::bind(&GameServer::SendMessage, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-
+            // 设置aoi回调函数
+            ptrAoiMap->SetSendMessageCallBack(funcCallback);
+        }
+    
         aoiMap_[idMap] = ptrAoiMap;
+
+        auto delaSyncMgr_ = std::make_shared<DeltaSyncManager>(ptrAoiMap, funcCallback);
+        deltaSyncManager_[idMap] = delaSyncMgr_;
     }
+
+    // 差值同步管理器
+    
 
     //std::cout << "GameServer::Start  44444" << std::endl;
     server_.Start();
@@ -280,6 +293,42 @@ bool GameServer::MoveEntity(const std::weak_ptr<TcpConnection>& weak_connection_
 }
 
 
+bool GameServer::OnNackRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    NackRequest req;
+    if(!req.ParseFromString(strParamData))
+    {
+        throw std::runtime_error("GameServer::NackRequest parse MoveEntity failed");
+    }
+
+     // 获取实体
+    auto itr = deltaSyncManager_.find(100);
+    if(itr == deltaSyncManager_.end())
+    {
+        throw std::runtime_error("GameServer::NackRequest mapid error failed");
+    }
+
+    auto deltaSync = (itr->second);
+    deltaSync->OnNackRequest(req.entity_id(), req.entity_id(), req.from_version());
+    return true;
+}
+
+void GameServer::SetHp(int entityId, int64_t newHp)
+{
+    int32_t idMap = 100;
+    auto itr = deltaSyncManager_.find(idMap);
+    if(itr == deltaSyncManager_.end())
+    {
+        throw std::runtime_error("GameServer::SetHp mapid error failed");
+    }
+
+    auto deltaSync = (itr->second);
+    int threadIdx = idMap % parititionedPool_->GetParitionedCount();
+    parititionedPool_->CommitTask(threadIdx, [deltaSync, entityId, newHp](){
+        deltaSync->OnAttributeChanged(entityId, 1, newHp);
+    });
+}
+
 void GameServer::SendMessage(int entityId, const std::string& strMsgContent, GameServerMsgType msgType)
 {
     // 不在线，已经离开了。
@@ -304,6 +353,8 @@ void GameServer::SendMessage(int entityId, const std::string& strMsgContent, Gam
 
 int GameServer::TryExtractMapId(const std::string& strMsg, uint32_t msgType) 
 {
+    return 100;
+    /*
     switch (static_cast<GameServerMsgType>(msgType)) {
         case GSMT_AddEntity: {
             aoi::EntityEnterRequest req;
@@ -335,8 +386,10 @@ int GameServer::TryExtractMapId(const std::string& strMsg, uint32_t msgType)
         default:
             break;
     }
+    
 
     return -1;  // 无 mapId 或解析失败
+    */
 }
 
 

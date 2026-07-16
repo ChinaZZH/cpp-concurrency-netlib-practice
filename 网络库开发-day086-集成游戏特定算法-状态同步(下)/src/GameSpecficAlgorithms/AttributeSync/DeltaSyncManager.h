@@ -26,7 +26,7 @@ public:
     ~DeltaSyncManager() = default;  
 
 public:
-    // 由EventLoop定时调用，负责处理脏位的同步逻辑
+    // 负责处理脏位的同步逻辑
     void Tick(uint32_t tickMs);
 
     // 因为调用层，当玩家属性变化发生时

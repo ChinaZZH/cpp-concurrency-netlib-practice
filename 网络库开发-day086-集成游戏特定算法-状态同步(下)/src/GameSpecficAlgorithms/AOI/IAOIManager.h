@@ -23,6 +23,7 @@ struct EntityPositionResult {
 
 // AOI 统一接口
 class PartitionedPool;
+class DeltaSyncManager;
 
 class IAOIManager {
 public:

@@ -9,7 +9,6 @@
 #include <cstdlib> 
 #include <chrono>
 
-
 // ============================================================
 // 实体信息
 // ============================================================
@@ -60,6 +59,8 @@ public:
         //sendMsgCallBack_ = cb;
         msgNotifyer_ = std::make_unique<AOIMsgNotifyer>(cb, this);
     }
+
+   
 
     virtual std::pair<int, int> GetGridCoord(int x, int y) const override {
         return std::pair(x / gridSize_, y / gridSize_);
@@ -168,4 +169,6 @@ protected:
     int squareMaxDis_ = 0; // 超过这个距离的阈值则进行同步move消息
     std::shared_ptr<PartitionedPool> parititionedPool_;
     int delaySecondBroadcastMove_;
+
+    //std::shared_ptr<DeltaSyncManager> delaSyncMgr_;
 };
