@@ -639,6 +639,11 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
     stopFrameWork.store(true, std::memory_order_release);
     
     std::cout << "end !!!!" << std::endl;
+    if(frameThread.joinable())
+    {
+        frameThread.join();
+    }
+
     loop.Quit();
     io_thread.join();
     //return 0;
