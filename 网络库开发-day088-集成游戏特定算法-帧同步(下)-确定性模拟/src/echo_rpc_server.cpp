@@ -14,6 +14,7 @@
 #include <iostream>
 #include <chrono>
 #include <iostream>
+
 #include "GameSpecficAlgorithms/GameServer.h"
 #include "GameSpecficAlgorithms/AOI/AOIPerformanceTest.h"
 #include "GameSpecficAlgorithms/GameTest/Test_TimeWheel.h"
@@ -26,7 +27,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestAoiManager();
+    gameAlgorighm.TestFullDeterminism();
     return 0;
 }
 
@@ -39,9 +40,9 @@ int PerformanceTest()
 
 int main()
 {
-    //std::cout << "start unit testing" << std::endl;
-    // UnitTesting();
-    //std::cout << "start PerformanceTest " << std::endl;
+    std::cout << "start unit testing" << std::endl;
+    UnitTesting();
+    std::cout << "start PerformanceTest " << std::endl;
     //PerformanceTest();
     
     

@@ -16,7 +16,11 @@ public:
 public:
     void TestAoiManager();  // 测试aoi算法九宫格
     void TestQuadTreeAOI();
-    
+
+    void TestDeterminism();
+    void TestFullDeterminism();
+
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
+    
 };
