@@ -13,6 +13,8 @@
 #include "../ServiceDiscovery/ServiceRegistry.h"
 #include "AttributeSync/DeltaSyncManager.h"
 #include "../../build/proto_gen/aoi.pb.h"
+#include "FrameSync/InputBuffer.h"
+#include "FrameSync/FrameScheduler.h"
 
 
  GameServer::GameServer(EventLoop* loop, int nPort)
@@ -36,7 +38,14 @@
 
  GameServer::~GameServer()
  {
+    {
+        stop_frame_scheduler_flag_.store(false, std::memory_order_release);
+    }
 
+    if(frame_broadcast_thread_->joinable())
+    {
+        frame_broadcast_thread_->join();
+    }
  }
 
 
@@ -47,8 +56,12 @@ void GameServer::Start()
     RegisterHandler(GSMT_AddEntity, std::bind(&GameServer::AddEntity, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_RemoveEntity, std::bind(&GameServer::RemoveEntity, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_MoveEntity, std::bind(&GameServer::MoveEntity, this, std::placeholders::_1, std::placeholders::_2));
+    
+    // 状态同步(属性同步)
     RegisterHandler(GSMT_NACK_REQUEST, std::bind(&GameServer::OnNackRequest, this, std::placeholders::_1, std::placeholders::_2));
     
+    // 帧同步
+    RegisterHandler(GSMT_FrameClientInput, std::bind(&GameServer::FrameClientInput, this, std::placeholders::_1, std::placeholders::_2));
 
 
     // 设置分区线程池个数
@@ -73,11 +86,38 @@ void GameServer::Start()
     
         aoiMap_[idMap] = ptrAoiMap;
 
+        // 差值同步管理器
         auto delaSyncMgr_ = std::make_shared<DeltaSyncManager>(ptrAoiMap, funcCallback);
         deltaSyncManager_[idMap] = delaSyncMgr_;
     }
 
-    // 差值同步管理器
+    
+     // 帧同步
+     {
+        input_buffer_ = std::make_shared<InputBuffer>();
+        // 每帧50毫秒，相当于20fps
+        frame_scheduler_ = std::make_shared<FrameScheduler>(input_buffer_.get(), 50, [this](const std::string& serialized_pkg){
+            for(auto& [entityId, tcpConnection] : onServerConnections_)
+            {
+                ServerFramePackage serverFrame;
+                serverFrame.set_msg_client_id(entityId);
+                serverFrame.set_package(serialized_pkg);
+                //std::cout << "serialized_pkg size:=" << serialized_pkg.size() << std::endl; 
+                std::string strFrame = serverFrame.SerializeAsString();
+                this->SendMessage(entityId, strFrame, GSMT_FrameServerPackage);
+            }
+
+        }); 
+
+        frame_broadcast_thread_ = std::make_unique<std::thread>([this](){
+            while(false == stop_frame_scheduler_flag_.load(std::memory_order_acquire))
+            {
+                //uint32_t intervalMs = frame_scheduler_->GetIntervalMs();
+                std::this_thread::sleep_for(std::chrono::microseconds(50)); // 每次50毫秒tick一次，然后
+                frame_scheduler_->OnTick();
+            }
+        });
+     }
     
 
     //std::cout << "GameServer::Start  44444" << std::endl;
@@ -312,6 +352,43 @@ bool GameServer::OnNackRequest(const std::weak_ptr<TcpConnection>& weak_connecti
     deltaSync->OnNackRequest(req.entity_id(), req.entity_id(), req.from_version());
     return true;
 }
+
+
+// 客户端发消息上来则往inputBuffer里面塞数据
+bool GameServer::FrameClientInput(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    ClientInput req;
+    if(!req.ParseFromString(strParamData))
+    {
+        throw std::runtime_error("GameServer::FrameClientInput parse ClientInput failed");
+    }
+
+    auto itr = onServerConnections_.find(req.player_id());
+    if(itr == onServerConnections_.end())
+    {
+        // 这边connection只是读取对应的eventLoop不会影响多线程的竞争问题
+        EventLoop* loop_ptr = nullptr;
+        auto con = weak_connection_ptr.lock();
+        if(con)
+        {
+            loop_ptr = con->GetLoop();
+        }
+
+        if(!loop_ptr)
+        {
+            throw std::runtime_error("loop_ptr nullptr error!!!");
+        }
+
+        TcpConnectionInfo connectionInfo;
+        connectionInfo.weakPtrCon = weak_connection_ptr;
+        connectionInfo.loop_ptr = loop_ptr;    
+        onServerConnections_[req.player_id()] = connectionInfo;
+    }
+
+    input_buffer_->PushInput(req.player_id(), frame_scheduler_->GetServerFrameIndex(), req);
+    return true;
+}
+
 
 void GameServer::SetHp(int entityId, int64_t newHp)
 {

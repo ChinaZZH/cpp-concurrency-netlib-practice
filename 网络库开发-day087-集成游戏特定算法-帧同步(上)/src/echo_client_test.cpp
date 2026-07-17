@@ -31,7 +31,7 @@ int ClientPressTest(int threads, int req_per_threads, bool async_call)
     for(int i = 0; i < threads; ++i)
     {
         thread_pool.emplace_back(
-			test_game_server_aoi_function, 
+			test_game_server_frame_sync, 
             async_call,
 			i, 
 			req_per_threads, 

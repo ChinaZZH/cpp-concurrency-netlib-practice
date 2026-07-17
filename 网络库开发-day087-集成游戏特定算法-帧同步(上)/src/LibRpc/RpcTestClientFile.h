@@ -11,6 +11,8 @@
 #include "../LibRpc/RpcConnectionPool.h"
 #include "../../build/proto_gen/add.pb.h"
 #include "../../build/proto_gen/aoi.pb.h"
+#include "../../build/proto_gen/frame_sync.pb.h"
+#include "../GameSpecficAlgorithms/FrameSync/ClientInputSender.h"
 #include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
 #include "../GameSpecficAlgorithms/GameClient/ClientEntityMgr.h"
 
@@ -521,6 +523,126 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
 
 
 
+
+void test_game_server_frame_sync(bool async_call, int id, int task_count, std::vector<uint64_t>& latencies, std::atomic<uint64_t>& timeout_cnt) {
+    // 创建 EventLoop 对象（将在独立线程中运行）
+    EventLoop loop;
+
+    // 创建 TcpClient 和 RpcClient
+    auto client = std::make_shared<TcpClient>(&loop, "127.0.0.1", 8888);
+    auto rpcClient = std::make_shared<RpcClient>(nullptr);
+
+    // 用于等待连接建立的同步
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool connected = false;
+
+    std::weak_ptr<RpcClient> rpcPtr = rpcClient->shared_from_this();
+    client->SetConnectionCallBack([&, rpcPtr](const TcpConnectionPtr& conn) {
+        auto rpcClient = rpcPtr.lock();
+        if(rpcClient)
+        {
+            //std::cout << "Connected to server" << std::endl;
+            auto msg_type_decoder = std::make_unique<LengthAndTypePrefixDecoder>();
+            conn->SetDecoder(std::move(msg_type_decoder));
+            rpcClient->SetConnection(conn);
+            
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                connected = true;
+            }
+        }
+        
+
+        cv.notify_one();
+    });
+    
+
+    
+    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+        switch(msgType)
+        {
+            case GSMT_FrameServerPackage:
+            {
+                ServerFramePackage response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_FrameServerPackage error!!!" << std::endl;
+                    return;
+                }
+
+    
+                FramePackage frame;
+                if(!frame.ParseFromString(response.package()))
+                {
+                    std::cout << "client onMessageCallBack parse FramePackage error!!!" << std::endl;
+                    return;
+                }
+
+               
+                 if(frame.inputs_size() > 0)
+			    {
+				    std::cout << "OnMessage ServerFramePackage recvClientId:=" << response.msg_client_id() << std::endl;
+					std::cout << std::endl << "frame_index:=" << frame.frame_index() << " timeStamp:=" << frame.timestamp_ms() << std::endl;
+					for(int i = 0; i < frame.inputs_size(); ++i)
+					{
+						const ClientInput& input = frame.inputs(i);
+						std::cout << "player_index:=" << input.player_id() << " x:=" << input.move_x() << " y:=" << input.move_y() << std::endl;
+					}
+			    }
+            }
+            break;
+                
+            default:
+                break;
+        }
+    });
+
+    client->Connect();
+    
+
+    // 启动 I/O 线程
+    std::thread io_thread([&loop]() {
+        //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
+        loop.Loop();
+    });
+    
+    // 等待连接建立
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&] { return connected; });
+    }
+
+
+    ClientInputSender clientFrame(1, client->GetTcpConnection());
+    std::atomic<bool> stopFrameWork = false;
+    std::thread frameThread([&stopFrameWork, &clientFrame](){
+        uint32_t client_frame = 0;
+        while(false == stopFrameWork.load(std::memory_order_acquire))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            clientFrame.Update(++client_frame);
+        }
+    });
+
+
+    
+    clientFrame.SetPosition(100, 200);
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    clientFrame.SetPosition(200, 200);
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    clientFrame.SetPosition(300, 300);
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    clientFrame.SetPosition(400, 400);
+
+    std::this_thread::sleep_for(std::chrono::seconds(60));
+    stopFrameWork.store(true, std::memory_order_release);
+    
+    std::cout << "end !!!!" << std::endl;
+    loop.Quit();
+    io_thread.join();
+    //return 0;
+}
 
 
 

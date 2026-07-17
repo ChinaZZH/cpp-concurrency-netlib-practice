@@ -48,8 +48,8 @@ int main()
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
 
-    TestClientEntity test;
-    test.Test();
+    //TestClientEntity test;
+    //test.Test();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
