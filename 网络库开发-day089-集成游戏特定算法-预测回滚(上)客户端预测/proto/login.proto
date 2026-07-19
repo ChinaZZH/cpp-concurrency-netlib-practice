@@ -10,3 +10,5 @@ message LoginResponse {
     string token = 2;        // 业务响应序列化后的二进制
     string msg = 3;        // 业务响应序列化后的二进制
 }
+
+

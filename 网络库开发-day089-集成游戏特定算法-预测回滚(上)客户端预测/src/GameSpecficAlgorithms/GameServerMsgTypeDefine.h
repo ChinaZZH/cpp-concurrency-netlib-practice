@@ -17,4 +17,5 @@ enum GameServerMsgType
     // 帧同步
     GSMT_FrameClientInput   = 21,
     GSMT_FrameServerPackage = 22,
+    GSMT_FrameSyncAckPackage = 23,
 };

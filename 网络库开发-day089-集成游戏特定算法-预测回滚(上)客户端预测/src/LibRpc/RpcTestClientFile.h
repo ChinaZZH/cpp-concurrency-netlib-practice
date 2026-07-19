@@ -15,6 +15,7 @@
 #include "../GameSpecficAlgorithms/FrameSync/ClientInputSender.h"
 #include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
 #include "../GameSpecficAlgorithms/GameClient/ClientEntityMgr.h"
+#include "../GameSpecficAlgorithms/FrameSync/ClientPredictionManager.h"
 
 #include <iostream>
 #include <chrono>
@@ -524,7 +525,7 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
 
 
 
-void test_game_server_frame_sync(bool async_call, int id, int task_count, std::vector<uint64_t>& latencies, std::atomic<uint64_t>& timeout_cnt) {
+void test_game_server_frame_sync() {
     // 创建 EventLoop 对象（将在独立线程中运行）
     EventLoop loop;
 
@@ -558,10 +559,24 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
     });
     
 
-    
-    client->SetMessageCallBack([rpcPtr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+    int defaultPlayerID = 1;
+    ClientPredictionManager clientFrame(defaultPlayerID, nullptr);
+    client->SetMessageCallBack([rpcPtr, defaultPlayerID, &clientFrame](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
         switch(msgType)
         {
+            case GSMT_FrameSyncAckPackage:
+            {
+                TestAckPackage ack;
+                if(!ack.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_FrameSyncAckPackage error!!!" << std::endl;
+                    return;
+                }
+
+                clientFrame.OnAckReceived(ack);
+            }
+            break;
+
             case GSMT_FrameServerPackage:
             {
                 ServerFramePackage response;
@@ -571,7 +586,7 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
                     return;
                 }
 
-    
+            
                 FramePackage frame;
                 if(!frame.ParseFromString(response.package()))
                 {
@@ -579,9 +594,16 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
                     return;
                 }
 
+                // 只处理发给自己的以及和自己相关的
+                if(defaultPlayerID != response.msg_client_id())
+                {
+                    return;
+                }
+
                
                  if(frame.inputs_size() > 0)
 			    {
+                    /*
 				    std::cout << "OnMessage ServerFramePackage recvClientId:=" << response.msg_client_id() << std::endl;
 					std::cout << std::endl << "frame_index:=" << frame.frame_index() << " timeStamp:=" << frame.timestamp_ms() << std::endl;
 					for(int i = 0; i < frame.inputs_size(); ++i)
@@ -589,6 +611,7 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
 						const ClientInput& input = frame.inputs(i);
 						std::cout << "player_index:=" << input.player_id() << " x:=" << input.move_x() << " y:=" << input.move_y() << std::endl;
 					}
+                    */
 			    }
             }
             break;
@@ -602,7 +625,7 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
     
 
     // 启动 I/O 线程
-    std::thread io_thread([&loop]() {
+    std::thread io_thread([&loop, connected]() {
         //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
         loop.Loop();
     });
@@ -614,26 +637,68 @@ void test_game_server_frame_sync(bool async_call, int id, int task_count, std::v
     }
 
 
-    ClientInputSender clientFrame(1, client->GetTcpConnection());
+    // ClientPredictionManager clientFrame(defaultPlayerID, client->GetTcpConnection());
+    clientFrame.InitTcpConnection(client->GetTcpConnection());
     std::atomic<bool> stopFrameWork = false;
-    std::thread frameThread([&stopFrameWork, &clientFrame](){
+    std::thread frameThread([&stopFrameWork, &clientFrame, &loop](){
         uint32_t client_frame = 0;
         while(false == stopFrameWork.load(std::memory_order_acquire))
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
-            clientFrame.Update(++client_frame);
+            // 每20毫秒执行一次tick
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            loop.RunInLoop([&clientFrame](){
+                clientFrame.Tick(20);
+            });
+            
         }
     });
 
 
+
+    while(true)
+    {
+        
+        std::cout << "input Key(wsad):=";
+        char ch;
+        std::cin >> ch;
+        if('Q' == ch || 'q' == ch)
+        {
+            break;
+        }
+
+        int moveX = 0;
+        int moveY = 0;
+        if('w' == ch || 'W' == ch)
+        {
+            moveY = 1;
+        }
+        else if('s' == ch || 'S' == ch)
+        {
+            moveY = -1;
+        }
+        else if('A' == ch || 'a' == ch)
+        {
+            moveX = -1;
+        }
+        else if('D' == ch || 'd' == ch)
+        {
+            moveX = 1;
+        }
+        else 
+        {
+            ;
+
+        }
+
+        std::cout << ch << std::endl;
+        ClientInput input;
+        input.set_player_id(1);
+        input.set_move_x(moveX);
+        input.set_move_y(moveY);
+        input.set_attack(false);
+        clientFrame.OnLocalInput(input);
+    }
     
-    clientFrame.SetPosition(100, 200);
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    clientFrame.SetPosition(200, 200);
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    clientFrame.SetPosition(300, 300);
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    clientFrame.SetPosition(400, 400);
 
     std::this_thread::sleep_for(std::chrono::seconds(60));
     stopFrameWork.store(true, std::memory_order_release);

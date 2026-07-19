@@ -31,7 +31,7 @@ int ClientPressTest(int threads, int req_per_threads, bool async_call)
     for(int i = 0; i < threads; ++i)
     {
         thread_pool.emplace_back(
-			test_game_server_frame_sync, 
+			test_game_server_aoi_function, 
             async_call,
 			i, 
 			req_per_threads, 
@@ -225,7 +225,7 @@ int test_http_client()
     return 0;
 }
 
-int echo_client_test()
+int main()
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {
@@ -271,10 +271,12 @@ int echo_client_test()
     std::cout << std::endl << std::endl;
     */
 
-    
+    /*
     std::cout << "start 1 thread and req_per_threads 1: " << std::endl;
     ClientPressTest(1, 1, false);
     std::cout << std::endl << std::endl;
+    */
+   
 
     /*
     ClientEntityMgr clientEntity(1); // 定义客户端为entityId为1, 这边只弄entityId为1的客户端，只看他的视野。
@@ -285,5 +287,7 @@ int echo_client_test()
     clientEntity.MoveEntity(2, 120, 130);
     std::this_thread::sleep_for(std::chrono::seconds(30)); 
     */
+
+    test_game_server_frame_sync();
     return 0;
 }

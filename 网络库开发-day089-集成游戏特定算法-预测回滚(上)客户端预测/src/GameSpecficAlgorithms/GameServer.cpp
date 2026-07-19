@@ -13,8 +13,10 @@
 #include "../ServiceDiscovery/ServiceRegistry.h"
 #include "AttributeSync/DeltaSyncManager.h"
 #include "../../build/proto_gen/aoi.pb.h"
+#include "../../build/proto_gen/frame_sync.pb.h"
 #include "FrameSync/InputBuffer.h"
 #include "FrameSync/FrameScheduler.h"
+
 
 
  GameServer::GameServer(EventLoop* loop, int nPort)
@@ -42,7 +44,7 @@
         stop_frame_scheduler_flag_.store(false, std::memory_order_release);
     }
 
-    if(frame_broadcast_thread_->joinable())
+    if(frame_broadcast_thread_ && frame_broadcast_thread_->joinable())
     {
         frame_broadcast_thread_->join();
     }
@@ -109,6 +111,7 @@ void GameServer::Start()
 
         }); 
 
+        
         frame_broadcast_thread_ = std::make_unique<std::thread>([this](){
             while(false == stop_frame_scheduler_flag_.load(std::memory_order_acquire))
             {
@@ -385,7 +388,20 @@ bool GameServer::FrameClientInput(const std::weak_ptr<TcpConnection>& weak_conne
         onServerConnections_[req.player_id()] = connectionInfo;
     }
 
-    input_buffer_->PushInput(req.player_id(), frame_scheduler_->GetServerFrameIndex(), req);
+    //input_buffer_->PushInput(req.player_id(), frame_scheduler_->GetServerFrameIndex(), req);
+    // 临时处理为了跑通流程
+     // 打印日志
+    printf("[Server] Received client frame %d\n", req.frame_index());
+    
+    static int server_current_frame_ = 0;
+    server_current_frame_ += 1;
+
+    // 立即回复确认包
+    TestAckPackage ack;
+    ack.set_acked_client_frame(req.client_seq());
+    ack.set_server_frame(server_current_frame_);  // 服务端当前帧号
+    std::string strFrame = ack.SerializeAsString();
+    this->SendMessage(req.player_id(), strFrame, GSMT_FrameSyncAckPackage);
     return true;
 }
 

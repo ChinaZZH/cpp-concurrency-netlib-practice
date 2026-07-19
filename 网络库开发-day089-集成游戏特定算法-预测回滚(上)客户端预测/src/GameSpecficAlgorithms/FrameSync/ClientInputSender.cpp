@@ -11,6 +11,7 @@ void ClientInputSender::Update(uint32_t client_frame)
         input.set_frame_index(client_frame);
         input.set_move_x(current_x_);
         input.set_move_y(current_y_);
+        input.set_client_seq(client_frame);
         
         std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(input.SerializeAsString(), GSMT_FrameClientInput));
         tcp_conn_->Send(strContent); // 使用你的 TcpConnection

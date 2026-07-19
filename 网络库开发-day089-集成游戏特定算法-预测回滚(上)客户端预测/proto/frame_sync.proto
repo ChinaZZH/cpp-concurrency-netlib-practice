@@ -9,6 +9,9 @@ message ClientInput {
     bool attack = 5;
     uint32 skill_id = 6;         // 0 表示无技能
     uint32 buttons = 7;          // 位掩码：跳跃/防御/冲刺等
+
+    // 【新增】客户端本地自增序列号（从 1 开始，单调递增）
+    uint32 client_seq = 8;
 }
 
 // 服务端下行：全局帧包（包含同一帧内所有玩家的指令）
@@ -22,4 +25,10 @@ message FramePackage {
 message ServerFramePackage {
     int32  msg_client_id = 1;    // 这条消息包所属对象
     bytes  package = 2;          // frame包
+}
+
+// 测试使用
+message TestAckPackage {
+    uint32 acked_client_frame = 1;   // 服务端确认的客户端帧号
+    uint32 server_frame = 2;         // 服务端当前帧号
 }
