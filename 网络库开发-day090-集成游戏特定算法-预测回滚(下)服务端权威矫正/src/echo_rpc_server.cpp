@@ -27,7 +27,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestFullDeterminism();
+    gameAlgorighm.TestServerPlayerManger();
     return 0;
 }
 
@@ -38,7 +38,7 @@ int PerformanceTest()
     return 0;
 }
 
-int echo_rpc_server()
+int main()
 {
     std::cout << "start unit testing" << std::endl;
     UnitTesting();

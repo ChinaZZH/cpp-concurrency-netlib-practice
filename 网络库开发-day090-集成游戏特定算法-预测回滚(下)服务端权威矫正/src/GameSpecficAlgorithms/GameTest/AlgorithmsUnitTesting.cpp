@@ -5,6 +5,7 @@
 #include "../AOI/AOIPerformanceTest.h"
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
+#include "../FrameSync/ServerPlayerManager.h"
 #include <vector>
 #include <cstdint>
 
@@ -164,4 +165,24 @@ void AlgorithmsUnitTesting::TestFullDeterminism() {
     }
 
     std::cout << "=== Full determinism test completed ===" << std::endl;
+}
+
+
+
+void AlgorithmsUnitTesting::TestServerPlayerManger()
+{
+    ServerPlayerManager mgr;
+    mgr.AddPlayer(1);
+
+    std::unordered_map<uint32_t, ClientInput> inputs;
+    ClientInput input;
+    input.set_move_x(1);
+    inputs[1] = input;
+
+    mgr.Tick(1, inputs, 20);
+
+    ServerPlayerState state;
+    mgr.GetPlayerState(1, state);
+    // state.x 应该从 0 变为 2.0（因为 1 * 0.1 * 20 = 2）
+    printf("Server pos: %.2f\n", state.x.ToDouble());
 }

@@ -17,6 +17,7 @@ ClientPredictionManager::ClientPredictionManager(uint32_t local_player_id, std::
     local_state_.vy = Fixed::Zero();
 
     local_state_.state = 0;
+    local_state_.hp = 100;
 }
 
 

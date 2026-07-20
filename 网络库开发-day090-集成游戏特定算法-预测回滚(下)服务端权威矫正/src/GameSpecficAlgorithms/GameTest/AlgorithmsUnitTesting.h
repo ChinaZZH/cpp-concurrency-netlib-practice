@@ -20,6 +20,8 @@ public:
     void TestDeterminism();
     void TestFullDeterminism();
 
+    void TestServerPlayerManger();
+    
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     
