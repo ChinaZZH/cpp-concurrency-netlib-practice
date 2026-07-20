@@ -179,7 +179,7 @@ void AlgorithmsUnitTesting::TestServerPlayerManger()
     input.set_move_x(1);
     inputs[1] = input;
 
-    mgr.Tick(1, inputs, 20);
+    mgr.Tick(inputs, 20);
 
     ServerPlayerState state;
     mgr.GetPlayerState(1, state);

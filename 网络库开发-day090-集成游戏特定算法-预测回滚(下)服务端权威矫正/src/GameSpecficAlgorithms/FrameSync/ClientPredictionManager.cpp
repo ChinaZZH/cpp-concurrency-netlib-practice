@@ -102,7 +102,12 @@ void ClientPredictionManager::Simulate(const ClientInput& input, float delta_ms)
 // 发送数据给服务端（网络层接口）
 void ClientPredictionManager::SendToSever(const ClientInput& input)
 {
-    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(input.SerializeAsString(), GSMT_FrameClientInput));
+    // 构造要发送的包，并附上当前预测位置
+    ClientInput packet = input;
+    packet.set_predicted_x(local_state_.x.Raw());
+    packet.set_predicted_y(local_state_.y.Raw());
+
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(packet.SerializeAsString(), GSMT_FrameClientInput));
     tcp_conn_->Send(strContent); // 使用你的 TcpConnection
 
     /*

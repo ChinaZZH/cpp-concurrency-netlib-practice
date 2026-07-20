@@ -5,6 +5,7 @@ ServerPlayerManager::ServerPlayerManager()
     // 无需初始化
 }
 
+ 
 // 1. 注册玩家（当玩家加入游戏时调用）
 void ServerPlayerManager::AddPlayer(uint32_t player_id)
 {
@@ -50,30 +51,76 @@ bool ServerPlayerManager::GetPlayerState(uint32_t player_id, ServerPlayerState& 
 
 // 4. 核心：每帧 Tick，推进所有玩家的状态
 //    参数：当前服务端帧号，所有玩家在这一帧的输入列表，时间步长(ms)
-void ServerPlayerManager::Tick(uint32_t server_frame, const std::unordered_map<uint32_t, ClientInput>& input_per_player
-    , uint32_t delta_ms)
+void ServerPlayerManager::Tick(const std::unordered_map<uint32_t, ClientInput>& inputs, uint32_t delta_ms)
 {
+    // 遍历所有玩家
     for(auto& [player_id, playerState] : players_)
     {
+        // ===== 1. 提取输入（含预测坐标） =====
         ClientInput input;
-        auto itr = input_per_player.find(player_id);
-        if(itr != input_per_player.end())
+        bool hasPrediction = false;
+        Fixed predictedX, predictedY;
+        auto itr = inputs.find(player_id);
+        if(itr != inputs.end())
         {
             input = (itr->second);
+            hasPrediction = true;
+            predictedX = Fixed::FromRaw(input.predicted_x());
+            predictedY = Fixed::FromRaw(input.predicted_y());
         }
         else
         {
              // 空输入：所有操作归零
             input.set_player_id(player_id);
-            input.set_frame_index(server_frame);
+            input.set_frame_index(0);
             input.set_move_x(0);
             input.set_move_y(0);
             input.set_attack(false);
             input.set_skill_id(0);
         }
 
-        
+        // ===== 2. 执行权威模拟 =====
+        ServerPlayerState oldPlayerState = playerState;
         playerState = Simulate(playerState, input, delta_ms);
+
+        // ===== 3. 校验对比（如果客户端有上报预测位置） =====
+        if(hasPrediction)
+        {
+            Fixed dx = playerState.x - predictedX;
+            Fixed dy = playerState.y - predictedY;
+            if(dx < Fixed::Zero())
+            {
+                dx = -dx;
+            }
+
+            if(dy < Fixed::Zero())
+            {
+                dy = -dy;
+            }
+
+
+            // 【正确写法】设定阈值为 0.02 单位，MOBA/FPS 通用
+            Fixed threshold = Fixed(0.02f);
+            if(dx > threshold || dy > threshold)
+            {
+                // 【关键】只记录日志，暂不下发矫正
+                /*
+                printf("[Server] Player %u MISMATCH! Server=(%.4f, %.4f), Client=(%.4f, %.4f), Diff=(%.4f, %.4f)\n",
+                       player_id,
+                       playerState.x.ToDouble(), playerState.y.ToDouble(),
+                       predictedX.ToDouble(), predictedY.ToDouble(),
+                       dx.ToDouble(), dy.ToDouble());
+                */
+               CorrectionEntry entry;
+               entry.state = playerState;
+               entry.client_frame = input.frame_index();
+               pending_corrections_[player_id] = entry;
+            }else{
+                pending_corrections_.erase(player_id);
+                // 偏差在容忍范围内，静默通过
+                printf("[Server] Player %u MATCH OK.\n", player_id);
+            } 
+        }
     }
 }
 

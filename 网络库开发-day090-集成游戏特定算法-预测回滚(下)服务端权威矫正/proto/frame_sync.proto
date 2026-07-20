@@ -12,6 +12,10 @@ message ClientInput {
 
     // 【新增】客户端本地自增序列号（从 1 开始，单调递增）
     uint32 client_seq = 8;
+
+    // 【新增】客户端预测后的坐标（定点数原始值，Q24.40 格式）
+    int64 predicted_x = 9;
+    int64 predicted_y = 10;
 }
 
 // 服务端下行：全局帧包（包含同一帧内所有玩家的指令）
@@ -32,3 +36,26 @@ message TestAckPackage {
     uint32 acked_client_frame = 1;   // 服务端确认的客户端帧号
     uint32 server_frame = 2;         // 服务端当前帧号
 }
+
+
+// 帧同步的模式下加入玩家
+message FrameSyncAddPlayer {
+   uint32 player_id = 1;
+}
+
+
+// 帧同步的模式下移除玩家
+message FrameSyncRemovePlayer {
+    uint32 player_id = 1;
+}
+
+
+// 服务端强制矫正指令（单播给特定玩家）
+message ServerCorrection {
+    uint32 player_id = 1;              // 目标玩家
+    uint32 client_frame = 2;           // 【关键】该玩家当初上报的客户端帧号（回滚锚点）
+    sint64 authoritative_x = 3;        // 服务端算出的权威位置（定点数 Raw 值）
+    sint64 authoritative_y = 4;
+    // 可选：速度、朝向等，按需添加
+}
+

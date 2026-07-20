@@ -15,6 +15,12 @@ struct ServerPlayerState{
 };
 
 
+struct CorrectionEntry
+{
+    ServerPlayerState state;
+    uint32_t client_frame; // 这一帧客户端上报的帧号
+};
+
 class ServerPlayerManager
 {
 public:
@@ -31,15 +37,38 @@ public:
 
     // 4. 核心：每帧 Tick，推进所有玩家的状态
     //    参数：当前服务端帧号，所有玩家在这一帧的输入列表，时间步长(ms)
-    void Tick(uint32_t server_frame, const std::unordered_map<uint32_t, ClientInput>& input_per_player, uint32_t delta_ms);
+    void Tick(const std::unordered_map<uint32_t, ClientInput>& inputs, uint32_t delta_ms);
 
+
+    // 由 TcpServer 的 OnMessage 调用，将客户端上报的输入暂存起来
+    //void SumbitInput(uint32_t player_id, const ClientInput& input) {
+    //    pending_inputs_[player_id] = input; // 直接覆盖，保留最新
+    //}
+
+    
+
+
+    // 获取待矫正列表（只读）
+    const std::unordered_map<uint32_t, CorrectionEntry>& GetPendingCorrections() const { return pending_corrections_; }
+
+     // 清空矫正缓存（发送后调用）
+     void ClearCorrections()
+     {
+        pending_corrections_.clear();
+     }
 
 private:
     // 内部模拟函数（与客户端完全一致） 
     ServerPlayerState Simulate(const ServerPlayerState& current, const ClientInput& input, uint32_t delta_ms);
 
+    uint32_t AddServerFrameIndex();
+
 private:
     // 存储所有玩家的权威状态
     std::unordered_map<uint32_t, ServerPlayerState>  players_;
 
+    // 暂存每个玩家最新上报的输入（key = player_id）
+    // std::unordered_map<uint32_t, ClientInput>  pending_inputs_;
+
+    std::unordered_map<uint32_t, CorrectionEntry> pending_corrections_;
 };

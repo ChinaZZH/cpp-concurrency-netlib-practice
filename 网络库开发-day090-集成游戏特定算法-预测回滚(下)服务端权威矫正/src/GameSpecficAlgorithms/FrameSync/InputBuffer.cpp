@@ -12,9 +12,9 @@ void InputBuffer::PushInput(uint32_t playerId, uint32_t server_frame, const Clie
 }
 
 // 由帧调度器调用（单线程），取出指定帧的所有指令
-std::vector<ClientInput> InputBuffer::FetchFrame(uint32_t frame_index)
+std::unordered_map<uint32_t, ClientInput> InputBuffer::FetchFrame(uint32_t frame_index)
 {
-    std::vector<ClientInput> result;
+    std::unordered_map<uint32_t, ClientInput> result;
     std::unique_lock<std::shared_mutex> lock(mutex_);
     auto it = frameInputs_.find(frame_index);
     if (it == frameInputs_.end())
@@ -27,7 +27,7 @@ std::vector<ClientInput> InputBuffer::FetchFrame(uint32_t frame_index)
         // 修正 frame_index 为服务端帧号（以防客户端乱填）
         ClientInput copy = kv.second;
         copy.set_frame_index(frame_index);
-        result.push_back(std::move(copy));
+        result[kv.first] = std::move(copy);
     }
 
     return result;
@@ -37,6 +37,11 @@ std::vector<ClientInput> InputBuffer::FetchFrame(uint32_t frame_index)
 void InputBuffer::Gc(uint32_t current_frame_index, uint32_t keep_frame_count /*= 10*/)
 {
     uint32_t min_frame_index_to_keep = (current_frame_index > keep_frame_count) ? (current_frame_index - keep_frame_count) : 0;
+    if(min_frame_index_to_keep <= 0)
+    {
+        return;
+    }
+    
     std::unique_lock<std::shared_mutex> lock(mutex_);
     for (auto it = frameInputs_.begin(); it != frameInputs_.end(); )
     {

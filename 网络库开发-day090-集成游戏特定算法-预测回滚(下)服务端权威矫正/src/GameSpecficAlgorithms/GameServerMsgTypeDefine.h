@@ -18,4 +18,6 @@ enum GameServerMsgType
     GSMT_FrameClientInput   = 21,
     GSMT_FrameServerPackage = 22,
     GSMT_FrameSyncAckPackage = 23,
+    GSMT_FrameSyncAddPlayer  = 24,
+    GSMT_FrameSyncRemovePlayer = 25,
 };

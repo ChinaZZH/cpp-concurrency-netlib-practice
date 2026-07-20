@@ -10,7 +10,7 @@ public:
     void PushInput(uint32_t playerId, uint32_t server_frame, const ClientInput& inputData);
 
     // 由帧调度器调用（单线程），取出指定帧的所有指令
-    std::vector<ClientInput> FetchFrame(uint32_t frame_index);
+    std::unordered_map<uint32_t, ClientInput> FetchFrame(uint32_t frame_index);
 
     // 清理过期帧数据，保留最近 N 帧
     void Gc(uint32_t current_frame_index, uint32_t keep_frame_count = 10);
