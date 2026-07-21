@@ -19,6 +19,8 @@ class ClientPredictionManager
 public:
     ClientPredictionManager(uint32_t local_player_id, std::shared_ptr<TcpConnection> tcpConnection);
 
+    ~ClientPredictionManager();
+    
     //------由客户端主循环调用(每帧)-------------
     // 1.处理本地输入: 立即预测，并缓存输入
     void OnLocalInput(const ClientInput& input);
@@ -33,6 +35,8 @@ public:
     void InitTcpConnection(std::shared_ptr<TcpConnection> tcpConnection);
 
     void OnAckReceived(const TestAckPackage& ack);
+
+    void OnCorrection(const ServerCorrection& correction);
 
 private:
     // 模拟函数：根据输入更新状态（先用简单移动）

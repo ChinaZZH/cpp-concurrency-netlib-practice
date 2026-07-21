@@ -96,8 +96,10 @@ private:
 
 
     // 帧同步
-    std::shared_ptr<InputBuffer> input_buffer_;
-    std::shared_ptr<FrameScheduler> frame_scheduler_;
+    std::unique_ptr<InputBuffer> input_buffer_;
+    std::unique_ptr<FrameScheduler> frame_scheduler_;
+    std::unique_ptr<ServerPlayerManager> server_player_mgr_;
+
     std::unique_ptr<std::thread> frame_broadcast_thread_;
     std::atomic<bool> stop_frame_scheduler_flag_ = false;
 };

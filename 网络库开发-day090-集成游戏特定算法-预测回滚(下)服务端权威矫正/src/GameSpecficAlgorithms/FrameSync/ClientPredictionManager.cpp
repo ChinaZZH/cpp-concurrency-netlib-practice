@@ -13,14 +13,26 @@ ClientPredictionManager::ClientPredictionManager(uint32_t local_player_id, std::
     local_state_.x = Fixed::Zero();
     local_state_.y = Fixed::Zero();
 
-    local_state_.vx = Fixed::Zero();
-    local_state_.vy = Fixed::Zero();
+    //local_state_.vx = Fixed::Zero();
+    //local_state_.vy = Fixed::Zero();
 
-    local_state_.state = 0;
-    local_state_.hp = 100;
+    //local_state_.state = 0;
+    //local_state_.hp = 100; 
 }
 
 
+ClientPredictionManager::~ClientPredictionManager()
+{
+    if(local_player_id_ > 0 && tcp_conn_)
+    {
+        // 发一个removePlayer的数据包
+        FrameSyncRemovePlayer removePlayer;
+        removePlayer.set_player_id(local_player_id_);
+     
+        std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(removePlayer.SerializeAsString(), GSMT_FrameSyncRemovePlayer));
+        tcp_conn_->Send(strContent);
+    }
+}
 
 // 1.处理本地输入: 立即预测，并缓存输入
 void ClientPredictionManager::OnLocalInput(const ClientInput& input)
@@ -125,7 +137,15 @@ void ClientPredictionManager::SendToSever(const ClientInput& input)
 void ClientPredictionManager::InitTcpConnection(std::shared_ptr<TcpConnection> tcpConnection)
 {
     tcp_conn_ = (tcpConnection);
+
+     // 发一个addPlayer的数据包
+    FrameSyncAddPlayer addPlayer;
+    addPlayer.set_player_id(local_player_id_);
+     
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(addPlayer.SerializeAsString(), GSMT_FrameSyncAddPlayer));
+    tcp_conn_->Send(strContent);
 }
+
 
 void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
 {
@@ -168,6 +188,31 @@ void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
     printf("[Client] Ack received: client_frame=%d, server_frame=%d, pending left=%zu\n",
            acked_client_frame, server_frame_index, pending_inputs_.size());
     */
+}
+
+
+void ClientPredictionManager::OnCorrection(const ServerCorrection& correction)
+{
+    uint32_t target_frame = correction.client_frame();
+    int64_t authoritative_x = correction.authoritative_x();
+    Fixed ax = Fixed::FromRaw(authoritative_x);
+
+    int64_t authoritative_y = correction.authoritative_y();
+    Fixed ay = Fixed::FromRaw(authoritative_y);
+
+    printf("[Client] Correction: rollback to %u, pos=(%.2f, %.2f)\n",
+           target_frame, ax.ToDouble(), ay.ToDouble());
+
+    // 覆盖快照。
+    PlayerSnapshot snapshot;
+    snapshot.x = ax;
+    snapshot.y = ay;
+    snapshot.current_frame_index = target_frame;
+    snapshots_.Save(target_frame, snapshot);
+
+    local_state_.x = ax;
+    local_state_.y = ay;
+    Rollback(target_frame);
 }
 
 

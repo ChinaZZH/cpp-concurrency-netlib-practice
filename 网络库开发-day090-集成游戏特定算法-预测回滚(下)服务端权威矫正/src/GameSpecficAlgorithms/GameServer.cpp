@@ -16,7 +16,7 @@
 #include "../../build/proto_gen/frame_sync.pb.h"
 #include "FrameSync/InputBuffer.h"
 #include "FrameSync/FrameScheduler.h"
-
+#include "FrameSync/ServerPlayerManager.h"
 
 
 
@@ -99,8 +99,10 @@ void GameServer::Start()
     
      // 帧同步
      {
-        input_buffer_ = std::make_shared<InputBuffer>();
-        auto broadcastCb = [this](const std::string& serialized_pkg){
+        input_buffer_ = std::make_unique<InputBuffer>();
+
+        // 每帧50毫秒，相当于20fps
+        frame_scheduler_ = std::make_unique<FrameScheduler>(input_buffer_.get(), [this](const std::string& serialized_pkg){
             for(auto& [entityId, tcpConnection] : onServerConnections_)
             {
                 ServerFramePackage serverFrame;
@@ -110,17 +112,13 @@ void GameServer::Start()
                 std::string strFrame = serverFrame.SerializeAsString();
                 this->SendMessage(entityId, strFrame, GSMT_FrameServerPackage);
             }
-        };
-
-        auto correctionCb = [](uint32_t playerId, const CorrectionEntry& connectionEntry) {
-            //ServerCorrection
-            //this->SendMessage(entityId, strFrame, GSMT_FrameServerPackage);
-        };
-
-        // 每帧50毫秒，相当于20fps
-        frame_scheduler_ = std::make_shared<FrameScheduler>(input_buffer_.get(), broadcastCb,  correctionCb); 
+        }); 
 
         
+        server_player_mgr_ = std::make_unique<ServerPlayerManager>([this](uint32_t playerId, const std::string& data){
+            this->SendMessage(playerId, data, GSMT_ServerCorrection);
+        });
+
         frame_broadcast_thread_ = std::make_unique<std::thread>([this](){
             uint32_t logicTickCount = 0;
             while(false == stop_frame_scheduler_flag_.load(std::memory_order_acquire))
@@ -129,7 +127,7 @@ void GameServer::Start()
                 logicTickCount += 1;
                 if(logicTickCount >= 5)
                 {
-                    frame_scheduler_->OnBroadcastTick();
+                    frame_scheduler_->OnTick();
                     logicTickCount = 0;
                 }
 
@@ -137,11 +135,11 @@ void GameServer::Start()
                 logicTickCount += 1;
                 if(logicTickCount >= 5)
                 {
-                    frame_scheduler_->OnBroadcastTick();
+                    frame_scheduler_->OnTick();
                     logicTickCount = 0;
                 }
 
-                frame_scheduler_->OnLogicTick();    
+                server_player_mgr_->Tick(20);    // 每20毫毛tick一次
             }
         });
      }
@@ -412,22 +410,8 @@ bool GameServer::FrameClientInput(const std::weak_ptr<TcpConnection>& weak_conne
         onServerConnections_[req.player_id()] = connectionInfo;
     }
 
+    server_player_mgr_->SumbitInput(req.player_id(), req);
     input_buffer_->PushInput(req.player_id(), frame_scheduler_->GetServerFrameIndex(), req);
-    // 临时处理为了跑通流程
-    // 打印日志
-    /*
-    printf("[Server] Received client frame %d\n", req.frame_index());
-    
-    static int server_current_frame_ = 0;
-    server_current_frame_ += 1;
-
-    // 立即回复确认包
-    TestAckPackage ack;
-    ack.set_acked_client_frame(req.client_seq());
-    ack.set_server_frame(server_current_frame_);  // 服务端当前帧号
-    std::string strFrame = ack.SerializeAsString();
-    this->SendMessage(req.player_id(), strFrame, GSMT_FrameSyncAckPackage);
-    */
     return true;
 }
 
@@ -439,7 +423,29 @@ bool GameServer::OnFrameSyncAddPlayer(const std::weak_ptr<TcpConnection>& weak_c
         throw std::runtime_error("GameServer::FrameSyncAddPlayer parse ClientInput failed");
     }
 
-    frame_scheduler_->GetServerPlayerManager()->AddPlayer(req.player_id());
+    auto itr = onServerConnections_.find(req.player_id());
+    if(itr == onServerConnections_.end())
+    {
+        // 这边connection只是读取对应的eventLoop不会影响多线程的竞争问题
+        EventLoop* loop_ptr = nullptr;
+        auto con = weak_connection_ptr.lock();
+        if(con)
+        {
+            loop_ptr = con->GetLoop();
+        }
+
+        if(!loop_ptr)
+        {
+            throw std::runtime_error("loop_ptr nullptr error!!!");
+        }
+
+        TcpConnectionInfo connectionInfo;
+        connectionInfo.weakPtrCon = weak_connection_ptr;
+        connectionInfo.loop_ptr = loop_ptr;    
+        onServerConnections_[req.player_id()] = connectionInfo;
+    }
+
+    server_player_mgr_->AddPlayer(req.player_id());
     return true;
 }
 
@@ -451,7 +457,8 @@ bool GameServer::OnFrameSyncRemovePlayer(const std::weak_ptr<TcpConnection>& wea
         throw std::runtime_error("GameServer::FrameSyncRemovePlayer parse ClientInput failed");
     }
 
-    frame_scheduler_->GetServerPlayerManager()->RemovePlayer(req.player_id());
+    onServerConnections_.erase(req.player_id());
+    server_player_mgr_->RemovePlayer(req.player_id());
     return true;
 }
 

@@ -225,7 +225,7 @@ int test_http_client()
     return 0;
 }
 
-int echo_client_test()
+int main()
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {
