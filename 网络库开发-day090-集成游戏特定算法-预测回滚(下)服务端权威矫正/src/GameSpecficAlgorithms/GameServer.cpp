@@ -119,6 +119,7 @@ void GameServer::Start()
             this->SendMessage(playerId, data, GSMT_ServerCorrection);
         });
 
+        // 后面优化定时器，不用开frame_broadcast_thread_ 这个线程处理，直接用定时器来处理。
         frame_broadcast_thread_ = std::make_unique<std::thread>([this](){
             uint32_t logicTickCount = 0;
             while(false == stop_frame_scheduler_flag_.load(std::memory_order_acquire))

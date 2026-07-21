@@ -564,6 +564,25 @@ void test_game_server_frame_sync() {
     client->SetMessageCallBack([rpcPtr, defaultPlayerID, &clientFrame](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
         switch(msgType)
         {
+            case GSMT_ServerCorrection:
+            {
+                ServerCorrection correction;
+                if(!correction.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_ServerCorrection error!!!" << std::endl;
+                    return;
+                }
+
+                if(correction.player_id() != defaultPlayerID)
+                {
+                    std::cout << "GSMT_ServerCorrection playerID error!!!" << std::endl;
+                    return;
+                }
+
+                clientFrame.OnCorrection(correction);
+            }
+            break;
+
             case GSMT_FrameSyncAckPackage:
             {
                 TestAckPackage ack;

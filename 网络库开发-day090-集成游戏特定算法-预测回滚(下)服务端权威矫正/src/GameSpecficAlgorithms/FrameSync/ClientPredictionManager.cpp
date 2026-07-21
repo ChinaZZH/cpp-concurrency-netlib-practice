@@ -90,12 +90,13 @@ void ClientPredictionManager::Tick(uint32_t delta_ms)
     snapshots_.Save(current_client_frame_, local_state_);
 
    
+     // 2.4 【新增】把这一帧的输入发送给服务端
+    SendToSever(input);
 
     // 可选：打印日志看效果
     if (bQuery)
     {
-         // 2.4 【新增】把这一帧的输入发送给服务端
-        SendToSever(input);
+        
        // std::cout << "Frame: " << current_client_frame_ << " pos=(" << local_state_.x.ToFloat() << ", " << local_state_.y.ToFloat() << " )" << std::endl;
     }
 }

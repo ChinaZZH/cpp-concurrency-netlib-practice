@@ -38,11 +38,11 @@ int PerformanceTest()
     return 0;
 }
 
-int echo_rpc_server()
+int main()
 {
-    std::cout << "start unit testing" << std::endl;
-    UnitTesting();
-    std::cout << "start PerformanceTest " << std::endl;
+    //std::cout << "start unit testing" << std::endl;
+    //UnitTesting();
+    //std::cout << "start PerformanceTest " << std::endl;
     //PerformanceTest();
     
     

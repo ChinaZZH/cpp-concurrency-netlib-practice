@@ -114,6 +114,12 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
         ServerPlayerState oldPlayerState = playerState;
         playerState = Simulate(playerState, input, delta_ms);
 
+        if(nullptr == send_correction_cb_)
+        {
+            std::cout << "[Server] send_correction_cb_ is nullptr.\n";
+            continue;
+        }
+
         // ===== 3. 校验对比（如果客户端有上报预测位置） =====
         if(hasPrediction)
         {
@@ -132,7 +138,7 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
 
             // 【正确写法】设定阈值为 0.02 单位，MOBA/FPS 通用
             Fixed threshold = Fixed(0.02f);
-            if((dx > threshold || dy > threshold) && send_correction_cb_)
+            if(dx > threshold || dy > threshold)
             {
                 // 【关键】只记录日志，暂不下发矫正
                 /*
@@ -155,6 +161,9 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
                correction.SerializeToString(&strData);
                send_correction_cb_(player_id, strData);
 
+            }
+            else{
+                std::cout << "[Server] OK! Sending correction.\n";
             }
         }
     }
