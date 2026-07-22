@@ -107,6 +107,13 @@ void TcpClient::HandleNewConnection()
     }
 
     bReconnectFlag = false; // 重置为false
+    nReconnectCount_ = 0;
+    reconnect_timer_id_ = 0;
+    if(reconnect_timer_id_ > 0)
+    {
+        loop_->CancelTimer(reconnect_timer_id_);
+    }
+
     //std::cout << "end TcpClient::HandleWrite thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
 }
 
@@ -119,26 +126,16 @@ void TcpClient::HandleDisconnect()
     bConnecting = false;
     bReconnectFlag = true; // 设置重连标记
 
-    std::thread reconnecter([this](){
-        int nReconnectCount = 5;
-        while(nReconnectCount > 0)
-        {
-            this->Connect();
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-            // 已经连接上了，则跳出线程函数
-            if(connection_)
-            {
-                break;
-            }
+    nReconnectCount_ = 5;
+    reconnect_timer_id_ = loop_->GenerateNewTimerId();
+    loop_->RunEvery(reconnect_timer_id_, std::chrono::seconds(2), [this](){
+         if(nReconnectCount_ <= 0)
+         {
+            loop_->CancelTimer(reconnect_timer_id_);
+            reconnect_timer_id_ = 0;
+         }
 
-            // 否则次数-1
-            nReconnectCount -= 1;
-        }
+         this->Connect();
+         nReconnectCount_ -= 1;
     });
-    
-    
-    if(reconnecter.joinable())
-    {
-        reconnecter.join();
-    }
 }

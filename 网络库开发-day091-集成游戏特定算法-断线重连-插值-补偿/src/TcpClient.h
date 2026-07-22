@@ -58,4 +58,6 @@ private:
 
     CloseCallBack closeCb_;
     bool bReconnectFlag = false;
+    uint64_t reconnect_timer_id_ = 0;
+    int nReconnectCount_ = 0;
 };
