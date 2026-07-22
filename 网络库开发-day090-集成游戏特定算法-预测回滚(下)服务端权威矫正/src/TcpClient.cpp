@@ -13,6 +13,7 @@ TcpClient::TcpClient(EventLoop* loop, const std::string& strIp, int nPort)
 ,port_(nPort)
 ,fd_(-1)
 ,bConnecting(false)
+,bReconnectFlag(false)
 {
     
 }
@@ -43,6 +44,7 @@ TcpClient::~TcpClient()
 
 void TcpClient::Connect()
 {
+  
     // 创建socekt并且连接
     int socketFd = ClientSocket::Connect(ip_, port_);
     if(socketFd < 0)
@@ -99,5 +101,41 @@ void TcpClient::HandleNewConnection()
         connectionCb_(connection_);
     }
 
+    if(closeCb_)
+    {
+        connection_->SetCloseCallBack(closeCb_);
+    }
+
+    bReconnectFlag = false; // 重置为false
+    nReconnectCount_ = 0;
+    reconnect_timer_id_ = 0;
+    if(reconnect_timer_id_ > 0)
+    {
+        loop_->CancelTimer(reconnect_timer_id_);
+    }
+
     //std::cout << "end TcpClient::HandleWrite thread_id:" << std::this_thread::get_id() << " loop thread_id:" << loop_->GetThreadId() << std::endl;
+}
+
+
+// 在io线程内
+void TcpClient::HandleDisconnect()
+{
+    fd_ = -1;
+    connection_.reset();
+    bConnecting = false;
+    bReconnectFlag = true; // 设置重连标记
+
+    nReconnectCount_ = 5;
+    reconnect_timer_id_ = loop_->GenerateNewTimerId();
+    loop_->RunEvery(reconnect_timer_id_, std::chrono::seconds(2), [this](){
+         if(nReconnectCount_ <= 0)
+         {
+            loop_->CancelTimer(reconnect_timer_id_);
+            reconnect_timer_id_ = 0;
+         }
+
+         this->Connect();
+         nReconnectCount_ -= 1;
+    });
 }

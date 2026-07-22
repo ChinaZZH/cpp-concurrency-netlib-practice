@@ -16,6 +16,7 @@ class TcpClient: public std::enable_shared_from_this<TcpClient>
 public:
     using ConnectionCallBack = std::function<void(const TcpConnectionPtr&)>;
     using MessageCallBack = std::function<void(const TcpConnectionPtr&, std::string&, uint32_t)>;
+    using CloseCallBack = std::function<void(const std::shared_ptr<TcpConnection>&)>;
    
     TcpClient(EventLoop* loop, const std::string& strIp, int nPort);
 
@@ -27,6 +28,8 @@ public:
 
     void SetMessageCallBack(MessageCallBack cb) { msgCb_ = cb; }
 
+    void SetCloseCallBack(CloseCallBack cb) { closeCb_ = cb; } 
+
     void HandleWrite();     // 连接建立完成时的回调
 
     void HandleNewConnection();
@@ -36,7 +39,11 @@ public:
     const std::string& GetIp() const { return ip_; }
 
     int GetPort() const { return port_; }
-    
+
+    void HandleDisconnect();
+
+    bool GetReconnectFlag() const { return bReconnectFlag; }
+
 private:
     EventLoop* loop_;
     std::string ip_;
@@ -48,4 +55,9 @@ private:
     ConnectionCallBack  connectionCb_;
     MessageCallBack     msgCb_;     
     bool bConnecting = false;
+
+    CloseCallBack closeCb_;
+    bool bReconnectFlag = false;
+    uint64_t reconnect_timer_id_ = 0;
+    int nReconnectCount_ = 0;
 };
