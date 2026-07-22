@@ -8,6 +8,7 @@
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
 #include "../../../build/proto_gen/frame_sync.pb.h"
+#include "../../../build/proto_gen/reconnect.pb.h"
 
 // 玩家权威状态（服务端持有）
 struct ServerPlayerState{
@@ -44,6 +45,9 @@ public:
     // 由 TcpServer 的 OnMessage 调用，将客户端上报的输入暂存起来
     void SumbitInput(uint32_t player_id, const ClientInput& input);
 
+
+    // 【新增】构建全量快照回复包（只读）
+    bool BuildSnapShotReply(uint32_t player_id, SnapshotReply& reply);
     
 private:
     // 内部模拟函数（与客户端完全一致） 

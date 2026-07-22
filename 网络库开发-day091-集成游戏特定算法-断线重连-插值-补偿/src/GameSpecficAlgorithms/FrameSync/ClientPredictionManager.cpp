@@ -13,11 +13,11 @@ ClientPredictionManager::ClientPredictionManager(uint32_t local_player_id, std::
     local_state_.x = Fixed::Zero();
     local_state_.y = Fixed::Zero();
 
-    //local_state_.vx = Fixed::Zero();
-    //local_state_.vy = Fixed::Zero();
+    local_state_.vx = Fixed::Zero();
+    local_state_.vy = Fixed::Zero();
 
-    //local_state_.state = 0;
-    //local_state_.hp = 100; 
+    local_state_.state = 0;
+    local_state_.hp = 100; 
 }
 
 
@@ -209,7 +209,14 @@ void ClientPredictionManager::OnCorrection(const ServerCorrection& correction)
     snapshot.x = ax;
     snapshot.y = ay;
     snapshot.current_frame_index = target_frame;
+    
+    // 这些数据后面修改应该从服务端下发下来
+    snapshot.vx = local_state_.vx;
+    snapshot.vy = local_state_.vy;
+    snapshot.state = local_state_.state;
+    snapshot.hp = local_state_.hp;
     snapshots_.Save(target_frame, snapshot);
+
 
     local_state_.x = ax;
     local_state_.y = ay;
@@ -261,4 +268,34 @@ void ClientPredictionManager::Rollback(uint32_t target_frame)
         printf("[Rollback] Replayed %u frames. New pos=(%.2f, %.2f)\n", 
                replayed_frames, local_state_.x.ToFloat(), local_state_.y.ToFloat());
     }
+}
+
+
+void ClientPredictionManager::RequestReconnect()
+{
+    if(local_player_id_ > 0 && tcp_conn_)
+    {
+        ReconnectRequest req;
+        req.set_player_id(local_player_id_);
+
+        std::string data = std::move(LengthAndTypePrefixDecoder::MakeRequestString(req.SerializeAsString(), GSMT_FrameReconnect));
+        tcp_conn_->Send(data);
+        printf("[Client] Reconnect request sent.\n");  
+    }   
+}
+
+
+// 接受断线重连的回复的全量快照
+void ClientPredictionManager::ApplySnapshot(const SnapshotReply& reply)
+{
+    // 对应当前的客户端帧号
+    local_state_.x = Fixed::FromRaw(reply.x());
+    local_state_.y = Fixed::FromRaw(reply.y());
+    local_state_.vx = Fixed::FromRaw(reply.vx());
+    local_state_.vy = Fixed::FromRaw(reply.vy());
+    local_state_.state = reply.state();
+    local_state_.hp = reply.hp();
+
+    snapshots_.Clear();
+    pending_inputs_.clear();
 }

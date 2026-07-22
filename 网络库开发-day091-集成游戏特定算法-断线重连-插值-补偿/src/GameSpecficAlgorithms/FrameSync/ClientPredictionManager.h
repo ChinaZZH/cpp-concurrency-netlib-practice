@@ -12,6 +12,7 @@
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
 #include "../../../build/proto_gen/frame_sync.pb.h"
+#include "../../../build/proto_gen/reconnect.pb.h"
 
 class TcpConnection;
 class ClientPredictionManager
@@ -38,6 +39,12 @@ public:
 
     void OnCorrection(const ServerCorrection& correction);
 
+    // 发起断线重连
+    void RequestReconnect();
+
+    // 接受断线重连的回复的全量快照
+    void ApplySnapshot(const SnapshotReply& reply);
+
 private:
     // 模拟函数：根据输入更新状态（先用简单移动）
     void Simulate(const ClientInput& input, float delta_ms);
@@ -57,9 +64,6 @@ private:
     // 【关键】待确认输入队列：key = 客户端预测帧号
     std::mutex mutex_;
     std::map<uint32_t, ClientInput> pending_inputs_;
-
-    // std::unordered_map<uint32_t, uint32_t> client_to_server_map_; // 建立映射， 客户端的帧号所对应的服务器的帧号。
-
 
     SnapshotStorage snapshots_;  // 新增
 };

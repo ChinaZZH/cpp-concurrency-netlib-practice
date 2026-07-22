@@ -524,7 +524,6 @@ void test_game_server_aoi_function(bool async_call, int id, int task_count, std:
 
 
 
-
 void test_game_server_frame_sync() {
     // 创建 EventLoop 对象（将在独立线程中运行）
     EventLoop loop;
@@ -720,6 +719,259 @@ void test_game_server_frame_sync() {
     
 
     std::this_thread::sleep_for(std::chrono::seconds(60));
+    stopFrameWork.store(true, std::memory_order_release);
+    
+    std::cout << "end !!!!" << std::endl;
+    if(frameThread.joinable())
+    {
+        frameThread.join();
+    }
+
+    loop.Quit();
+    io_thread.join();
+    //return 0;
+}
+
+
+void test_game_server_reconnection() {
+    // 创建 EventLoop 对象（将在独立线程中运行）
+    EventLoop loop;
+
+    // 创建 TcpClient 和 RpcClient
+    auto client = std::make_shared<TcpClient>(&loop, "127.0.0.1", 8888);
+    auto rpcClient = std::make_shared<RpcClient>(nullptr);
+
+    // 用于等待连接建立的同步
+    //std::mutex mtx;
+    //std::condition_variable cv;
+    std::atomic<bool> connected = false;
+
+    int defaultPlayerID = 1;
+    ClientPredictionManager clientFrame(defaultPlayerID, nullptr);
+    std::weak_ptr<RpcClient> rpcPtr = rpcClient->shared_from_this();
+    client->SetConnectionCallBack([rpcPtr, &clientFrame, &client, &connected](const TcpConnectionPtr& conn) {
+        auto rpcClient = rpcPtr.lock();
+        if(rpcClient)
+        {
+            //std::cout << "Connected to server" << std::endl;
+            auto msg_type_decoder = std::make_unique<LengthAndTypePrefixDecoder>();
+            conn->SetDecoder(std::move(msg_type_decoder));
+            rpcClient->SetConnection(conn);
+            
+            {
+                //std::lock_guard<std::mutex> lock(mtx);
+                clientFrame.InitTcpConnection(conn);
+                if(client->GetReconnectFlag())
+                {
+                    clientFrame.RequestReconnect();
+                }
+                
+                connected.store(true, std::memory_order_release); // = true;
+            }
+        }
+        
+
+        //cv.notify_one();
+    });
+    
+
+   
+    client->SetMessageCallBack([rpcPtr, defaultPlayerID, &clientFrame](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+        switch(msgType)
+        {
+            case GSMT_FrameReconnect:
+            {
+                SnapshotReply reply;
+                if(!reply.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_FrameReconnect error!!!" << std::endl;
+                    return;
+                }
+
+                if(reply.player_id() != defaultPlayerID)
+                {
+                    std::cout << "GSMT_FrameReconnect playerID error!!!" << std::endl;
+                    return;
+                }
+
+                clientFrame.ApplySnapshot(reply);
+            }
+            break;
+
+            case GSMT_ServerCorrection:
+            {
+                ServerCorrection correction;
+                if(!correction.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_ServerCorrection error!!!" << std::endl;
+                    return;
+                }
+
+                if(correction.player_id() != defaultPlayerID)
+                {
+                    std::cout << "GSMT_ServerCorrection playerID error!!!" << std::endl;
+                    return;
+                }
+
+                clientFrame.OnCorrection(correction);
+            }
+            break;
+
+            case GSMT_FrameSyncAckPackage:
+            {
+                TestAckPackage ack;
+                if(!ack.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_FrameSyncAckPackage error!!!" << std::endl;
+                    return;
+                }
+
+                clientFrame.OnAckReceived(ack);
+            }
+            break;
+
+            case GSMT_FrameServerPackage:
+            {
+                ServerFramePackage response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_FrameServerPackage error!!!" << std::endl;
+                    return;
+                }
+
+            
+                FramePackage frame;
+                if(!frame.ParseFromString(response.package()))
+                {
+                    std::cout << "client onMessageCallBack parse FramePackage error!!!" << std::endl;
+                    return;
+                }
+
+                // 只处理发给自己的以及和自己相关的
+                if(defaultPlayerID != response.msg_client_id())
+                {
+                    return;
+                }
+
+               
+                 if(frame.inputs_size() > 0)
+			    {
+                    /*
+				    std::cout << "OnMessage ServerFramePackage recvClientId:=" << response.msg_client_id() << std::endl;
+					std::cout << std::endl << "frame_index:=" << frame.frame_index() << " timeStamp:=" << frame.timestamp_ms() << std::endl;
+					for(int i = 0; i < frame.inputs_size(); ++i)
+					{
+						const ClientInput& input = frame.inputs(i);
+						std::cout << "player_index:=" << input.player_id() << " x:=" << input.move_x() << " y:=" << input.move_y() << std::endl;
+					}
+                    */
+			    }
+            }
+            break;
+                
+            default:
+                break;
+        }
+    });
+
+    client->Connect();
+    
+
+    // 启动 I/O 线程
+    std::thread io_thread([&loop]() {
+        //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
+        loop.Loop();
+    });
+    
+    // 等待连接建立
+    /*
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&] { return connected; });
+    }
+    */
+
+    //std::atomic<bool> bConnectToServer = true;
+    client->SetCloseCallBack([&connected, &clientFrame, &client](const TcpConnectionPtr& connectionPtr){
+        connected.store(false, std::memory_order_release);
+        clientFrame.InitTcpConnection(nullptr);
+        client->HandleDisconnect();
+    });
+
+    // ClientPredictionManager clientFrame(defaultPlayerID, client->GetTcpConnection());
+    std::atomic<bool> stopFrameWork = false;
+    std::thread frameThread([&connected, &stopFrameWork, &clientFrame, &loop](){
+        uint32_t client_frame = 0;
+        while(false == stopFrameWork.load(std::memory_order_acquire))
+        {
+            // 每20毫秒执行一次tick
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            if(false == connected.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+
+            loop.RunInLoop([&clientFrame](){
+                clientFrame.Tick(20);
+            });
+            
+        }
+    });
+
+
+
+    while(true)
+    {
+        
+        std::cout << "input Key(wsad):=";
+        char ch;
+        std::cin >> ch;
+        if('Q' == ch || 'q' == ch)
+        {
+            break;
+        }
+
+        int moveX = 0;
+        int moveY = 0;
+        if('w' == ch || 'W' == ch)
+        {
+            moveY = 1;
+        }
+        else if('s' == ch || 'S' == ch)
+        {
+            moveY = -1;
+        }
+        else if('A' == ch || 'a' == ch)
+        {
+            moveX = -1;
+        }
+        else if('D' == ch || 'd' == ch)
+        {
+            moveX = 1;
+        }
+        else 
+        {
+            ;
+
+        }
+
+        if(false == connected.load(std::memory_order_acquire))
+        {
+            std::cout << " lose line" << std::endl;
+            continue;
+        }
+
+        std::cout << ch << std::endl;
+        ClientInput input;
+        input.set_player_id(1);
+        input.set_move_x(moveX);
+        input.set_move_y(moveY);
+        input.set_attack(false);
+        clientFrame.OnLocalInput(input);
+    }
+    
+
+    std::this_thread::sleep_for(std::chrono::seconds(100));
     stopFrameWork.store(true, std::memory_order_release);
     
     std::cout << "end !!!!" << std::endl;

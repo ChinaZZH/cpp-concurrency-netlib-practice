@@ -13,6 +13,7 @@ void ServerPlayerManager::AddPlayer(uint32_t player_id)
     auto itr = players_.find(player_id);
     if(itr != players_.end())
     {
+        printf("[Server] Player %u already exists, skipping AddPlayer.\n", player_id);
         return;
     }
 
@@ -167,4 +168,38 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
             }
         }
     }
+}
+
+
+
+// 【新增】构建全量快照回复包（只读）
+bool ServerPlayerManager::BuildSnapShotReply(uint32_t player_id, SnapshotReply& reply)
+{
+    auto itr = players_.find(player_id);
+    if(itr == players_.end())
+    {
+        return false;
+    }
+
+    ServerPlayerState playerState = (itr->second);
+    {
+        auto itr_input = pending_inputs_.find(player_id);
+        if(itr_input != pending_inputs_.end())
+        {
+            const ClientInput& input = (itr_input->second).input;
+            playerState = Simulate(playerState, input, 20);
+            pending_inputs_.erase(itr_input);
+        }
+    }
+    
+    
+    reply.set_player_id(player_id);
+    reply.set_client_frame_hint(0);
+    reply.set_x(playerState.x.Raw());
+    reply.set_y(playerState.y.Raw());
+    reply.set_vx(playerState.vx.Raw());
+    reply.set_vy(playerState.vy.Raw());
+    reply.set_hp(playerState.hp);
+    reply.set_state(playerState.state);
+    return true;
 }

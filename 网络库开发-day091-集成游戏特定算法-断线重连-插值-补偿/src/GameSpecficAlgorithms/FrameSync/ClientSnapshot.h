@@ -11,9 +11,9 @@
 struct PlayerSnapshot{
     uint32_t current_frame_index = 0;      // 对应服务端帧号（用于回滚锚点）
     Fixed x, y;             // 位置
-    //Fixed vx, vy;           // 速度
-    //int32_t state = 0;      // 0=待机, 1=跑动, 2=跳跃, 3=攻击...
-    //uint32_t hp = 100;      // 血量（如果需要回滚伤害）
+    Fixed vx, vy;           // 速度
+    int32_t state = 0;      // 0=待机, 1=跑动, 2=跳跃, 3=攻击...
+    uint32_t hp = 100;      // 血量（如果需要回滚伤害）
 
      // 深拷贝默认即可，全是 POD 类型
 };

@@ -14,6 +14,7 @@
 #include "AttributeSync/DeltaSyncManager.h"
 #include "../../build/proto_gen/aoi.pb.h"
 #include "../../build/proto_gen/frame_sync.pb.h"
+#include "../../build/proto_gen/reconnect.pb.h"
 #include "FrameSync/InputBuffer.h"
 #include "FrameSync/FrameScheduler.h"
 #include "FrameSync/ServerPlayerManager.h"
@@ -67,7 +68,7 @@ void GameServer::Start()
     RegisterHandler(GSMT_FrameClientInput, std::bind(&GameServer::FrameClientInput, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_FrameSyncAddPlayer, std::bind(&GameServer::OnFrameSyncAddPlayer, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_FrameSyncRemovePlayer, std::bind(&GameServer::OnFrameSyncRemovePlayer, this, std::placeholders::_1, std::placeholders::_2));
-
+    RegisterHandler(GSMT_FrameReconnect, std::bind(&GameServer::OnFrameReconnect, this, std::placeholders::_1, std::placeholders::_2));
 
     // 设置分区线程池个数
     //std::cout << "GameServer::Start  22222" << std::endl;
@@ -464,6 +465,24 @@ bool GameServer::OnFrameSyncRemovePlayer(const std::weak_ptr<TcpConnection>& wea
 }
 
 
+bool GameServer::OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    ReconnectRequest req;
+    if(!req.ParseFromString(strParamData))
+    {
+        throw std::runtime_error("GameServer::OnFrameReconnect parse ClientInput failed");
+    }
+
+    SnapshotReply reply;
+    if(server_player_mgr_->BuildSnapShotReply(req.player_id(), reply))
+    {
+        std::string strData;
+        reply.SerializeToString(&strData);
+        this->SendMessage(req.player_id(), strData, GSMT_FrameReconnect);
+    }
+    
+    return true;
+}
 
 void GameServer::SetHp(int entityId, int64_t newHp)
 {
