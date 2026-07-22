@@ -153,17 +153,6 @@ void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
     uint32_t acked_client_frame = ack.acked_client_frame();
     uint32_t server_frame_index = ack.server_frame();
 
-    // 1. 建立映射（为后续回滚准备）
-    // client_to_server_map_[acked_client_frame] = server_frame_index;
-
-    /*
-    既然暂时没有服务端权威位置，我们用一个“懒触发”策略来验证逻辑：
-
-    在 OnAckReceived（第二步加的）中，如果发现 acked_frame 比 current_frame_ 小很多（比如差距 > 5 帧），
-    
-    就主动触发一次回滚（模拟断线重连或强制矫正）。
-    */
-
     // 【新增】如果确认的帧远落后于当前帧，触发回滚（模拟矫正）
     if(current_client_frame_ - acked_client_frame > 5)
     {
@@ -187,6 +176,57 @@ void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
 
     /*
     printf("[Client] Ack received: client_frame=%d, server_frame=%d, pending left=%zu\n",
+           acked_client_frame, server_frame_index, pending_inputs_.size());
+    */
+}
+
+
+
+void ClientPredictionManager::OnServerFrame(const FramePackage& pkg)
+{
+    uint32_t server_client_frame = pkg.frame_index();
+    uint64_t timestamp_ms = pkg.timestamp_ms();
+
+    bool bQueryFlag = false;
+    uint32_t acked_client_frame = 0;
+    for(const auto& input : pkg.inputs())
+    {
+        if(input.player_id() == local_player_id_) 
+        {
+            bQueryFlag = true;
+            acked_client_frame = input.client_seq();  // 获取服务端已经确认的客户端帧号。
+            break; 
+        }
+    }
+
+    if(!bQueryFlag)
+    {
+        return;
+    }
+
+    // 【新增】如果确认的帧远落后于当前帧，触发回滚（模拟矫正）
+    if(current_client_frame_ - acked_client_frame > 5)
+    {
+        printf("[Trigger] Ack lag detected! Rolling back to frame %d\n", acked_client_frame);
+        Rollback(acked_client_frame);
+        return;
+    }
+
+    // 2. 清理 pending_inputs_ 中已确认的帧
+    std::lock_guard<std::mutex> lk(mutex_);
+    for(auto itr = pending_inputs_.begin(); itr != pending_inputs_.end(); )
+    {
+        if((itr->first) <= acked_client_frame)
+        {
+            itr = pending_inputs_.erase(itr);   // 小于等于acked_frame 说明已经被消费
+        }
+        else{
+            ++itr;
+        }
+    }
+
+    /*
+    printf("[Client] Ack OnServerFrame: client_frame=%d, server_frame=%d, pending left=%zu\n",
            acked_client_frame, server_frame_index, pending_inputs_.size());
     */
 }

@@ -15,6 +15,7 @@
 #include "../../../build/proto_gen/reconnect.pb.h"
 
 class TcpConnection;
+// 专注于本地玩家预测
 class ClientPredictionManager
 {
 public:
@@ -37,6 +38,8 @@ public:
 
     void OnAckReceived(const TestAckPackage& ack);
 
+    void OnServerFrame(const FramePackage& pkg);
+    
     void OnCorrection(const ServerCorrection& correction);
 
     // 发起断线重连

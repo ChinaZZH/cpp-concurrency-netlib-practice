@@ -49,6 +49,8 @@ public:
     // 【新增】构建全量快照回复包（只读）
     bool BuildSnapShotReply(uint32_t player_id, SnapshotReply& reply);
     
+    const std::unordered_map<uint32_t, ServerPlayerState>& GetAllPlayersState() const { return players_; }
+    
 private:
     // 内部模拟函数（与客户端完全一致） 
     ServerPlayerState Simulate(const ServerPlayerState& current, const ClientInput& input, uint32_t delta_ms);

@@ -1,6 +1,7 @@
 #include "FrameScheduler.h"
 #include <chrono>
 #include "../../../build/proto_gen/frame_sync.pb.h"
+#include "ServerPlayerManager.h"
 
 // 每隔50毫秒打包一次
  void FrameScheduler::OnTick()
@@ -26,6 +27,16 @@
         //std::cout << "FrameScheduler::OnTick x:=" << newInput->move_x() << " y:=" << newInput->move_y() <<std::endl;
     }
     
+    const auto& allPlayer = serverPlayerMgr_->GetAllPlayersState();
+    for(const auto& [playerId, serverPlayerState] : allPlayer)
+    {
+        PlayerState* playerState = framePkg.add_states();
+        playerState->set_player_id(playerId);
+        playerState->set_x(serverPlayerState.x.Raw());
+        playerState->set_y(serverPlayerState.y.Raw());
+    }
+    
+
     // 4. 序列化并广播
     std::string serialized_pkg;
     if(framePkg.SerializeToString(&serialized_pkg))

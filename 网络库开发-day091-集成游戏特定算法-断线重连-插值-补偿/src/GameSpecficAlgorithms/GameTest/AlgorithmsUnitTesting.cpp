@@ -6,6 +6,7 @@
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
 #include "../FrameSync/ServerPlayerManager.h"
+#include "../FrameSync/RemotePlayerSmoother.h"
 #include <vector>
 #include <cstdint>
 
@@ -187,4 +188,90 @@ void AlgorithmsUnitTesting::TestServerPlayerManger()
     // state.x 应该从 0 变为 2.0（因为 1 * 0.1 * 20 = 2）
     printf("Server pos: %.2f\n", state.x.ToDouble());
     
+}
+
+
+void AlgorithmsUnitTesting::TestRemotePlayerSmoother()
+{
+    RemotePlayerSmoother smoother;
+    {
+        // 单状态测试
+        RemoteStateSnapshot s1; 
+        s1.x = Fixed::FromRaw(0); 
+        s1.y = Fixed::Zero(); 
+        s1.timeStamp_ms = 100; 
+        s1.valid = true;
+
+        
+        smoother.PushState(s1);
+        bool ready = smoother.IsReady(); // 应为 false（只有 prev_）
+        if(ready)
+        {
+            std::cout << "[FAIL] One RemotePlayerSmoother test." << std::endl;
+        }
+        else{
+            std::cout << "[PASS] One RemotePlayerSmoother test." << std::endl;
+        }
+    }
+        
+
+    // 双状态测试：
+    {
+        RemoteStateSnapshot s2; 
+        s2.x = Fixed::FromRaw(100); 
+        s2.y = Fixed::Zero(); 
+        s2.timeStamp_ms = 200; 
+        s2.valid = true;
+
+        smoother.PushState(s2);
+        bool ready = smoother.IsReady(); // 应为 true（prev_ 和 next_ 都有）
+         if(ready)
+        {
+            std::cout << "[PASS] two RemotePlayerSmoother test." << std::endl;
+        }
+        else{
+            std::cout << "[FAIL] two RemotePlayerSmoother test." << std::endl;
+        }
+    }
+
+        
+
+    {
+     
+        // 此时 prev_ 应为 s2 (x=100)，next_ 应为 s3 (x=200)
+        RemoteStateSnapshot s3; 
+        s3.x = Fixed::FromRaw(200); 
+        s3.y = Fixed::Zero(); 
+        s3.timeStamp_ms = 300; 
+        s3.valid = true;
+        smoother.PushState(s3);
+           
+        auto render = smoother.GetRenderState(250); // 时间在 100~200 之间
+        // 理论上 render.x 应接近 50（因为 t=0.5，100*0.5=50）
+        std::cout << "reader.x must be 150 ,got :=" << render.x.Raw() << std::endl;
+    }
+
+    
+    {
+        // 应返回 prev_ (x=0)
+        auto render_before = smoother.GetRenderState(50);  // 早于 prev_
+        if(0 == render_before.x.Raw())
+        {
+            std::cout << "[PASS] render_before test." << std::endl;
+        }
+        else{
+            std::cout << "[FAIL] render_before test." << std::endl;
+        }
+
+        // 应返回 next_ (x=200)
+        Fixed expected = Fixed::FromRaw(200); 
+        auto render_after = smoother.GetRenderState(350);  // 晚于 next_
+        if(expected.Raw() == render_after.x.Raw())
+        {
+            std::cout << "[PASS] render_before test." << std::endl;
+        }else{
+            std::cout << "[FAIL] render_after test x:=." << render_after.x.Raw() << std::endl;
+        }
+            
+    }
 }

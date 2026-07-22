@@ -4,12 +4,18 @@
 #include <atomic>
 #include "InputBuffer.h"
 
-class FrameScheduler {
+class ServerPlayerManager;
+
+class FrameScheduler 
+{
 public:
     using BroadcastCallback = std::function<void(const std::string& serialized_pkg)>;
 
-    FrameScheduler(InputBuffer* inputBuffer, BroadcastCallback broadcastCallback)
-        : buffer_(inputBuffer), current_frame_index_(1), broadcastCallback_(broadcastCallback) 
+    FrameScheduler(InputBuffer* inputBuffer, ServerPlayerManager* serverPlayerMgr, BroadcastCallback broadcastCallback)
+        : buffer_(inputBuffer)
+        , serverPlayerMgr_(serverPlayerMgr)
+        , current_frame_index_(1)
+        , broadcastCallback_(broadcastCallback) 
         {
 
         }
@@ -24,6 +30,7 @@ private:
 
 private:
     InputBuffer* buffer_;
+    ServerPlayerManager* serverPlayerMgr_;
     std::atomic<uint32_t> current_frame_index_;
     BroadcastCallback broadcastCallback_;
 };

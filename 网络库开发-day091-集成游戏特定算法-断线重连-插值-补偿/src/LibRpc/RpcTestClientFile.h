@@ -12,10 +12,11 @@
 #include "../../build/proto_gen/add.pb.h"
 #include "../../build/proto_gen/aoi.pb.h"
 #include "../../build/proto_gen/frame_sync.pb.h"
-#include "../GameSpecficAlgorithms/FrameSync/ClientInputSender.h"
 #include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
 #include "../GameSpecficAlgorithms/GameClient/ClientEntityMgr.h"
 #include "../GameSpecficAlgorithms/FrameSync/ClientPredictionManager.h"
+#include "../GameSpecficAlgorithms/FrameSync/RemotePlayerSmoother.h"
+#include "../GameSpecficAlgorithms/FrameSync/RemotePlayerManager.h"
 
 #include <iostream>
 #include <chrono>
@@ -559,8 +560,9 @@ void test_game_server_frame_sync() {
     
 
     int defaultPlayerID = 1;
+    RemotePlayerManager remotePlayerMgr;
     ClientPredictionManager clientFrame(defaultPlayerID, nullptr);
-    client->SetMessageCallBack([rpcPtr, defaultPlayerID, &clientFrame](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+    client->SetMessageCallBack([rpcPtr, defaultPlayerID, &clientFrame, &remotePlayerMgr](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
         switch(msgType)
         {
             case GSMT_ServerCorrection:
@@ -619,18 +621,23 @@ void test_game_server_frame_sync() {
                 }
 
                
-                 if(frame.inputs_size() > 0)
+                if(frame.inputs_size() > 0)
 			    {
-                    /*
-				    std::cout << "OnMessage ServerFramePackage recvClientId:=" << response.msg_client_id() << std::endl;
-					std::cout << std::endl << "frame_index:=" << frame.frame_index() << " timeStamp:=" << frame.timestamp_ms() << std::endl;
-					for(int i = 0; i < frame.inputs_size(); ++i)
-					{
-						const ClientInput& input = frame.inputs(i);
-						std::cout << "player_index:=" << input.player_id() << " x:=" << input.move_x() << " y:=" << input.move_y() << std::endl;
-					}
-                    */
+                   clientFrame.OnServerFrame(frame);
 			    }
+
+                uint64_t server_timeStamp_ms = frame.timestamp_ms();
+                for(auto& state : frame.states())
+                {
+                    if(defaultPlayerID == state.player_id())
+                    {
+                        continue;
+                    }
+
+                    Fixed x = Fixed::FromRaw(state.x());
+                    Fixed y = Fixed::FromRaw(state.y());
+                    remotePlayerMgr.UpdateRemoteState(state.player_id(), x, y, server_timeStamp_ms);
+                }
             }
             break;
                 
@@ -740,10 +747,6 @@ void test_game_server_reconnection() {
     // 创建 TcpClient 和 RpcClient
     auto client = std::make_shared<TcpClient>(&loop, "127.0.0.1", 8888);
     auto rpcClient = std::make_shared<RpcClient>(nullptr);
-
-    // 用于等待连接建立的同步
-    //std::mutex mtx;
-    //std::condition_variable cv;
     std::atomic<bool> connected = false;
 
     int defaultPlayerID = 1;

@@ -102,8 +102,12 @@ void GameServer::Start()
      {
         input_buffer_ = std::make_unique<InputBuffer>();
 
+         server_player_mgr_ = std::make_unique<ServerPlayerManager>([this](uint32_t playerId, const std::string& data){
+            this->SendMessage(playerId, data, GSMT_ServerCorrection);
+        });
+
         // 每帧50毫秒，相当于20fps
-        frame_scheduler_ = std::make_unique<FrameScheduler>(input_buffer_.get(), [this](const std::string& serialized_pkg){
+        frame_scheduler_ = std::make_unique<FrameScheduler>(input_buffer_.get(), server_player_mgr_.get(), [this](const std::string& serialized_pkg){
             for(auto& [entityId, tcpConnection] : onServerConnections_)
             {
                 ServerFramePackage serverFrame;
@@ -115,12 +119,7 @@ void GameServer::Start()
             }
         }); 
 
-        
-        server_player_mgr_ = std::make_unique<ServerPlayerManager>([this](uint32_t playerId, const std::string& data){
-            this->SendMessage(playerId, data, GSMT_ServerCorrection);
-        });
 
-        // 后面优化定时器，不用开frame_broadcast_thread_ 这个线程处理，直接用定时器来处理。
         frame_broadcast_thread_ = std::make_unique<std::thread>([this](){
             uint32_t logicTickCount = 0;
             while(false == stop_frame_scheduler_flag_.load(std::memory_order_acquire))
