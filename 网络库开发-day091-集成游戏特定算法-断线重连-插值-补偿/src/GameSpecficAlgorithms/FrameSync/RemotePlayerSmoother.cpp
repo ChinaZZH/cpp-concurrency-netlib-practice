@@ -23,7 +23,7 @@ void RemotePlayerSmoother::PushState(const RemoteStateSnapshot& newState)
     if(prev_.valid && false == next_.valid)
     {
         // 如果新状态时间戳大于 prev_，则作为 next_ 存储
-        if(newState.timeStamp_ms > prev_.timeStamp_ms)
+        if(newState.server_frame > prev_.server_frame)
         {
             next_ = newState;
             next_.valid = true;
@@ -42,13 +42,13 @@ void RemotePlayerSmoother::PushState(const RemoteStateSnapshot& newState)
     if(prev_.valid && next_.valid)
     {
          // 如果新状态时间戳大于 next_，则滑动窗口：prev = next, next = new
-        if(newState.timeStamp_ms > next_.timeStamp_ms)
+        if(newState.server_frame > next_.server_frame)
         {
             prev_ = next_;
             next_ = newState;
            // std::cout << "RemotePlayerSmoother::PushState 2222 x:=" << next_.x.Raw() <<  std::endl;
         }
-        else if(newState.timeStamp_ms > prev_.timeStamp_ms){
+        else if(newState.server_frame > prev_.server_frame){
             // 如果新状态时间戳小于 next_ 但大于 prev_，则替换 next_（更好的一步到位）
             next_ = newState;
            // std::cout << "RemotePlayerSmoother::PushState 333 x:=" << next_.x.Raw() <<  std::endl;
@@ -80,7 +80,7 @@ Fixed RemotePlayerSmoother::Lerp(Fixed a, Fixed b, float t) const
 
 
 // 2. 获取用于渲染的插值状态（由渲染循环调用）
-RemoteStateSnapshot RemotePlayerSmoother::GetRenderState(uint64_t now_ms) const
+RemoteStateSnapshot RemotePlayerSmoother::GetRenderState(uint32_t render_frame) const
 {
     // 如果双缓冲无效，返回空状态
     if(false == prev_.valid || false == next_.valid)
@@ -92,7 +92,7 @@ RemoteStateSnapshot RemotePlayerSmoother::GetRenderState(uint64_t now_ms) const
     }
 
     // 如果当前时间早于 prev_ 时间，返回 prev_
-    if(now_ms < prev_.timeStamp_ms)
+    if(render_frame < prev_.server_frame)
     {
         RemoteStateSnapshot empty;
         empty.valid = false;
@@ -101,7 +101,7 @@ RemoteStateSnapshot RemotePlayerSmoother::GetRenderState(uint64_t now_ms) const
     }
 
     // 如果两个状态时间戳相同，直接返回 prev_
-    if(prev_.timeStamp_ms == next_.timeStamp_ms)
+    if(prev_.server_frame == next_.server_frame)
     {
         return prev_;
     }
@@ -110,22 +110,22 @@ RemoteStateSnapshot RemotePlayerSmoother::GetRenderState(uint64_t now_ms) const
 
     // 如果当前时间晚于 next_ 时间，返回 next_（或继续插值到未来，但会超出范围）
     // 一般做法：如果 now > next，则 t > 1，直接返回 next_。
-    if(now_ms > next_.timeStamp_ms)
+    if(render_frame > next_.server_frame)
     {
         //std::cout << "RemotePlayerSmoother::GetRenderState 333 x:=" << next_.x.ToFloat() <<  std::endl;
         return next_;
     }
 
     // 计算插值因子 t = (now - prev_time) / (next_time - prev_time)
-    uint64_t total_time_diff = next_.timeStamp_ms - prev_.timeStamp_ms;
-    uint64_t time_since_prev = now_ms - prev_.timeStamp_ms;
-    float fPercent = static_cast<float>(time_since_prev) / static_cast<float>(total_time_diff);
+    uint32_t total_frame_diff = next_.server_frame - prev_.server_frame;
+    uint32_t frame_since_prev = render_frame - prev_.server_frame;
+    float fPercent = static_cast<float>(frame_since_prev) / static_cast<float>(total_frame_diff);
 
     // 执行插值
     RemoteStateSnapshot result;
     result.x = Lerp(prev_.x, next_.x, fPercent);
     result.y = Lerp(prev_.y, next_.y, fPercent);
-    result.timeStamp_ms = now_ms;
+    result.server_frame = render_frame;
     result.valid = true;
 
     return result;

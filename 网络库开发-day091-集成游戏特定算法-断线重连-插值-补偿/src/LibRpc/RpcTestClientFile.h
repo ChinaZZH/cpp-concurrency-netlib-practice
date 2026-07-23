@@ -626,7 +626,7 @@ void test_game_server_frame_sync() {
                    clientFrame.OnServerFrame(frame);
 			    }
 
-                uint64_t server_timeStamp_ms = frame.timestamp_ms();
+                uint64_t server_frame_index = frame.frame_index();
                 for(auto& state : frame.states())
                 {
                     if(defaultPlayerID == state.player_id())
@@ -636,7 +636,7 @@ void test_game_server_frame_sync() {
 
                     Fixed x = Fixed::FromRaw(state.x());
                     Fixed y = Fixed::FromRaw(state.y());
-                    remotePlayerMgr.UpdateRemoteState(state.player_id(), x, y, server_timeStamp_ms);
+                    remotePlayerMgr.UpdateRemoteState(state.player_id(), x, y, server_frame_index);
                 }
             }
             break;

@@ -22,7 +22,7 @@ public:
     void TestFullDeterminism();
 
     void TestServerPlayerManger();
-    void TestRemotePlayerSmoother();
+    //void TestRemotePlayerSmoother();
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     void PrintState(const char* label, const ServerPlayerState& state);

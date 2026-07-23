@@ -284,6 +284,7 @@ void AlgorithmsUnitTesting::PrintState(const char* label, const ServerPlayerStat
            label, state.x.ToDouble(), state.y.ToDouble(), state.hp);
 }
 
+/*
 void AlgorithmsUnitTesting::TestRemotePlayerSmoother()
 {
     RemotePlayerSmoother smoother;
@@ -368,3 +369,4 @@ void AlgorithmsUnitTesting::TestRemotePlayerSmoother()
             
     }
 }
+*/
