@@ -58,6 +58,8 @@ public:
 
     bool OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
 
+    bool OnFrameAttackRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
     void SetHp(int entityId, int64_t newHp);
 
 private:

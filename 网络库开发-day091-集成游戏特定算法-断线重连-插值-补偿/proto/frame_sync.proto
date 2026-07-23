@@ -64,3 +64,25 @@ message ServerCorrection {
     // 可选：速度、朝向等，按需添加
 }
 
+// 客户端发起攻击的消息
+message AttackRequest
+{
+    uint32 player_id = 1;
+    uint32 server_frame_index = 2;     // 客户端预测帧号（用于延迟补偿）
+    uint32 target_id = 3;       // 攻击目标玩家 ID（可选）
+    int64  dir_x = 4;           // 攻击方向（如果是自由瞄准）
+    int64  dir_y = 5;
+
+    uint32 skill_id = 6;        // 使用的技能 ID（0 表示普通攻击）
+}
+
+
+
+// 攻击后的结果
+message HitResult {
+    uint32 attacker_id = 1;
+    uint32 target_id = 2;
+    uint32 damage = 3;
+    bool hit = 4;               // true=命中，false=未命中
+    uint32 frame_index = 5;     // 回显帧号，用于客户端日志
+}

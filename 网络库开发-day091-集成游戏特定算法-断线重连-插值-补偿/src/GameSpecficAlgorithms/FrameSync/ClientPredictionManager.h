@@ -48,6 +48,9 @@ public:
     // 接受断线重连的回复的全量快照
     void ApplySnapshot(const SnapshotReply& reply);
 
+    // 发起攻击
+    void SendAttack(uint32_t target_id, float dirX, float dirY, uint32_t skill_id = 0);
+
 private:
     // 模拟函数：根据输入更新状态（先用简单移动）
     void Simulate(const ClientInput& input, float delta_ms);
@@ -69,5 +72,7 @@ private:
     std::map<uint32_t, ClientInput> pending_inputs_;
 
     SnapshotStorage snapshots_;  // 新增
+
+    uint32_t server_frame_index_ = 0;
 };
 

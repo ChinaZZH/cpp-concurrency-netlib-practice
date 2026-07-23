@@ -20,6 +20,9 @@ enum GameServerMsgType
     GSMT_FrameSyncAckPackage = 23,
     GSMT_FrameSyncAddPlayer  = 24,
     GSMT_FrameSyncRemovePlayer = 25,
+
     GSMT_ServerCorrection    = 26,
     GSMT_FrameReconnect      = 27,   
+    GSMT_FrameAttackRequest  = 28,
+    GSMT_FrameHitResult      = 29,
 };

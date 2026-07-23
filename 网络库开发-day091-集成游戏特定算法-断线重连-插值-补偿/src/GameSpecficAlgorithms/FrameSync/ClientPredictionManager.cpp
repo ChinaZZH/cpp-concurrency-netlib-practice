@@ -152,6 +152,7 @@ void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
 {
     uint32_t acked_client_frame = ack.acked_client_frame();
     uint32_t server_frame_index = ack.server_frame();
+    server_frame_index_ = server_frame_index;
 
     // 【新增】如果确认的帧远落后于当前帧，触发回滚（模拟矫正）
     if(current_client_frame_ - acked_client_frame > 5)
@@ -184,8 +185,10 @@ void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
 
 void ClientPredictionManager::OnServerFrame(const FramePackage& pkg)
 {
-    uint32_t server_client_frame = pkg.frame_index();
+    uint32_t server_frame_index = pkg.frame_index();
     uint64_t timestamp_ms = pkg.timestamp_ms();
+
+    server_frame_index_ = server_frame_index;
 
     bool bQueryFlag = false;
     uint32_t acked_client_frame = 0;
@@ -338,4 +341,30 @@ void ClientPredictionManager::ApplySnapshot(const SnapshotReply& reply)
 
     snapshots_.Clear();
     pending_inputs_.clear();
+
+    server_frame_index_ = reply.server_frame_index();
+}
+
+
+// 发起攻击
+void ClientPredictionManager::SendAttack(uint32_t target_id, float dirX, float dirY, uint32_t skill_id /*= 0*/)
+{
+    if(nullptr == tcp_conn_)
+    {
+        return ;
+    }
+
+    Fixed fixedX(dirX);
+    Fixed fixedY(dirY);
+
+    AttackRequest request;
+    request.set_player_id(local_player_id_);
+    request.set_server_frame_index(server_frame_index_);
+    request.set_target_id(target_id);
+    request.set_dir_x(fixedX.Raw());
+    request.set_dir_y(fixedY.Raw());
+    request.set_skill_id(skill_id);
+
+    std::string data = std::move(LengthAndTypePrefixDecoder::MakeRequestString(request.SerializeAsString(), GSMT_FrameAttackRequest));
+    tcp_conn_->Send(data);
 }

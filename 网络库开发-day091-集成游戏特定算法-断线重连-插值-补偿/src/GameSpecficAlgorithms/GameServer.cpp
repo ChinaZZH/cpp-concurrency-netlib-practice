@@ -68,7 +68,12 @@ void GameServer::Start()
     RegisterHandler(GSMT_FrameClientInput, std::bind(&GameServer::FrameClientInput, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_FrameSyncAddPlayer, std::bind(&GameServer::OnFrameSyncAddPlayer, this, std::placeholders::_1, std::placeholders::_2));
     RegisterHandler(GSMT_FrameSyncRemovePlayer, std::bind(&GameServer::OnFrameSyncRemovePlayer, this, std::placeholders::_1, std::placeholders::_2));
+    
+    // 帧同步 断线重连
     RegisterHandler(GSMT_FrameReconnect, std::bind(&GameServer::OnFrameReconnect, this, std::placeholders::_1, std::placeholders::_2));
+
+    // 帧同步 补偿
+    RegisterHandler(GSMT_FrameAttackRequest, std::bind(&GameServer::OnFrameAttackRequest, this, std::placeholders::_1, std::placeholders::_2));
 
     // 设置分区线程池个数
     //std::cout << "GameServer::Start  22222" << std::endl;
@@ -482,6 +487,107 @@ bool GameServer::OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_conne
     
     return true;
 }
+
+/*
+消除网络延迟带来的“瞄准偏差”：玩家在客户端看到目标在位置 A，开了一枪。但等这个攻击包到达服务器时，
+
+目标可能已经跑到位置 B。用历史位置判定，能让子弹打在“玩家看到的位置”上。
+
+提升射击手感：这是 FPS 和 MOBA 游戏的标准做法（如《CS:GO》的 cl_interp 机制、《英雄联盟》的技能判定）。
+*/
+
+ bool GameServer::OnFrameAttackRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+ {
+    AttackRequest req;
+    if(!req.ParseFromString(strParamData))
+    {
+        throw std::runtime_error("GameServer::OnFrameAttackRequest parse ClientInput failed");
+    }
+
+    uint32_t player_id = req.player_id();
+    uint32_t server_frame_index = req.server_frame_index();
+    uint32_t target_id = req.target_id();
+
+    // 将定点数原始值还原为 Fixed 对象
+    Fixed dir_x = Fixed::FromRaw(req.dir_x());
+    Fixed dir_y = Fixed::FromRaw(req.dir_y());
+
+    uint32_t skill_id = req.skill_id();
+    
+    // ================================================================
+    // 1. 获取攻击者的历史位置（自身位置）
+    // ================================================================
+    ServerPlayerState attacker_state;
+    bool attacer_found = server_player_mgr_->GetHistoryByServerFrame(player_id, server_frame_index, attacker_state);
+    if(!attacer_found)
+    {
+        // 如果攻击者自身的历史也查不到（极端情况：帧号太旧），使用实时位置
+        server_player_mgr_->GetPlayerState(player_id, attacker_state);
+        printf("[Server] Attacker history not found, using real-time position.\n");
+    }
+
+    // ================================================================
+    // 2. 获取目标的历史位置（关键：延迟补偿）
+    // ================================================================
+    ServerPlayerState target_state;
+    bool target_found = server_player_mgr_->GetHistoryByServerFrame(target_id, server_frame_index, target_state);
+    if(!target_found)
+    {
+        // 如果攻击者自身的历史也查不到（极端情况：帧号太旧），使用实时位置
+        server_player_mgr_->GetPlayerState(target_id, target_state);
+        printf("[Server] Target history not found, using real-time position.\n");
+    }
+
+    // ================================================================
+    // 3. 碰撞检测（使用历史位置）
+    // ================================================================
+    bool hit = false;
+    Fixed attack_range = Fixed::FromRaw(5000);  // 攻击范围（示例：约 0.0045 单位，实际值根据游戏调）
+
+    // 计算攻击者到目标的距离
+    Fixed dx = target_state.x - attacker_state.x;
+    Fixed dy = target_state.y - attacker_state.y;
+    Fixed dist_sq = dx * dx + dy * dy;          // 距离平方（避免开方）
+
+    // 攻击范围平方
+    Fixed range_sq = attack_range * attack_range;
+
+    if (dist_sq <= range_sq) {
+        hit = true;
+        printf("[Server] HIT! Attacker %u hit target %u at frame %u\n",
+               player_id, target_id, server_frame_index);
+    } else {
+        printf("[Server] MISS. Distance=%.2f, Range=%.2f\n",
+               FixedMath::FixedSqrt(dist_sq).ToDouble(), attack_range.ToDouble());
+    }
+
+    // ================================================================
+    // 4. 下发命中结果（给攻击者和被攻击者）
+    // ================================================================
+    if (hit) {
+        // 构造命中消息（假设有 HitResult 协议）
+        HitResult result;
+        result.set_attacker_id(player_id);
+        result.set_target_id(target_id);
+        result.set_damage(10);  // 示例伤害
+        result.set_hit(true);
+
+        std::string data;
+        result.SerializeToString(&data);
+
+        // 发给攻击者
+        std::string strData;
+        result.SerializeToString(&strData);
+        this->SendMessage(player_id, strData, GSMT_FrameReconnect);
+
+        // 发给被攻击者
+        this->SendMessage(target_id, strData, GSMT_FrameReconnect);
+    }
+
+
+    return true;
+ }
+
 
 void GameServer::SetHp(int entityId, int64_t newHp)
 {

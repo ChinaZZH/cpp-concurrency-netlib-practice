@@ -3,6 +3,7 @@
 #include <iostream>
 #include <chrono>
 #include <memory>
+#include "../FrameSync/ServerPlayerManager.h"
 
 //class AOIManager;
 class CrossListAOI;
@@ -24,5 +25,5 @@ public:
     void TestRemotePlayerSmoother();
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
-    
+    void PrintState(const char* label, const ServerPlayerState& state);
 };

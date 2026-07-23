@@ -18,7 +18,7 @@
         std::chrono::system_clock::now().time_since_epoch()).count());
 
     FramePackage framePkg;
-    framePkg.set_frame_index(server_frame_index);
+    framePkg.set_frame_index(serverPlayerMgr_->GetServerFrameIndex());
     framePkg.set_timestamp_ms(currentTime);
     for(auto& input : inputs) 
     {

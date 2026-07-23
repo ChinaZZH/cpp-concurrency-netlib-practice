@@ -27,7 +27,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestRemotePlayerSmoother();
+    gameAlgorighm.TestServerPlayerManger();
     return 0;
 }
 

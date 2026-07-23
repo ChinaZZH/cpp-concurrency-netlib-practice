@@ -20,4 +20,6 @@ message SnapshotReply
     int64 vy    = 6;
     uint32 hp   = 7;
     int32 state = 8;        // 待机/跑动/攻击等
+
+    uint32 server_frame_index = 9;        //当前的服务端帧号
 }

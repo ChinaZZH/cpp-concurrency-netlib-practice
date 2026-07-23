@@ -172,24 +172,117 @@ void AlgorithmsUnitTesting::TestFullDeterminism() {
 
 void AlgorithmsUnitTesting::TestServerPlayerManger()
 {
-    
-    ServerPlayerManager mgr(nullptr);
-    mgr.AddPlayer(1);
+    // 测试案例1
+    {
+        ServerPlayerManager mgr(nullptr);
+        mgr.AddPlayer(1);
 
     
-    ClientInput input;
-    input.set_move_x(1);
-    mgr.SumbitInput(1, input);
+        ClientInput input;
+        input.set_move_x(1);
+        mgr.SumbitInput(1, input);
 
-    mgr.Tick(20);
+        mgr.Tick(20);
 
-    ServerPlayerState state;
-    mgr.GetPlayerState(1, state);
-    // state.x 应该从 0 变为 2.0（因为 1 * 0.1 * 20 = 2）
-    printf("Server pos: %.2f\n", state.x.ToDouble());
+        ServerPlayerState state;
+        mgr.GetPlayerState(1, state);
+        // state.x 应该从 0 变为 2.0（因为 1 * 0.1 * 20 = 2）
+        printf("Server pos: %.2f\n", state.x.ToDouble());
+    }
     
+
+    // 测试样例2
+    {
+        printf("=== Step 1 History Storage Test ===\n\n");
+        ServerPlayerManager mgr(nullptr);
+        mgr.AddPlayer(1);
+
+        // 2. 手动构造三次 Tick 的输入
+        //   Tick 1: client_frame = 10, 向右移动 (move_x = 1)
+        ClientInput input1;
+        input1.set_player_id(1);
+        input1.set_frame_index(10);
+        input1.set_move_x(1);
+        input1.set_move_y(0);
+        input1.set_predicted_x(0);  // 占位，不影响服务端模拟
+        input1.set_predicted_y(0);
+        mgr.SumbitInput(1, input1);
+        mgr.Tick(20);  // Tick 1: 消费 input1，位置从 0 -> 2.0
+
+        //    Tick 2: client_frame = 11, 继续向右移动
+        ClientInput input2;
+        input2.set_player_id(1);
+        input2.set_frame_index(11);
+        input2.set_move_x(1);
+        input2.set_move_y(0);
+        mgr.SumbitInput(1, input2);
+        mgr.Tick(20);  // Tick 2: 消费 input2，位置从 2.0 -> 4.0
+
+        mgr.Tick(20);  // Tick 3: 空输入，位置保持 4.0（假设无惯性）
+
+        // 4. 查询历史：按 client_frame = 11 查询
+        printf("\n--- Querying History ---\n");
+        ServerPlayerState found_state;
+        bool found = mgr.GetHistoryByServerFrame(1, 11, found_state);
+
+        if(found) {
+            PrintState("Found state for client_frame=11", found_state);
+            // 预期：经过两次 Tick，位置应为 4.0
+            assert(found_state.x.ToDouble() == 4.0);
+            assert(found_state.y.ToDouble() == 0.0);
+            printf("✅ client_frame=11 query PASSED.\n");
+        } else {
+            printf("❌ client_frame=11 query FAILED (not found).\n");
+            return ;
+        }
+
+
+        // 5. 查询一个不存在的 client_frame（例如 99），应返回 false
+        printf("\n--- Querying Non-existent Frame ---\n");
+        ServerPlayerState dummy;
+        bool not_found = mgr.GetHistoryByServerFrame(1, 99, dummy);
+        if (!not_found) {
+            printf("✅ client_frame=99 query correctly returned false.\n");
+        } else {
+            printf("❌ client_frame=99 query incorrectly returned true.\n");
+            return ;
+        }
+
+
+        // 6. 查询 client_frame = 10（第一次 Tick 的状态），验证是否能找到
+        printf("\n--- Querying client_frame=10 ---\n");
+        ServerPlayerState state10;
+        bool found10 = mgr.GetHistoryByServerFrame(1, 10, state10);
+        if (found10) {
+            PrintState("Found state for client_frame=10", state10);
+            // 预期：第一次 Tick 后位置应为 2.0
+            assert(state10.x.ToDouble() == 2.0);
+            printf("✅ client_frame=10 query PASSED.\n");
+        } else {
+            printf("❌ client_frame=10 query FAILED.\n");
+            return ;
+        }
+
+
+        // 7. 查询 client_frame = 0（空输入帧），应返回 false（因为查询条件跳过 0）
+        printf("\n--- Querying client_frame=0 (should skip) ---\n");
+        bool found0 = mgr.GetHistoryByServerFrame(1, 0, dummy);
+        if (!found0) {
+            printf("✅ client_frame=0 correctly skipped.\n");
+        } else {
+            printf("❌ client_frame=0 should be skipped but returned true.\n");
+            return ;
+        }
+
+        printf("\n=== All Step 1 Tests PASSED ===\n");
+    }
 }
 
+// 辅助：打印定点数
+void AlgorithmsUnitTesting::PrintState(const char* label, const ServerPlayerState& state) {
+    printf("%s: pos=(%.2f, %.2f), hp=%u\n", 
+           label, state.x.ToDouble(), state.y.ToDouble(), state.hp);
+}
 
 void AlgorithmsUnitTesting::TestRemotePlayerSmoother()
 {

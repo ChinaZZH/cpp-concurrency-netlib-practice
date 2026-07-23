@@ -2,6 +2,7 @@
 
 ServerPlayerManager::ServerPlayerManager(SendCorrectionCallback cb)
 :send_correction_cb_(cb)
+,server_frame_index_(0)
 {
     
 }
@@ -83,6 +84,8 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
     inputs.swap(pending_inputs_);
     
 
+    server_frame_index_ += 1;
+
     // 遍历所有玩家
     for(auto& [player_id, playerState] : players_)
     {
@@ -95,7 +98,10 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
         if(itr != inputs.end())
         {
             hasPrediction = true;
-            input = (itr->second).input;
+            auto& clientInput = (itr->second).input;
+            clientInput.set_frame_index(server_frame_index_);
+
+            input = clientInput;
             clientFrame = (itr->second).client_frame;
             predictedX = Fixed::FromRaw(input.predicted_x());
             predictedY = Fixed::FromRaw(input.predicted_y());
@@ -104,7 +110,7 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
         {
              // 空输入：所有操作归零
             input.set_player_id(player_id);
-            input.set_frame_index(0);
+            input.set_frame_index(server_frame_index_); // 服务端帧号，客户端帧号走client_seq
             input.set_move_x(0);
             input.set_move_y(0);
             input.set_attack(false);
@@ -114,6 +120,10 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
         // ===== 2. 执行权威模拟 =====
         ServerPlayerState oldPlayerState = playerState;
         playerState = Simulate(playerState, input, delta_ms);
+        
+        // 有客户端输入才去记录。
+        this->PushHistory(player_id, clientFrame, server_frame_index_, playerState);
+        
 
         if(nullptr == send_correction_cb_)
         {
@@ -172,7 +182,7 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
 
 
 
-// 【新增】构建全量快照回复包（只读）
+// 构建全量快照回复包（只读）
 bool ServerPlayerManager::BuildSnapShotReply(uint32_t player_id, SnapshotReply& reply)
 {
     auto itr = players_.find(player_id);
@@ -181,20 +191,10 @@ bool ServerPlayerManager::BuildSnapShotReply(uint32_t player_id, SnapshotReply& 
         return false;
     }
 
-    ServerPlayerState playerState = (itr->second);
-    {
-        auto itr_input = pending_inputs_.find(player_id);
-        if(itr_input != pending_inputs_.end())
-        {
-            const ClientInput& input = (itr_input->second).input;
-            playerState = Simulate(playerState, input, 20);
-            pending_inputs_.erase(itr_input);
-        }
-    }
-    
-    
+    ServerPlayerState playerState = (itr->second);    
     reply.set_player_id(player_id);
     reply.set_client_frame_hint(0);
+    reply.set_server_frame_index(server_frame_index_);
     reply.set_x(playerState.x.Raw());
     reply.set_y(playerState.y.Raw());
     reply.set_vx(playerState.vx.Raw());
@@ -202,4 +202,36 @@ bool ServerPlayerManager::BuildSnapShotReply(uint32_t player_id, SnapshotReply& 
     reply.set_hp(playerState.hp);
     reply.set_state(playerState.state);
     return true;
+}
+
+
+// 按客户端帧号查询历史状态
+bool ServerPlayerManager::GetHistoryByServerFrame(uint32_t player_id, uint32_t server_frame_index, ServerPlayerState& out)
+{
+    auto itr = histories_.find(player_id);
+    if(itr == histories_.end())
+    {
+        return false;
+    }
+
+    const ServerPlayerManager::PlayerHistory& playerHistory = (itr->second);
+    return playerHistory.FindClientFrame(server_frame_index, out);
+}
+
+
+// 推入历史数据
+void ServerPlayerManager::PushHistory(uint32_t player_id, uint32_t client_frame, uint32_t server_frame, const ServerPlayerState& state)
+{
+    if(server_frame <= 0)
+    {
+        return ;
+    }
+
+    HistoryEntry entry;
+    entry.client_frame = client_frame;
+    entry.server_frame = server_frame;
+    entry.state = state;
+
+    ServerPlayerManager::PlayerHistory& playerHistory = histories_[player_id];
+    playerHistory.Push(entry);
 }
