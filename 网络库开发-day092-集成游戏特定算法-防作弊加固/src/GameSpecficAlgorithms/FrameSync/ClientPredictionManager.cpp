@@ -1,0 +1,370 @@
+#include "ClientPredictionManager.h"
+#include "../../TcpConnection.h"
+#include "../../Decoder/LengthAndTypePrefixDecoder.h"
+#include "../../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
+#include "../../../build/proto_gen/frame_sync.pb.h"
+
+ClientPredictionManager::ClientPredictionManager(uint32_t local_player_id, std::shared_ptr<TcpConnection> tcpConnection)
+: local_player_id_(local_player_id)
+,tcp_conn_(tcpConnection)
+,current_client_frame_(0)
+{
+    // 初始化本地状态为原点
+    local_state_.x = Fixed::Zero();
+    local_state_.y = Fixed::Zero();
+
+    local_state_.vx = Fixed::Zero();
+    local_state_.vy = Fixed::Zero();
+
+    local_state_.state = 0;
+    local_state_.hp = 100; 
+}
+
+
+ClientPredictionManager::~ClientPredictionManager()
+{
+    if(local_player_id_ > 0 && tcp_conn_)
+    {
+        // 发一个removePlayer的数据包
+        FrameSyncRemovePlayer removePlayer;
+        removePlayer.set_player_id(local_player_id_);
+     
+        std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(removePlayer.SerializeAsString(), GSMT_FrameSyncRemovePlayer));
+        tcp_conn_->Send(strContent);
+    }
+}
+
+// 1.处理本地输入: 立即预测，并缓存输入
+void ClientPredictionManager::OnLocalInput(const ClientInput& input)
+{
+    // 分配客户端预测帧号（本地自增）
+    uint32_t predicted_frame = current_client_frame_ + 1; // 下一帧的输入
+
+    // 存储待确认输入（key = 客户端预测帧号）
+    ClientInput copy = input;
+    copy.set_frame_index(predicted_frame);
+    copy.set_client_seq(predicted_frame);
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        pending_inputs_[predicted_frame] = copy; // 存到队列中
+    }
+    
+    std::cout << "predicted_frame: " << predicted_frame << " move_pos=(" << input.move_x() << ", " << input.move_y() << " )" << std::endl;
+}
+
+
+// 2. 每帧 Tick：推进帧号 → 取输入 → 模拟 → 保存快照 → 发数据
+void ClientPredictionManager::Tick(uint32_t delta_ms)
+{
+    // 2.1 推进帧号
+    current_client_frame_ += 1;
+
+    // 2.2 从队列中取这一帧的输入（如果没有，就构造空输入）
+    bool bQuery = false;
+
+     // 空输入
+    ClientInput input;
+    input.set_player_id(local_player_id_);
+    input.set_frame_index(current_client_frame_);
+    input.set_move_x(0);
+    input.set_move_y(0);
+    input.set_attack(false);
+    input.set_skill_id(0);
+    input.set_client_seq(current_client_frame_);
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        auto itr = pending_inputs_.find(current_client_frame_);
+        if(itr != pending_inputs_.end())
+        {
+            input = itr->second;
+            bQuery = true;
+        }
+    }
+    
+
+
+    // 2.3 执行模拟（用 input 更新 state_）
+    Simulate(input, delta_ms);
+
+    //  保存当前帧快照
+    snapshots_.Save(current_client_frame_, local_state_);
+
+   
+     // 2.4 【新增】把这一帧的输入发送给服务端
+    SendToSever(input);
+
+    // 可选：打印日志看效果
+    if (bQuery)
+    {
+        
+       // std::cout << "Frame: " << current_client_frame_ << " pos=(" << local_state_.x.ToFloat() << ", " << local_state_.y.ToFloat() << " )" << std::endl;
+    }
+}
+
+
+// 模拟函数：根据输入更新状态（先用简单移动）
+void ClientPredictionManager::Simulate(const ClientInput& input, float delta_ms)
+{
+    float fSpeed = 0.1f; // 每毫秒移动速度(固定速率)
+    local_state_.x += Fixed(input.move_x() * fSpeed * delta_ms);
+    local_state_.y += Fixed(input.move_y() * fSpeed * delta_ms);
+
+    
+}
+
+// 发送数据给服务端（网络层接口）
+void ClientPredictionManager::SendToSever(const ClientInput& input)
+{
+    // 构造要发送的包，并附上当前预测位置
+    ClientInput packet = input;
+    packet.set_predicted_x(local_state_.x.Raw());
+    packet.set_predicted_y(local_state_.y.Raw());
+
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(packet.SerializeAsString(), GSMT_FrameClientInput));
+    tcp_conn_->Send(strContent); // 使用你的 TcpConnection
+
+    /*
+    printf("  -> Send to server: frame=%d, move=(%d,%d)\n", 
+               input.frame_index(), 
+               input.move_x(), 
+               input.move_y()
+            );
+    */
+            
+}
+
+
+// 测试临时使用
+void ClientPredictionManager::InitTcpConnection(std::shared_ptr<TcpConnection> tcpConnection)
+{
+    tcp_conn_ = (tcpConnection);
+
+     // 发一个addPlayer的数据包
+    FrameSyncAddPlayer addPlayer;
+    addPlayer.set_player_id(local_player_id_);
+     
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(addPlayer.SerializeAsString(), GSMT_FrameSyncAddPlayer));
+    tcp_conn_->Send(strContent);
+}
+
+
+void ClientPredictionManager::OnAckReceived(const TestAckPackage& ack)
+{
+    uint32_t acked_client_frame = ack.acked_client_frame();
+    uint32_t server_frame_index = ack.server_frame();
+    server_frame_index_ = server_frame_index;
+
+    // 【新增】如果确认的帧远落后于当前帧，触发回滚（模拟矫正）
+    if(current_client_frame_ - acked_client_frame > 5)
+    {
+        printf("[Trigger] Ack lag detected! Rolling back to frame %d\n", acked_client_frame);
+        Rollback(acked_client_frame);
+        return;
+    }
+
+    // 2. 清理 pending_inputs_ 中已确认的帧
+    std::lock_guard<std::mutex> lk(mutex_);
+    for(auto itr = pending_inputs_.begin(); itr != pending_inputs_.end(); )
+    {
+        if((itr->first) <= acked_client_frame)
+        {
+            itr = pending_inputs_.erase(itr);   // 小于等于acked_frame 说明已经被消费
+        }
+        else{
+            ++itr;
+        }
+    }
+
+    /*
+    printf("[Client] Ack received: client_frame=%d, server_frame=%d, pending left=%zu\n",
+           acked_client_frame, server_frame_index, pending_inputs_.size());
+    */
+}
+
+
+
+void ClientPredictionManager::OnServerFrame(const FramePackage& pkg)
+{
+    uint32_t server_frame_index = pkg.frame_index();
+    uint64_t timestamp_ms = pkg.timestamp_ms();
+
+    server_frame_index_ = server_frame_index;
+
+    bool bQueryFlag = false;
+    uint32_t acked_client_frame = 0;
+    for(const auto& input : pkg.inputs())
+    {
+        if(input.player_id() == local_player_id_) 
+        {
+            bQueryFlag = true;
+            acked_client_frame = input.client_seq();  // 获取服务端已经确认的客户端帧号。
+            break; 
+        }
+    }
+
+    if(!bQueryFlag)
+    {
+        return;
+    }
+
+    // 【新增】如果确认的帧远落后于当前帧，触发回滚（模拟矫正）
+    if(current_client_frame_ - acked_client_frame > 5)
+    {
+        printf("[Trigger] Ack lag detected! Rolling back to frame %d\n", acked_client_frame);
+        Rollback(acked_client_frame);
+        return;
+    }
+
+    // 2. 清理 pending_inputs_ 中已确认的帧
+    std::lock_guard<std::mutex> lk(mutex_);
+    for(auto itr = pending_inputs_.begin(); itr != pending_inputs_.end(); )
+    {
+        if((itr->first) <= acked_client_frame)
+        {
+            itr = pending_inputs_.erase(itr);   // 小于等于acked_frame 说明已经被消费
+        }
+        else{
+            ++itr;
+        }
+    }
+
+    /*
+    printf("[Client] Ack OnServerFrame: client_frame=%d, server_frame=%d, pending left=%zu\n",
+           acked_client_frame, server_frame_index, pending_inputs_.size());
+    */
+}
+
+
+void ClientPredictionManager::OnCorrection(const ServerCorrection& correction)
+{
+    uint32_t target_frame = correction.client_frame();
+    int64_t authoritative_x = correction.authoritative_x();
+    Fixed ax = Fixed::FromRaw(authoritative_x);
+
+    int64_t authoritative_y = correction.authoritative_y();
+    Fixed ay = Fixed::FromRaw(authoritative_y);
+
+    printf("[Client] Correction: rollback to %u, pos=(%.2f, %.2f)\n",
+           target_frame, ax.ToDouble(), ay.ToDouble());
+
+    // 覆盖快照。
+    PlayerSnapshot snapshot;
+    snapshot.x = ax;
+    snapshot.y = ay;
+    snapshot.current_frame_index = target_frame;
+    
+    // 这些数据后面修改应该从服务端下发下来
+    snapshot.vx = local_state_.vx;
+    snapshot.vy = local_state_.vy;
+    snapshot.state = local_state_.state;
+    snapshot.hp = local_state_.hp;
+    snapshots_.Save(target_frame, snapshot);
+
+
+    local_state_.x = ax;
+    local_state_.y = ay;
+    Rollback(target_frame);
+}
+
+
+void ClientPredictionManager::Rollback(uint32_t target_frame)
+{
+     std::lock_guard<std::mutex> lk(mutex_);
+    // 1. 从快照中恢复状态
+    PlayerSnapshot snapshot;
+    if(!snapshots_.Restore(target_frame, snapshot))
+    {
+        printf("[Rollback] ERROR: frame %d not found in snapshots!\n", target_frame);
+        return;
+    }
+
+    // 2. 重置当前状态到目标帧
+    local_state_ = snapshot;
+    printf("[Rollback] State reset to frame %d: pos=(%.2f, %.2f)\n",
+           target_frame, local_state_.x.ToFloat(), local_state_.y.ToFloat());
+
+
+    // 3. 清理 pending_inputs_ 中 <= target_frame 的输入（它们已被确认）
+    auto itr = pending_inputs_.begin(); 
+    while(itr != pending_inputs_.end() && (itr->first) <= target_frame)
+    {
+        itr = pending_inputs_.erase(itr);   // 小于等于acked_frame 说明已经被消费
+    }
+
+    
+    // 4. 重放所有 > target_frame 的输入（重新模拟）
+    uint32_t replayed_frames = 0;
+    for(; itr != pending_inputs_.end(); ++itr)
+    {
+        auto frame = itr->first;
+
+        // 重新执行模拟（注意：delta_ms 固定为 20）
+        Simulate(itr->second, 20.0f);
+
+        //  保存当前帧快照
+        snapshots_.Save(frame, local_state_);
+
+        replayed_frames++;
+    }
+
+    if (replayed_frames > 0) {
+        printf("[Rollback] Replayed %u frames. New pos=(%.2f, %.2f)\n", 
+               replayed_frames, local_state_.x.ToFloat(), local_state_.y.ToFloat());
+    }
+}
+
+
+void ClientPredictionManager::RequestReconnect()
+{
+    if(local_player_id_ > 0 && tcp_conn_)
+    {
+        ReconnectRequest req;
+        req.set_player_id(local_player_id_);
+
+        std::string data = std::move(LengthAndTypePrefixDecoder::MakeRequestString(req.SerializeAsString(), GSMT_FrameReconnect));
+        tcp_conn_->Send(data);
+        printf("[Client] Reconnect request sent.\n");  
+    }   
+}
+
+
+// 接受断线重连的回复的全量快照
+void ClientPredictionManager::ApplySnapshot(const SnapshotReply& reply)
+{
+    // 对应当前的客户端帧号
+    local_state_.x = Fixed::FromRaw(reply.x());
+    local_state_.y = Fixed::FromRaw(reply.y());
+    local_state_.vx = Fixed::FromRaw(reply.vx());
+    local_state_.vy = Fixed::FromRaw(reply.vy());
+    local_state_.state = reply.state();
+    local_state_.hp = reply.hp();
+
+    snapshots_.Clear();
+    pending_inputs_.clear();
+
+    server_frame_index_ = reply.server_frame_index();
+}
+
+
+// 发起攻击
+void ClientPredictionManager::SendAttack(uint32_t target_id, float dirX, float dirY, uint32_t skill_id /*= 0*/)
+{
+    if(nullptr == tcp_conn_)
+    {
+        return ;
+    }
+
+    Fixed fixedX(dirX);
+    Fixed fixedY(dirY);
+
+    AttackRequest request;
+    request.set_player_id(local_player_id_);
+    request.set_server_frame_index(server_frame_index_);
+    request.set_target_id(target_id);
+    request.set_dir_x(fixedX.Raw());
+    request.set_dir_y(fixedY.Raw());
+    request.set_skill_id(skill_id);
+
+    std::string data = std::move(LengthAndTypePrefixDecoder::MakeRequestString(request.SerializeAsString(), GSMT_FrameAttackRequest));
+    tcp_conn_->Send(data);
+}
