@@ -20,6 +20,7 @@
 
   ## 游戏特定算法
   - [三种aoi算法的性能比对](./docs/aoi_performance_test.md)
+  - [帧同步插值方案对比：帧号 vs 时间戳](./docs/frame_interpolation_comparison.md)
  
 （C++并发基础 → 手写网络库 → monkey解释器和monkey编译器 → 游戏特定算法）
 
