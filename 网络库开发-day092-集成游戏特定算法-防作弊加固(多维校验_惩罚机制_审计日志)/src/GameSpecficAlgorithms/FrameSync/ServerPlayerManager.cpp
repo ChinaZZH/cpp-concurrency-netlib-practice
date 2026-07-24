@@ -1,10 +1,13 @@
 #include "ServerPlayerManager.h"
+#include "../GameServer.h"
+#include "AuditLog.h"
 
 ServerPlayerManager::ServerPlayerManager(SendCorrectionCallback cb)
 :send_correction_cb_(cb)
 ,server_frame_index_(0)
 {
-    
+    audit_logger_ = std::make_shared<AuditLogger>();
+    audit_logger_->Init("logs/anticheat.csv", true);  // // 异步模式
 }
 
  
@@ -29,6 +32,7 @@ void ServerPlayerManager::AddPlayer(uint32_t player_id)
 
     initState.state = 0;
     initState.hp = 100;
+    initState.client_frame = 0;
     players_[player_id] =  initState;
     std::cout << "[Server] Player " << player_id << " registered." << std::endl;
 }
@@ -62,6 +66,7 @@ ServerPlayerState ServerPlayerManager::Simulate(const ServerPlayerState& current
     float fSpeed = 0.1f; // 每毫秒移动速度(固定速率)
     newPlayerState.x += Fixed(input.move_x() * fSpeed * delta_ms);
     newPlayerState.y += Fixed(input.move_y() * fSpeed * delta_ms);
+    newPlayerState.client_frame = input.client_seq();
     return newPlayerState;
 }
 
@@ -71,7 +76,7 @@ void ServerPlayerManager::SumbitInput(uint32_t player_id, const ClientInput& inp
 {
     PendingInput pendingData;
     pendingData.input = input;
-    pendingData.client_frame = input.frame_index();
+    pendingData.client_frame = input.client_seq();
     pending_inputs_[player_id] = pendingData;
 }
 
@@ -124,15 +129,19 @@ void ServerPlayerManager::Tick(uint32_t delta_ms)
         // 有客户端输入才去记录。
         this->PushHistory(player_id, clientFrame, server_frame_index_, playerState);
         
-
+        // 增加校验
+        this->CheckAntiCheat(player_id, playerState, delta_ms, clientFrame);
+        bool bPunishment = this->PunishmentBytViolation(player_id, playerState);
         if(nullptr == send_correction_cb_)
         {
-            std::cout << "[Server] send_correction_cb_ is nullptr.\n";
+            //std::cout << "[Server] send_correction_cb_ is nullptr.\n";
             continue;
         }
 
+        
         // ===== 3. 校验对比（如果客户端有上报预测位置） =====
-        if(hasPrediction)
+        // 已经受到违规惩罚，则不必走这个强制矫正
+        if(false == bPunishment && hasPrediction)
         {
             Fixed dx = playerState.x - predictedX;
             Fixed dy = playerState.y - predictedY;
@@ -191,9 +200,9 @@ bool ServerPlayerManager::BuildSnapShotReply(uint32_t player_id, SnapshotReply& 
         return false;
     }
 
-    ServerPlayerState playerState = (itr->second);    
+    ServerPlayerState playerState = (itr->second);     
     reply.set_player_id(player_id);
-    reply.set_client_frame_hint(0);
+    reply.set_client_frame_hint(playerState.client_frame);
     reply.set_server_frame_index(server_frame_index_);
     reply.set_x(playerState.x.Raw());
     reply.set_y(playerState.y.Raw());
@@ -234,4 +243,246 @@ void ServerPlayerManager::PushHistory(uint32_t player_id, uint32_t client_frame,
 
     ServerPlayerManager::PlayerHistory& playerHistory = histories_[player_id];
     playerHistory.Push(entry);
+}
+
+
+// 判断是否可以攻击，主要用于判断攻击的频率
+bool ServerPlayerManager::CheckAttackTarget(uint32_t player_id, uint32_t server_frame_index, uint32_t target_id)
+{
+    // ===== 1. 攻击频率校验 =====
+    AntiCheatState& acState = anti_cheat_states_[player_id];
+    if(acState.last_attack_frame > 0)
+    {
+        // 发上来的服务端帧号小于当前的服务端帧号，则说明发上来的数据错误
+        uint32_t diff_frame_num = server_frame_index - acState.last_attack_frame;
+        if((server_frame_index < acState.last_attack_frame) || (diff_frame_num < MIN_ATTACK_INTERVAL_FRAMES))
+        {
+            // 技能处于cd时间内，不让攻击
+            acState.violation_count += 1;
+            //printf("[AntiCheat] Player %u attack too frequent! diff=%u, min=%u\n", player_id, diff_frame_num, MIN_ATTACK_INTERVAL_FRAMES);
+            LogViolation(
+                player_id, 
+                "attack_freq", 
+                std::to_string(diff_frame_num), 
+                std::to_string(MIN_ATTACK_INTERVAL_FRAMES),
+                acState.violation_count, 
+                "ignored"
+            );
+
+            return false;
+        }
+    }
+
+
+    acState.last_attack_frame = server_frame_index_;
+    return true;
+}
+
+
+bool ServerPlayerManager::CheckAntiCheat(uint32_t player_id, ServerPlayerState& playerState, uint32_t delta_ms, uint32_t client_frame_index)
+{
+    // 客户端没有发clientInput包上来。
+    if(client_frame_index <= 0)
+    {
+        return true;
+    }
+
+    // 1. 速度校验
+    AntiCheatState& acState = anti_cheat_states_[player_id];
+    if(acState.has_prev_state)
+    {
+        Fixed diff_X = playerState.x - acState.prevState.x;
+        Fixed diff_Y = playerState.y - acState.prevState.y;
+        Fixed sqrtDist = diff_X * diff_X + diff_Y * diff_Y;
+
+        float dist = (GameServer::MAX_MOVE_SPEED / 1000.00f);
+        dist = dist * delta_ms;
+        Fixed maxDist(dist);
+        Fixed maxSqrtDist = (maxDist * maxDist);
+        if(sqrtDist > maxSqrtDist)
+        {
+            acState.violation_count += 1;
+            // 强制拉回
+            playerState.x = acState.prevState.x;
+            playerState.y = acState.prevState.y;
+
+            LogViolation(
+                player_id, 
+                "speed", 
+                std::to_string(FixedMath::FixedSqrt(sqrtDist).ToDouble()), 
+                std::to_string(maxDist.ToDouble()),
+                acState.violation_count, 
+                "correction"
+            );
+        }
+    }
+
+
+    // 3. 帧号连续性校验
+    if(acState.last_client_frame > 0)
+    {
+        // 帧号出错或者跳帧了
+        if(client_frame_index <= acState.last_client_frame || client_frame_index - acState.last_client_frame > 1)
+        {
+            acState.violation_count += 1;
+
+            LogViolation(
+                player_id, 
+                "frame_skip", 
+                std::to_string(client_frame_index), 
+                std::to_string(acState.last_client_frame + 1),
+                acState.violation_count, 
+                "warning"
+            );
+        }
+    }
+
+    // 更新上一个帧号。
+    if(client_frame_index > acState.last_client_frame)
+    {
+        acState.last_client_frame = client_frame_index;
+    }
+
+    acState.prevState = playerState;
+    acState.has_prev_state = true;
+    return true;
+}
+
+
+// 获取并重置违规计数（用于外部模块判断是否触发惩罚）
+uint32_t ServerPlayerManager::GetAndResetViolationCount(uint32_t player_id)
+{
+    auto itr = anti_cheat_states_.find(player_id);
+    if(itr == anti_cheat_states_.end())
+    {
+        return 0;
+    }
+
+    AntiCheatState& acState = (itr->second);
+    uint32_t violationCount = acState.violation_count;
+
+    acState.violation_count = 0;
+    return violationCount;
+}
+
+
+bool ServerPlayerManager::PunishmentBytViolation(uint32_t player_id, const ServerPlayerState& playerState)
+{
+    if(playerState.client_frame <= 0)
+    {
+        return false;
+    }
+
+    auto itr = anti_cheat_states_.find(player_id);
+    if(itr == anti_cheat_states_.end())
+    {
+        return false;
+    }
+
+    // 1. 警告（仅日志，已在 CheckAntiCheat 1 中输出） 无需额外操作
+    bool bPunishment = false;
+    AntiCheatState& acState = (itr->second);
+    uint32_t violation_count = acState.violation_count;
+
+    // 2. 强制矫正（violation_count >= 3）
+    if(violation_count >= VIOLATION_CORRECT_THRESHOLD)
+    {
+        bPunishment = true;
+
+        // 构造矫正包，强制拉回权威位置
+        //printf("[AntiCheat] Player %u corrected (violation count: %u)\n", player_id, violation_count);
+        if(send_correction_cb_)
+        {
+            ServerCorrection correction;
+            correction.set_player_id(player_id);
+            correction.set_client_frame(playerState.client_frame);
+            correction.set_authoritative_x(playerState.x.Raw());
+            correction.set_authoritative_y(playerState.y.Raw());
+
+            std::string strData;
+            correction.SerializeToString(&strData);
+            send_correction_cb_(player_id, strData);
+        }
+
+        LogViolation(
+                player_id, 
+                "penalty_correction", 
+                "", 
+                "",
+                acState.violation_count, 
+                "correction_sent"
+            );
+    }
+
+
+    // 3. 踢出（violation_count >= 5）
+    if(violation_count >= VIOLATION_KICK_THRESHOLD)
+    {
+        bPunishment = true;
+        acState.violation_count = 0; // 重置违规计数，防止重复踢出
+
+        //printf("[AntiCheat] Player %u kicked (violation count: %u)\n", player_id, violation_count);
+        if(kick_callback_)
+        {
+            kick_callback_(player_id);
+        }
+
+        LogViolation(
+                player_id, 
+                "penalty_kick", 
+                "", 
+                "",
+                acState.violation_count, 
+                "kick"
+            );
+    }
+
+
+    // 4. 封禁（violation_count >= 10，可选）
+    if(violation_count >= VIOLATION_BAN_THRESHOLD)
+    {
+        bPunishment = true;
+        acState.violation_count = 0;    // 重置违规计数，防止重复踢出
+
+
+        //printf("[AntiCheat] Player %u banned (violation count: %u)\n", player_id, violation_count);
+        if(ban_callback_)
+        {
+            ban_callback_(player_id);
+        }
+
+        LogViolation(
+                player_id, 
+                "ban_kick", 
+                "", 
+                "",
+                acState.violation_count, 
+                "ban"
+            );
+    }
+
+    return bPunishment;
+}
+
+
+void ServerPlayerManager::LogViolation(uint32_t player_id, const std::string& type,
+                      const std::string& current, const std::string& threshold,
+                      uint32_t count, const std::string& penalty)
+{
+
+    if (!audit_logger_) 
+    {
+        return;
+    }
+
+    AuditEntry entry;
+    entry.timestamp_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    entry.player_id = player_id;
+    entry.violation_type = type;
+    entry.current_value = current;
+    entry.threshold_value = threshold;
+    entry.violation_count = count;
+    entry.penalty_action = penalty;
+
+    audit_logger_->Log(entry);
 }

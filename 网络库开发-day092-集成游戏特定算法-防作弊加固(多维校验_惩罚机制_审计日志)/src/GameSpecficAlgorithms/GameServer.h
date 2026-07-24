@@ -1,6 +1,7 @@
 #pragma once
 #include "../TcpServer.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <functional>
 #include <string>
 #include <fstream>
@@ -38,8 +39,10 @@ public:
 
     void RegisterHandler(GameServerMsgType msgType, GameHandler handler);
 
-     void EnableServiceDiscovery(const std::string& registry_host, int registry_port, 
+    void EnableServiceDiscovery(const std::string& registry_host, int registry_port, 
         const std::string& service_name, const std::string& my_ip, int my_port, int ttl_sec);
+
+    void KickPlayer(uint32_t player_id);
         
 public:
     bool AddEntity(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
@@ -67,6 +70,12 @@ private:
 
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
 
+public:
+    // 状态同步， 位置同步
+    const static int    MAX_MOVE_SPEED          = 50;        // 单位/秒
+    const static int    MAX_TELEPORT_DIST       = 100;       // 防闪现阈值
+    const static int    MOVE_THRESHOLD          = 10;        // 移动阈值（距离小于此值不广播）
+
 private:
     // 服务器的基础设施 开始
     TcpServer server_;
@@ -93,11 +102,6 @@ private:
     std::map<int, std::shared_ptr<DeltaSyncManager>> deltaSyncManager_; // 默认只有一张地图(状态同步 属性同步)
 
 
-    // 状态同步， 位置同步
-    const static int    MAX_MOVE_SPEED          = 50;        // 单位/秒
-    const static int    MAX_TELEPORT_DIST       = 100;       // 防闪现阈值
-    const static int    MOVE_THRESHOLD          = 10;        // 移动阈值（距离小于此值不广播）
-
 
     // 帧同步
     std::unique_ptr<InputBuffer> input_buffer_;
@@ -106,4 +110,6 @@ private:
 
     std::unique_ptr<std::thread> frame_broadcast_thread_;
     std::atomic<bool> stop_frame_scheduler_flag_ = false;
+
+    std::unordered_set<uint32_t> ban_player_id_list_;
 };

@@ -107,9 +107,19 @@ void GameServer::Start()
      {
         input_buffer_ = std::make_unique<InputBuffer>();
 
-         server_player_mgr_ = std::make_unique<ServerPlayerManager>([this](uint32_t playerId, const std::string& data){
+        server_player_mgr_ = std::make_unique<ServerPlayerManager>([this](uint32_t playerId, const std::string& data){
             this->SendMessage(playerId, data, GSMT_ServerCorrection);
         });
+
+        server_player_mgr_->SetKickCallback([this](uint32_t player_id){
+            this->KickPlayer(player_id);
+        });
+        
+        server_player_mgr_->SetBanCallback([this](uint32_t player_id){
+            this->KickPlayer(player_id);
+            ban_player_id_list_.insert(player_id);
+        });
+
 
         // 每帧50毫秒，相当于20fps
         frame_scheduler_ = std::make_unique<FrameScheduler>(input_buffer_.get(), server_player_mgr_.get(), [this](const std::string& serialized_pkg){
@@ -429,6 +439,13 @@ bool GameServer::OnFrameSyncAddPlayer(const std::weak_ptr<TcpConnection>& weak_c
         throw std::runtime_error("GameServer::FrameSyncAddPlayer parse ClientInput failed");
     }
 
+    // 判断是否在黑名单内
+    auto itrBan = ban_player_id_list_.find(req.player_id());
+    if(itrBan != ban_player_id_list_.end())
+    {
+        return false;
+    }
+
     auto itr = onServerConnections_.find(req.player_id());
     if(itr == onServerConnections_.end())
     {
@@ -515,6 +532,15 @@ bool GameServer::OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_conne
     uint32_t skill_id = req.skill_id();
     
     // ================================================================
+    // 0. 攻击频率校验
+    // ================================================================
+    bool bCheckAttack = server_player_mgr_->CheckAttackTarget(player_id, server_frame_index, target_id);
+    if(false == bCheckAttack)
+    {
+       return false;
+    }
+
+    // ================================================================
     // 1. 获取攻击者的历史位置（自身位置）
     // ================================================================
     ServerPlayerState attacker_state;
@@ -525,6 +551,7 @@ bool GameServer::OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_conne
         server_player_mgr_->GetPlayerState(player_id, attacker_state);
         printf("[Server] Attacker history not found, using real-time position.\n");
     }
+
 
     // ================================================================
     // 2. 获取目标的历史位置（关键：延迟补偿）
@@ -675,4 +702,24 @@ void GameServer::PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id)
     std::cout << "Entity " << id << " neighbors: ";
     for (int n : neighbors) std::cout << n << " ";
     std::cout << std::endl;
+}
+
+
+void GameServer::KickPlayer(uint32_t player_id)
+{
+    auto itr = onServerConnections_.find(player_id);
+    if(itr == onServerConnections_.end())
+    {
+        return ;
+    }
+
+    // 则发送数据到对应的客户端
+    const TcpConnectionInfo& connectionInfo = (itr->second);
+    connectionInfo.loop_ptr->RunInLoop([weak_con = connectionInfo.weakPtrCon](){
+        auto con = weak_con.lock();
+        if(con)
+        {
+            con->Shutdown();
+        }
+    });
 }

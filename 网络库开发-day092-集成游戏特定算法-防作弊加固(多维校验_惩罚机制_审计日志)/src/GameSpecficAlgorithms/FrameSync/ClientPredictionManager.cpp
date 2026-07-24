@@ -343,6 +343,7 @@ void ClientPredictionManager::ApplySnapshot(const SnapshotReply& reply)
     pending_inputs_.clear();
 
     server_frame_index_ = reply.server_frame_index();
+    current_client_frame_ = reply.client_frame_hint();
 }
 
 

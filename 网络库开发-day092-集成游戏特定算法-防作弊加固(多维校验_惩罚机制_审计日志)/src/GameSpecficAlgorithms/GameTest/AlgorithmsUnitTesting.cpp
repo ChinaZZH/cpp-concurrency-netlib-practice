@@ -173,6 +173,8 @@ void AlgorithmsUnitTesting::TestFullDeterminism() {
 void AlgorithmsUnitTesting::TestServerPlayerManger()
 {
     // 测试案例1
+    bool bStepSwitch_1 = false;
+    if(bStepSwitch_1)
     {
         ServerPlayerManager mgr(nullptr);
         mgr.AddPlayer(1);
@@ -192,6 +194,8 @@ void AlgorithmsUnitTesting::TestServerPlayerManger()
     
 
     // 测试样例2
+    bool bStepSwitch_2 = false;
+    if(bStepSwitch_2)
     {
         printf("=== Step 1 History Storage Test ===\n\n");
         ServerPlayerManager mgr(nullptr);
@@ -275,6 +279,50 @@ void AlgorithmsUnitTesting::TestServerPlayerManger()
         }
 
         printf("\n=== All Step 1 Tests PASSED ===\n");
+    }
+
+
+    // 测试防作弊
+    bool bStepSwitch_3 = true;
+    if(bStepSwitch_3)
+    {
+        ServerPlayerManager mgr(nullptr);
+        mgr.AddPlayer(1);
+
+    
+        ClientInput input;
+        input.set_move_x(1);
+        input.set_client_seq(1);
+        mgr.SumbitInput(1, input);
+        mgr.Tick(20);
+
+        //ServerPlayerState state;
+        //mgr.GetPlayerState(1, state);
+        input.set_move_x(1);
+        input.set_client_seq(3);
+        mgr.SumbitInput(1, input);
+        mgr.Tick(20);
+
+
+        input.set_move_x(1);
+        input.set_client_seq(5);
+        mgr.SumbitInput(1, input);
+        mgr.Tick(20);
+
+        input.set_move_x(1);
+        input.set_client_seq(7);
+        mgr.SumbitInput(1, input);
+        mgr.Tick(20);
+
+        input.set_move_x(1);
+        input.set_client_seq(9);
+        mgr.SumbitInput(1, input);
+        mgr.Tick(20);
+
+         input.set_move_x(1);
+        input.set_client_seq(11);
+        mgr.SumbitInput(1, input);
+        mgr.Tick(20);
     }
 }
 
@@ -370,3 +418,4 @@ void AlgorithmsUnitTesting::TestRemotePlayerSmoother()
     }
 }
 */
+

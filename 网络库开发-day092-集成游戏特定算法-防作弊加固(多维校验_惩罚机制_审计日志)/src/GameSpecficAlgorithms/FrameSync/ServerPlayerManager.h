@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <atomic>
+#include <memory>
 #include <array>
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
@@ -17,10 +18,11 @@ struct ServerPlayerState{
     Fixed vx, vy;           // 速度
     int32_t state = 0;      // 0=待机, 1=跑动, 2=跳跃, 3=攻击...
     uint32_t hp = 100;      // 血量（如果需要回滚伤害）
+    uint32_t client_frame = 0;  
 };
 
 
-// 【新增】历史条目
+// 历史条目
 struct HistoryEntry
 {
     uint32_t client_frame = 0;      // 客户端预测帧号（0 表示无效）
@@ -29,12 +31,29 @@ struct HistoryEntry
     //bool valid = false;             // 是否有效
 };
 
+
+// 防作弊状态结构
+struct AntiCheatState
+{
+    uint32_t last_attack_frame = 0;
+    uint32_t last_client_frame = 0;
+    uint32_t violation_count = 0;       // 违规累计次数
+    ServerPlayerState prevState;
+    bool has_prev_state = false;
+};
+
+class AuditLogger;
+
 class ServerPlayerManager
 {
 public:
     using SendCorrectionCallback = std::function<void(uint32_t player_id, const std::string& data)>;
 
     ServerPlayerManager(SendCorrectionCallback cb);
+
+    void SetKickCallback(std::function<void(uint32_t)> kickCallback) { kick_callback_ = kickCallback; }
+    
+    void SetBanCallback(std::function<void(uint32_t)> banCallback) { ban_callback_ = banCallback; }
 
     // 1. 注册玩家（当玩家加入游戏时调用）
     void AddPlayer(uint32_t player_id);
@@ -64,12 +83,27 @@ public:
 
     uint32_t GetServerFrameIndex() { return server_frame_index_; }
 
+    // 判断是否可以攻击，主要用于判断攻击的频率
+    bool CheckAttackTarget(uint32_t player_id, uint32_t server_frame_index, uint32_t target_id);
+
 private:
     // 内部模拟函数（与客户端完全一致） 
     ServerPlayerState Simulate(const ServerPlayerState& current, const ClientInput& input, uint32_t delta_ms);
 
     // 推入历史数据
     void PushHistory(uint32_t player_id, uint32_t client_frame, uint32_t server_frame, const ServerPlayerState& state);
+
+    bool CheckAntiCheat(uint32_t player_id, ServerPlayerState& playerState, uint32_t delta_ms, uint32_t client_frame_index);
+
+    // 获取并重置违规计数（用于外部模块判断是否触发惩罚）
+    uint32_t GetAndResetViolationCount(uint32_t player_id);
+
+    bool PunishmentBytViolation(uint32_t player_id, const ServerPlayerState& playerState);
+
+    // 记录违规事件
+    void LogViolation(uint32_t player_id, const std::string& type,
+                      const std::string& current, const std::string& threshold,
+                      uint32_t count, const std::string& penalty);
 
 private:
     // 存储所有玩家的权威状态
@@ -145,4 +179,20 @@ private:
     std::unordered_map<uint32_t, PlayerHistory> histories_; // player_id -> 历史
 
     uint32_t server_frame_index_ = 0;
+
+    // 防作弊结构
+    std::unordered_map<uint32_t, AntiCheatState> anti_cheat_states_;
+
+    const static int MIN_ATTACK_INTERVAL_FRAMES = 3;
+
+    // 惩罚阈值
+    static constexpr uint32_t   VIOLATION_WARN_THRESHOLD    = 1;         // 仅日志
+    static constexpr uint32_t   VIOLATION_CORRECT_THRESHOLD = 3;         // 下发矫正
+    static constexpr uint32_t   VIOLATION_KICK_THRESHOLD    = 5;        // 踢出连接
+    static constexpr uint32_t   VIOLATION_BAN_THRESHOLD    = 10;         // 封禁
+
+    std::function<void(uint32_t)> kick_callback_;
+    std::function<void(uint32_t)> ban_callback_;
+
+    std::shared_ptr<AuditLogger> audit_logger_;
 };
