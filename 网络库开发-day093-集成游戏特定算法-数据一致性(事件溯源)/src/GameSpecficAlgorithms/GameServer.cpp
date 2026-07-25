@@ -15,16 +15,20 @@
 #include "../../build/proto_gen/aoi.pb.h"
 #include "../../build/proto_gen/frame_sync.pb.h"
 #include "../../build/proto_gen/reconnect.pb.h"
+#include "../../build/proto_gen/game_event.pb.h"
 #include "FrameSync/InputBuffer.h"
 #include "FrameSync/FrameScheduler.h"
 #include "FrameSync/ServerPlayerManager.h"
+#include "EventSink/EventSink.h"
+#include "EventSink/EventStore.h"
 
 
-
- GameServer::GameServer(EventLoop* loop, int nPort)
+GameServer::GameServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
 ,service_registry_(std::make_unique<ServiceRegistry>())
- ,parititionedPool_(std::make_shared<PartitionedPool>())
+,parititionedPool_(std::make_shared<PartitionedPool>())
+,event_sink_ptr_(std::make_shared<EventSink>())
+,event_store_ptr_(std::make_shared<EventStore>())
  {
     server_.SetMessageCallBack(std::bind(&GameServer::OnMessage, 
         this, std::placeholders::_1, 
@@ -37,6 +41,9 @@
         auto length_decoder = std::make_unique<LengthAndTypePrefixDecoder>();
         con->SetDecoder(std::move(length_decoder));
     });    
+
+    event_sink_ptr_->Init("../logs/events.bin");
+    event_store_ptr_->Init(event_sink_ptr_);
  }
     
 
@@ -531,6 +538,23 @@ bool GameServer::OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_conne
 
     uint32_t skill_id = req.skill_id();
     
+    // 记录攻击事件
+    {
+        GameEvent event;
+        event.set_player_id(player_id);
+        event.set_server_frame(server_frame_index);
+        event.set_timestamp_ms(GetCurrentTimeMs());
+        event.set_event_type(EVENT_ATTACK);
+
+        AttackPayload* attackPayload = event.mutable_attack();
+        attackPayload->set_target_id(target_id);
+        attackPayload->set_skill_id(skill_id);
+        attackPayload->set_dir_x(req.dir_x());
+        attackPayload->set_dir_y(req.dir_y());
+
+        event_store_ptr_->Record(event);
+    }
+
     // ================================================================
     // 0. 攻击频率校验
     // ================================================================
@@ -609,11 +633,35 @@ bool GameServer::OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_conne
 
         // 发给被攻击者
         this->SendMessage(target_id, strData, GSMT_FrameReconnect);
+
+
+        // 记录命中事件
+        {
+        
+            GameEvent event;
+            event.set_player_id(player_id);
+            event.set_server_frame(server_frame_index);
+            event.set_timestamp_ms(GetCurrentTimeMs());
+            event.set_event_type(EVENT_HIT);
+
+            HitPayload* hitPayload = event.mutable_hit();
+            hitPayload->set_target_id(target_id);
+            hitPayload->set_damage(10);
+            hitPayload->set_remaining_hp(10);
+        
+            event_store_ptr_->Record(event);
+        }
     }
 
 
     return true;
  }
+
+
+uint32_t GameServer::GetCurrentTimeMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
 
 
 void GameServer::SetHp(int entityId, int64_t newHp)

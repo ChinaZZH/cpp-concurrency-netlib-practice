@@ -7,7 +7,7 @@ ServerPlayerManager::ServerPlayerManager(SendCorrectionCallback cb)
 ,server_frame_index_(0)
 {
     audit_logger_ = std::make_shared<AuditLogger>();
-    audit_logger_->Init("logs/anticheat.csv", true);  // // 异步模式
+    audit_logger_->Init("../logs/anticheat.csv", true);  // // 异步模式
 }
 
  

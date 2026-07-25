@@ -21,6 +21,8 @@ class DeltaSyncManager;
 class InputBuffer;
 class FrameScheduler;
 class ServerPlayerManager;
+class EventSink;
+class EventStore;
 
 class GameServer 
 {
@@ -70,6 +72,8 @@ private:
 
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
 
+    uint32_t GetCurrentTimeMs();
+
 public:
     // 状态同步， 位置同步
     const static int    MAX_MOVE_SPEED          = 50;        // 单位/秒
@@ -112,4 +116,8 @@ private:
     std::atomic<bool> stop_frame_scheduler_flag_ = false;
 
     std::unordered_set<uint32_t> ban_player_id_list_;
+
+    // 数据一致性  事件溯源
+    std::shared_ptr<EventSink> event_sink_ptr_;
+    std::shared_ptr<EventStore> event_store_ptr_;
 };

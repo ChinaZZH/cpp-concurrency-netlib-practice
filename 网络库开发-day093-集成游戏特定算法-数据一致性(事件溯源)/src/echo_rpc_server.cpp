@@ -27,7 +27,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestServerPlayerManger();
+    gameAlgorighm.TestEventStore();
     return 0;
 }
 

@@ -7,6 +7,9 @@
 #include "../../Common/FixedPonitMaxFunc.h"
 #include "../FrameSync/ServerPlayerManager.h"
 #include "../FrameSync/RemotePlayerSmoother.h"
+#include "../../../build/proto_gen/game_event.pb.h"
+#include "../EventSink/EventSink.h"
+#include "../EventSink/EventStore.h"
 #include <vector>
 #include <cstdint>
 
@@ -419,3 +422,242 @@ void AlgorithmsUnitTesting::TestRemotePlayerSmoother()
 }
 */
 
+ void AlgorithmsUnitTesting::TestEventSinkLog()
+ {
+    std::shared_ptr<EventSink> event_sink = std::make_shared<EventSink>();
+    event_sink->Init("../logs/events.bin");
+
+    std::shared_ptr<EventStore> event_store = std::make_shared<EventStore>();
+    event_store->Init(event_sink);
+
+    uint32_t player_id = 1;
+    uint32_t server_frame_index = 10;
+    uint32_t current_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    uint32_t target_id = 10;
+    uint32_t skill_id = 1000;
+    int64_t x = 100;
+    int64_t y = 500;
+
+     // 记录攻击事件
+    {
+        GameEvent event;
+        event.set_player_id(player_id);
+        event.set_server_frame(server_frame_index);
+        event.set_timestamp_ms(current_time_ms);
+        event.set_event_type(EVENT_ATTACK);
+
+        AttackPayload* attackPayload = event.mutable_attack();
+        attackPayload->set_target_id(target_id);
+        attackPayload->set_skill_id(skill_id);
+        attackPayload->set_dir_x(x);
+        attackPayload->set_dir_y(y);
+
+        event_store->Record(event);
+    }
+
+
+    // 记录命中事件
+     {
+        
+            GameEvent event;
+            event.set_player_id(player_id);
+            event.set_server_frame(server_frame_index);
+            event.set_timestamp_ms(current_time_ms);
+            event.set_event_type(EVENT_HIT);
+
+            HitPayload* hitPayload = event.mutable_hit();
+            hitPayload->set_target_id(target_id);
+            hitPayload->set_damage(10);
+            hitPayload->set_remaining_hp(10);
+        
+            event_store->Record(event);
+    }
+ }
+
+
+ // 辅助函数：构造一个测试事件
+GameEvent AlgorithmsUnitTesting::MakeTestEvent(uint32_t player_id, uint32_t server_frame, EventType type, uint32_t target_id /*= 0*/, int32_t damage /*= 0*/) 
+{
+    GameEvent event;
+    event.set_player_id(player_id);
+    event.set_server_frame(server_frame);
+    event.set_timestamp_ms(std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::system_clock::now().time_since_epoch())
+                               .count());
+    event.set_event_type(type);
+
+    if (type == EVENT_ATTACK) 
+    {
+        auto* payload = event.mutable_attack();
+        payload->set_target_id(target_id);
+        payload->set_skill_id(1);
+        payload->set_dir_x(100);
+        payload->set_dir_y(0);
+    } 
+    else if (type == EVENT_HIT)
+    {
+        auto* payload = event.mutable_hit();
+        payload->set_target_id(target_id);
+        payload->set_damage(damage);
+        payload->set_remaining_hp(100 - damage);
+    }
+
+    return event;
+}
+
+
+// 打印事件（调试用）
+void AlgorithmsUnitTesting::PrintEvent(const GameEvent& event) 
+{
+    std::cout << "  [Event] id=" << event.player_id()
+              << " frame=" << event.server_frame()
+              << " type=" << event.event_type();
+    if (event.has_hit()) {
+        std::cout << " damage=" << event.hit().damage();
+    }
+    std::cout << std::endl;
+}
+
+
+ void AlgorithmsUnitTesting::TestEventStore()
+ {
+    std::cout << "=== EventStore Test Suite ===" << std::endl;
+
+    // ================================================================
+    // 准备：创建 EventStore（绑定一个空的 EventSink，只做内存缓存测试）
+    // ================================================================
+    auto sink = std::make_shared<EventSink>();
+    // 不调用 Init，避免写文件干扰测试
+
+    EventStore store;
+    store.Init(sink, 10);  // max_events = 10（方便测试淘汰）
+
+    // ================================================================
+    // Test 1: 初始化成功，GetEventCount() = 0
+    // ================================================================
+    std::cout << "\n[Test 1] Initial state..." << std::endl;
+    assert(store.GetEventCount() == 0);
+    std::cout << "  PASS: GetEventCount() == 0" << std::endl;
+
+    // ================================================================
+    // Test 2: 记录事件后，GetEventCount() 正确增长
+    // ================================================================
+    std::cout << "\n[Test 2] Record events..." << std::endl;
+    for (int i = 0; i < 5; i++) 
+    {
+        auto event = this->MakeTestEvent(1001, 100 + i, EVENT_ATTACK, 1002);
+        store.Record(event);
+    }
+
+    assert(store.GetEventCount() == 5);
+    std::cout << "  PASS: GetEventCount() == 5 after 5 records" << std::endl;
+
+    // ================================================================
+    // Test 3: 按玩家 ID 查询，返回该玩家的最近事件，且按时间降序
+    // ================================================================
+    std::cout << "\n[Test 3] QueryByPlayer..." << std::endl;
+
+    // 额外记录一些其他玩家的事件
+    for (int i = 0; i < 3; i++) {
+        auto event = MakeTestEvent(2001, 200 + i, EVENT_ATTACK, 1001);
+        store.Record(event);
+    }
+    // 再记录一些玩家 1001 的事件（最新的）
+    for (int i = 0; i < 4; i++) {
+        auto event = MakeTestEvent(1001, 300 + i, EVENT_HIT, 2001, 10 + i);
+        store.Record(event);
+    }
+
+    auto results = store.QueryByPlayer(1001, 5);
+    assert(results.size() == 5);
+    std::cout << "  QueryByPlayer(1001, 5) returned " << results.size() << " events" << std::endl;
+
+    // 验证降序：最新的在前
+    for (size_t i = 1; i < results.size(); i++) {
+        assert(results[i-1].server_frame() >= results[i].server_frame());
+    }
+    std::cout << "  PASS: Events are in descending frame order" << std::endl;
+
+     // 验证返回的都是玩家 1001 的事件
+    for (const auto& ev : results) {
+        assert(ev.player_id() == 1001);
+    }
+    std::cout << "  PASS: All returned events belong to player 1001" << std::endl;
+
+    // ================================================================
+    // Test 4: 按帧号范围查询，返回区间内所有事件
+    // ================================================================
+    std::cout << "\n[Test 4] QueryByFrameRange..." << std::endl;
+
+    auto range_results = store.QueryByFrameRange(150, 350);
+    std::cout << "  QueryByFrameRange(150, 350) returned " << range_results.size() << " events" << std::endl;
+
+    // 验证所有事件都在区间内
+    for (const auto& ev : range_results) {
+        assert(ev.server_frame() >= 150 && ev.server_frame() <= 350);
+    }
+    std::cout << "  PASS: All events are within frame range [150, 350]" << std::endl;
+
+
+     // ================================================================
+    // Test 5: 超过 max_events 时，最旧事件被自动淘汰
+    // ================================================================
+    std::cout << "\n[Test 5] Auto-eviction (max_events=10)..." << std::endl;
+
+    // 当前已有 5 + 3 + 4 = 12 个事件，超过 10，应该已经淘汰了 2 个最旧的
+    // 但为了更精确地测试淘汰，我们手动填充到 15 个
+    for (int i = 0; i < 5; i++) {
+        auto event = MakeTestEvent(3001, 400 + i, EVENT_ATTACK, 1001);
+        store.Record(event);
+    }
+
+    // 此时总共应该有 17 个事件（12 + 5），但 max_events=10，所以应该有 10 个
+    size_t count = store.GetEventCount();
+    std::cout << "  After 17 records with max_events=10, count=" << count << std::endl;
+    assert(count == 10);
+    std::cout << "  PASS: Event count capped at max_events=10" << std::endl;
+
+    // 验证最旧的事件（帧号 < 某些值）已经被淘汰
+    auto oldest_events = store.QueryByFrameRange(0, 100);
+    // 最旧的帧号应该是 300+ 左右的，0-100 的应该已经不存在了
+    std::cout << "  QueryByFrameRange(0, 100) returned " << oldest_events.size() << " events (should be 0)" << std::endl;
+    assert(oldest_events.empty());
+    std::cout << "  PASS: Oldest events (frame < 100) were evicted" << std::endl;
+
+    // ================================================================
+    // Test 6: 并发写入安全性
+    // ================================================================
+    std::cout << "\n[Test 6] Concurrent writes..." << std::endl;
+
+    const int THREAD_COUNT = 4;
+    const int EVENTS_PER_THREAD = 50;
+    std::vector<std::thread> threads;
+
+    for (int t = 0; t < THREAD_COUNT; t++) {
+        threads.emplace_back([&store, t, this]() {
+            uint32_t base_player = 5000 + t;
+            for (int i = 0; i < EVENTS_PER_THREAD; i++) {
+                auto event = MakeTestEvent(base_player, 1000 + t * 100 + i, EVENT_ATTACK, 1001);
+                store.Record(event);
+            }
+        });
+    }
+
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    // 检查总事件数（应该仍然是 max_events=10，因为一直在淘汰）
+    size_t final_count = store.GetEventCount();
+    std::cout << "  After " << THREAD_COUNT * EVENTS_PER_THREAD
+              << " concurrent writes, final count=" << final_count
+              << " (should be <= max_events=10)" << std::endl;
+    assert(final_count <= 10);
+    std::cout << "  PASS: Concurrent writes completed without crash, count capped correctly" << std::endl;
+
+    // ================================================================
+    // 全部通过
+    // ================================================================
+    std::cout << "\n=== ALL TESTS PASSED ===" << std::endl;
+ }
