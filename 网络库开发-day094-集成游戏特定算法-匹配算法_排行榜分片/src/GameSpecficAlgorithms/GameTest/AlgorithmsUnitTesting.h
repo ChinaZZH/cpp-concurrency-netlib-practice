@@ -11,6 +11,7 @@ class CrossListAOI;
 class GridAOI;
 class IAOIManager;
 class GameServer;
+class RankManager;
 
 class AlgorithmsUnitTesting
 {
@@ -31,6 +32,8 @@ public:
 
     void TestEventStore();
     
+    void TestRankMgr();
+
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     
@@ -39,4 +42,6 @@ private:
     GameEvent MakeTestEvent(uint32_t player_id, uint32_t server_frame, EventType type, uint32_t target_id = 0, int32_t damage = 0);
 
     void PrintEvent(const GameEvent& event);
+
+    void PrintTopN(const RankManager& mgr, uint32_t n);
 };

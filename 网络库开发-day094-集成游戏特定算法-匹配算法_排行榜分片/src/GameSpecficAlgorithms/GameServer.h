@@ -23,6 +23,7 @@ class FrameScheduler;
 class ServerPlayerManager;
 class EventSink;
 class EventStore;
+class MatchManager;
 
 class GameServer 
 {
@@ -120,4 +121,8 @@ private:
     // 数据一致性  事件溯源
     std::shared_ptr<EventSink> event_sink_ptr_;
     std::shared_ptr<EventStore> event_store_ptr_;
+
+    // 匹配算法
+    std::shared_ptr<MatchManager> match_mgr_;
+    uint64_t match_timer_id_;
 };

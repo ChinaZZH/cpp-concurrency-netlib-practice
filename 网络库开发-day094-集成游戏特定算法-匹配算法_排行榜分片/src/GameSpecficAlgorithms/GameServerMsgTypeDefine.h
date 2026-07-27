@@ -25,4 +25,7 @@ enum GameServerMsgType
     GSMT_FrameReconnect      = 27,   
     GSMT_FrameAttackRequest  = 28,
     GSMT_FrameHitResult      = 29,
+
+    GSMT_RemovePlayerFromMatch = 41,
+    GSMT_MatchSuccessdNotify   = 42,
 };

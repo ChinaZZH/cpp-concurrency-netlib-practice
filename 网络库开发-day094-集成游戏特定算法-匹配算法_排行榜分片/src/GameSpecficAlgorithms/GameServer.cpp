@@ -21,6 +21,7 @@
 #include "FrameSync/ServerPlayerManager.h"
 #include "EventSink/EventSink.h"
 #include "EventSink/EventStore.h"
+#include "Match/MatchManager.h"
 
 
 GameServer::GameServer(EventLoop* loop, int nPort)
@@ -29,6 +30,8 @@ GameServer::GameServer(EventLoop* loop, int nPort)
 ,parititionedPool_(std::make_shared<PartitionedPool>())
 ,event_sink_ptr_(std::make_shared<EventSink>())
 ,event_store_ptr_(std::make_shared<EventStore>())
+,match_mgr_(std::make_shared<MatchManager>())
+,match_timer_id_(0)
  {
     server_.SetMessageCallBack(std::bind(&GameServer::OnMessage, 
         this, std::placeholders::_1, 
@@ -49,6 +52,14 @@ GameServer::GameServer(EventLoop* loop, int nPort)
 
  GameServer::~GameServer()
  {
+    if(parititionedPool_ && match_timer_id_ > 0)
+    {
+        int threadIdx = 100 % parititionedPool_->GetParitionedCount();
+        parititionedPool_->CancelTimer(threadIdx, match_timer_id_);
+        match_timer_id_ = 0;
+    }
+
+
     {
         stop_frame_scheduler_flag_.store(false, std::memory_order_release);
     }
@@ -167,6 +178,36 @@ void GameServer::Start()
         });
      }
     
+
+    {
+        match_mgr_->SetTimeoutCallback([this](uint32_t player_id){
+            // 通知对方已经被移除了。
+            std::string strData;
+            this->SendMessage(player_id, strData, GSMT_RemovePlayerFromMatch);
+        });
+
+
+        match_mgr_->SetMatchSuccessCallback([](const std::vector<uint32_t>& vecPlayerIdList){
+            // 配对成功：启动一个新对局
+            /*
+            uint32_t room_id = CreateRoom();
+            for (uint32_t pid : players) {
+                AssignPlayerToRoom(pid, room_id);
+                // 通知客户端匹配成功，准备开始游戏
+                SendMatchSuccess(pid, room_id);
+            }
+
+            StartGameLoop(room_id);
+            */
+        });
+
+
+        int threadIdx = 100 % parititionedPool_->GetParitionedCount();
+        match_timer_id_ = parititionedPool_->DelayRunOnce(threadIdx, 1, [this](){
+            match_mgr_->Tick();
+        });
+
+    }
 
     //std::cout << "GameServer::Start  44444" << std::endl;
     server_.Start();

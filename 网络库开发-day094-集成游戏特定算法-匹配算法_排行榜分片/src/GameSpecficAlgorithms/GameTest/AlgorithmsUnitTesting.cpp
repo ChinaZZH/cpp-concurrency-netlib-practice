@@ -10,6 +10,7 @@
 #include "../../../build/proto_gen/game_event.pb.h"
 #include "../EventSink/EventSink.h"
 #include "../EventSink/EventStore.h"
+#include "../Match/RankManager.h"
 #include <vector>
 #include <cstdint>
 
@@ -661,3 +662,141 @@ void AlgorithmsUnitTesting::PrintEvent(const GameEvent& event)
     // ================================================================
     std::cout << "\n=== ALL TESTS PASSED ===" << std::endl;
  }
+
+
+ void AlgorithmsUnitTesting::TestRankMgr()
+ {
+    std::cout << "=== RankManager Test Suite ===" << std::endl;
+
+    RankManager mgr;
+    const uint32_t SHARD_SIZE = 100;
+
+    // ================================================================
+    // Test 1: Init() 正确设置分片大小
+    // ================================================================
+    std::cout << "\n[Test 1] Init shard size..." << std::endl;
+    mgr.Init(SHARD_SIZE);
+    assert(mgr.GetShardCount() == 0);
+    assert(mgr.GetTotalPlayers() == 0);
+    std::cout << "  PASS: Init succeeded, empty state." << std::endl;
+
+    // ================================================================
+    // Test 2: UpdateScore() 正确添加玩家，分片自动扩展
+    // ================================================================
+    std::cout << "\n[Test 2] Add players..." << std::endl;
+    mgr.UpdateScore(1001, 1200); // [1200, 1300)
+    mgr.UpdateScore(1002, 1250); // [1200, 1300)
+    mgr.UpdateScore(1003, 1180); // [1100, 1200)
+    mgr.UpdateScore(1004, 2000); // [2000, 2100)
+    mgr.UpdateScore(1005, 150); // [100, 200)
+
+    assert(mgr.GetTotalPlayers() == 5);
+    assert(mgr.GetShardCount() == 4);  // 分片: 100-199, 1100-1199, 1200-1299, 1900-1999? 实际是 150->1, 1180->11, 1200->12, 1250->12, 2000->20 => 4个分片
+
+    // 验证分片数量: 150->1, 1180->11, 1200/1250->12, 2000->20 => 4
+    // 但 GetShardCount 应该返回 4
+    // 为了更准确，我们手动检查
+    uint32_t shard_count = mgr.GetShardCount();
+    std::cout << "  Shard count: " << shard_count << " (expected >= 4)" << std::endl;
+    assert(shard_count >= 3);
+    std::cout << "  PASS: Players added, shards created." << std::endl;
+
+    // ================================================================
+    // Test 3: GetTopN(3) 返回分数最高的 3 个玩家
+    // ================================================================
+    std::cout << "\n[Test 3] GetTopN..." << std::endl;
+    PrintTopN(mgr, 3);
+    auto top3 = mgr.GetTopN(3);
+    assert(top3.size() == 3);
+    // 最高分应该是 1004(2000), 1002(1250), 1001(1200)
+    uint32_t first_score, second_score, third_score;
+    mgr.GetScore(top3[0], first_score);
+    mgr.GetScore(top3[1], second_score);
+    mgr.GetScore(top3[2], third_score);
+    assert(first_score == 2000);
+    assert(second_score == 1250);
+    assert(third_score == 1200);
+    std::cout << "  PASS: Top 3 are 1004(2000), 1002(1250), 1001(1200)" << std::endl;
+
+    // ================================================================
+    // Test 4: GetRank() 返回正确的玩家排名（从 1 开始）
+    // ================================================================
+    std::cout << "\n[Test 4] GetRank..." << std::endl;
+    int32_t rank = mgr.GetRank(1004);
+    assert(rank == 1);
+    rank = mgr.GetRank(1002);
+    assert(rank == 2);
+    rank = mgr.GetRank(1001);
+    assert(rank == 3);
+    rank = mgr.GetRank(1003);
+    assert(rank == 4);
+    rank = mgr.GetRank(1005);
+    assert(rank == 5);
+    std::cout << "  PASS: All ranks correct." << std::endl;
+
+    // ================================================================
+    // Test 5: 更新分数后，排名自动调整
+    // ================================================================
+    std::cout << "\n[Test 5] Update score and rank adjust..." << std::endl;
+    // 将 1003 从 1180 提升到 2100（变成最高）
+    mgr.UpdateScore(1003, 2100);
+    PrintTopN(mgr, 3);
+    auto top3_after = mgr.GetTopN(3);
+    mgr.GetScore(top3_after[0], first_score);
+    mgr.GetScore(top3_after[1], second_score);
+    mgr.GetScore(top3_after[2], third_score);
+    assert(first_score == 2100);  // 1003 现在最高
+    assert(second_score == 2000); // 1004 第二
+    assert(third_score == 1250);  // 1002 第三
+    // 检查排名
+    assert(mgr.GetRank(1003) == 1);
+    assert(mgr.GetRank(1004) == 2);
+    assert(mgr.GetRank(1002) == 3);
+    std::cout << "  PASS: Rank adjusted correctly." << std::endl;
+
+
+    // ================================================================
+    // Test 6: 空分片在玩家移除后被自动清理
+    // ================================================================
+    std::cout << "\n[Test 6] Empty shard cleanup..." << std::endl;
+    // 当前的玩家分布：1003(2100)->21, 1004(2000)->20, 1002(1250)->12, 1001(1200)->12, 1005(150)->1
+    // 分片: 1, 12, 20, 21
+    // 移除 1005（分片1的唯一玩家），分片1应被清理
+    // 但我们需要移除所有玩家才能清空分片。为了测试，我们移除分片12中的所有玩家
+    mgr.UpdateScore(1001, 2100); // 移动 1001 到 21
+    mgr.UpdateScore(1002, 2100); // 移动 1002 到 21
+    // 现在分片12应该空了（原来有1001,1002两个玩家），但分片12可能还有其他玩家？没有，只有这两个。
+    // 确保分片12被清理
+    // 我们通过检查分片数量来验证
+    uint32_t shard_count_before = mgr.GetShardCount();
+    //mgr.PrintShards();
+    //assert(shard_count_before == 6);
+
+    // 当前分片: 1(可能有1005?), 20(1004), 21(1003,1001,1002) => 但1005还在1，所以1还在
+    // 为了测试清空，我们移除1005
+    mgr.UpdateScore(1005, 2100); // 移动1005到21，分片1空了
+    uint32_t shard_count_after = mgr.GetShardCount();
+    // 应该只有分片20和21（分片1被清理）
+    //mgr.PrintShards();
+    assert(shard_count_after == 2);
+    std::cout << "  PASS: Empty shard cleaned up." << std::endl;
+
+
+    // ================================================================
+    // 全部通过
+    // ================================================================
+    std::cout << "\n=== ALL TESTS PASSED ===" << std::endl;
+ }
+
+ // 辅助：打印 Top N
+void AlgorithmsUnitTesting::PrintTopN(const RankManager& mgr, uint32_t n) 
+{
+    auto top = mgr.GetTopN(n);
+    std::cout << "  Top " << n << ": ";
+    for (uint32_t pid : top) {
+        uint32_t mmr;
+        mgr.GetScore(pid, mmr);
+        std::cout << pid << "(" << mmr << ") ";
+    }
+    std::cout << std::endl;
+}
