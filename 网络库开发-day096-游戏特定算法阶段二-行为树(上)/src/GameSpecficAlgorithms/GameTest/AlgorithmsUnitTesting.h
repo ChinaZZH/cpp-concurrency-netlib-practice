@@ -12,6 +12,8 @@ class GridAOI;
 class IAOIManager;
 class GameServer;
 class RankManager;
+class StateMachine;
+struct StateContext;
 
 class AlgorithmsUnitTesting
 {
@@ -34,6 +36,8 @@ public:
     
     void TestRankMgr();
 
+    void TestFsm();
+
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     
@@ -44,4 +48,6 @@ private:
     void PrintEvent(const GameEvent& event);
 
     void PrintTopN(const RankManager& mgr, uint32_t n);
+
+    void PrintStatus(const StateMachine& fsm, const StateContext& ctx, const char* msg = "");
 };

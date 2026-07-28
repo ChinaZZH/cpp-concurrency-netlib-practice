@@ -13,6 +13,17 @@
 #include "../Match/RankManager.h"
 #include <vector>
 #include <cstdint>
+#include <iostream>
+#include <thread>
+#include <chrono>
+#include "../Fsm/StateMachine.h"
+#include "../Fsm/State/IdleState.h"
+#include "../Fsm/State/PatrolState.h"
+#include "../Fsm/State/ChaseState.h"
+#include "../Fsm/State/AttackState.h"
+#include "../../Common/FixedPoint.h"
+#include "../../Common/FixedPonitMaxFunc.h"
+
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
  {
@@ -799,4 +810,93 @@ void AlgorithmsUnitTesting::PrintTopN(const RankManager& mgr, uint32_t n)
         std::cout << pid << "(" << mmr << ") ";
     }
     std::cout << std::endl;
+}
+
+
+// 辅助：打印当前状态和位置
+void AlgorithmsUnitTesting::PrintStatus(const StateMachine& fsm, const StateContext& ctx, const char* msg /*= ""*/) {
+    std::cout << "[Status] " << msg
+              << " | State: " << fsm.GetCurrentStateName()
+              << " | Pos: (" << ctx.x.ToFloat() << ", " << ctx.y.ToFloat() << ")"
+              << " | Target: " << ctx.target_id
+              << std::endl;
+}
+
+
+void AlgorithmsUnitTesting::TestFsm()
+{
+   std::cout << "=== FSM Test (Fixed-Point) ===" << std::endl;
+
+    StateMachine fsm;
+    StateContext new_ctx;
+    new_ctx.entity_id = 1001;
+    new_ctx.x = Fixed(0.0f);
+    new_ctx.y = Fixed(0.0f);
+    new_ctx.hp = Fixed(100.0f);
+    new_ctx.target_id = 0;
+
+    fsm.Init(new IdleState(), new_ctx);
+
+    auto& ctx = fsm.GetStateContext();
+    PrintStatus(fsm, ctx, "Init");
+
+
+    const float DELTA_MS = 20.0f;
+    const int TOTAL_FRAMES = 500;
+
+    bool target_appeared = false;
+    bool target_close = false;
+    bool target_escaped = false;
+
+     for (int frame = 0; frame < TOTAL_FRAMES; frame++) {
+
+        float current_time = frame * DELTA_MS / 1000.0f;
+
+        // ---- 事件触发 ----
+        if (current_time >= 3.0f && !target_appeared) {
+            ctx.target_id = 2001;
+            ctx.target_x = Fixed(50.0f);
+            ctx.target_y = Fixed(50.0f);
+            target_appeared = true;
+            std::cout << "\n[Event] Target appeared at (50, 50)" << std::endl;
+        }
+
+        if (current_time >= 6.0f && !target_close) {
+            ctx.target_x = Fixed(20.0f);
+            ctx.target_y = Fixed(20.0f);
+            target_close = true;
+            std::cout << "\n[Event] Target moved closer to (20, 20)" << std::endl;
+        }
+
+
+        if (current_time >= 8.0f && !target_escaped) {
+            ctx.target_x = Fixed(100.0f);
+            ctx.target_y = Fixed(100.0f);
+            target_escaped = true;
+            std::cout << "\n[Event] Target escaped to (100, 100)" << std::endl;
+        }
+
+        if (current_time >= 9.5f && ctx.target_id != 0) {
+            ctx.target_id = 0;
+            std::cout << "\n[Event] Target disappeared" << std::endl;
+        }
+
+        // ---- 更新状态机 ----
+        fsm.Update(DELTA_MS);
+
+        if (frame % 50 == 0) {
+            std::cout << "[Tick] " << current_time << "s -> State: "
+                      << fsm.GetCurrentStateName()
+                      << " | Pos: (" << ctx.x.ToFloat() << ", " << ctx.y.ToFloat() << ")" << std::endl;
+        }
+     }
+
+     std::cout << "\n=== Final State ===" << std::endl;
+    PrintStatus(fsm, ctx, "After 10s");
+
+    if (fsm.GetCurrentStateName() == "Idle") {
+        std::cout << "\n✅ TEST PASSED" << std::endl;
+    } else {
+        std::cout << "\n❌ TEST FAILED" << std::endl;
+    }
 }
