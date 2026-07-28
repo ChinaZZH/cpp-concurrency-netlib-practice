@@ -17,10 +17,7 @@ public:
     void Init(State* initial_state, StateContext& ctx);
 
     // 每帧更新（由游戏主循环调用）
-    void Update(uint32_t delta_ms);
-
-    // 切换状态（由 State::TransitionTo 调用）
-    void ChangeState(State* new_state);
+    void Update(float delta_ms);
 
     // 获取当前状态名称
     std::string GetCurrentStateName() const;
@@ -28,9 +25,14 @@ public:
     // 获取上下文（供状态读取/修改）
     StateContext& GetStateContext()  { return ctx_; }
 
-
     // 注册状态（用于状态工厂，可选）
     void RegisterState(const std::string& name, State* state);
+
+    // 强制切换（外部触发，如受击、死亡）
+    void ForceChangState(State* newState);
+
+private:
+    void ChangeState(State* new_state);
 
 private:
     std::unique_ptr<State> current_state_;

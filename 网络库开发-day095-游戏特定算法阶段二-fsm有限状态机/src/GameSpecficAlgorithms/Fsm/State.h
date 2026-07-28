@@ -5,7 +5,7 @@
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
 
-class StateMachine;
+
 
 // 状态上下文：包含 AI 实体的必要数据和引用
 struct StateContext
@@ -44,7 +44,7 @@ public:
 
     // 状态生命周期函数
     virtual void OnEnter(StateContext& ctx) = 0;
-    virtual void OnUpdate(StateContext& ctx, uint32_t delta_ms) = 0;
+    virtual State* OnUpdate(StateContext& ctx, float delta_ms) = 0;
     virtual void OnExit(StateContext& ctx) = 0;
 
     // 获取状态名称（用于调试日志）
@@ -52,8 +52,4 @@ public:
 
     // 是否可以切换到其他状态（默认允许）
     virtual bool CanTransition() const { return true; }
-
-private:
-    // 辅助方法：切换状态
-    void TransitionTo(StateMachine* fsm, State* new_state);
 };

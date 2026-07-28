@@ -24,15 +24,33 @@ void StateMachine::Init(State* initial_state, StateContext& ctx)
 }
 
 // 每帧更新（由游戏主循环调用）
-void StateMachine::Update(uint32_t delta_ms)
+void StateMachine::Update(float delta_ms)
 {
     if(false == initialized_ || !current_state_)
     {
         return;
     }
 
-    current_state_->OnUpdate(ctx_, delta_ms);
+    // 执行当前状态的更新，并获取“下一步”的指令
+    State* next_state = current_state_->OnUpdate(ctx_, delta_ms);
+
+    // 如果返回了非空指针，则执行切换
+    if(next_state)
+    {
+        ChangeState(next_state);
+    }
 }
+
+
+// 强制切换（外部触发，如受击、死亡）
+void StateMachine::ForceChangState(State* newState)
+{
+    if(newState)
+    {
+        ChangeState(newState);
+    }
+}
+
 
 // 切换状态（由 State::TransitionTo 调用）
 void StateMachine::ChangeState(State* new_state)
