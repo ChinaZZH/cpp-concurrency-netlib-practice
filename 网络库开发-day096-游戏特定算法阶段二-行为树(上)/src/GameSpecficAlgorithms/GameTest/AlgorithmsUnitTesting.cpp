@@ -23,7 +23,13 @@
 #include "../Fsm/State/AttackState.h"
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
-
+#include "Test_BehaviorTreeNode.h"
+#include "../BehaviorTree/BehaviorTree.h"
+#include "../BehaviorTree/BTNode.h"
+#include "../BehaviorTree/BTCompositeNode/BTCompositeNode.h"
+#include "../BehaviorTree/BTCompositeNode/SequenceNode.h"
+#include "../BehaviorTree/BTCompositeNode/SelectorNode.h"
+#include "../BehaviorTree/BTCompositeNode/ParallelNode.h"
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
  {
@@ -899,4 +905,173 @@ void AlgorithmsUnitTesting::TestFsm()
     } else {
         std::cout << "\n❌ TEST FAILED" << std::endl;
     }
+}
+
+
+void AlgorithmsUnitTesting::PrintResult_ForBehaviorTree(const std::string& test_name, BTStatus status)
+{
+    const char* status_str = "";
+    if (status == BTStatus::Success)
+    {
+        status_str = "Success";
+    } 
+    else if (status == BTStatus::Failure)
+    {
+        status_str = "Failure";
+    } 
+    else 
+    {
+        status_str = "Running";
+    }
+
+    std::cout << "[Test] " << test_name << " => " << status_str << std::endl;
+}
+
+
+void AlgorithmsUnitTesting::TestBehaviorTree_Step2()
+{
+    std::cout << "=== Behavior Tree Composite Node Test ===\n" << std::endl;
+
+    StateContext ctx;
+
+    // ----------------------------------------------------------------
+    // 1. SequenceNode 测试
+    // ----------------------------------------------------------------
+    std::cout << "--- 1. SequenceNode ---" << std::endl;
+
+    // 1.1 全部成功 => Success
+    auto seq1 = std::make_unique<SequenceNode>();
+    seq1->AddChild(std::make_unique<SuccessNode>());
+    seq1->AddChild(std::make_unique<SuccessNode>());
+    BTStatus r1 = seq1->Execute(ctx, 0.0f);
+    // 需要执行多次才能完成
+    while (r1 == BTStatus::Running) r1 = seq1->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("All Success", r1);
+
+    // 1.2 任一失败 => Failure
+    auto seq2 = std::make_unique<SequenceNode>();
+    seq2->AddChild(std::make_unique<SuccessNode>());
+    seq2->AddChild(std::make_unique<FailureNode>());
+    BTStatus r2 = seq2->Execute(ctx, 0.0f);
+    while (r2 == BTStatus::Running) r2 = seq2->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("With Failure", r2);
+
+    // 1.3 包含 Running => Running
+    auto seq3 = std::make_unique<SequenceNode>();
+    seq3->AddChild(std::make_unique<RunningNode>());
+    seq3->AddChild(std::make_unique<SuccessNode>());
+    BTStatus r3 = seq3->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("With Running", r3);
+
+    // 1.4 中间节点 Running，后续还有节点 => Running (状态机需多次执行)
+    auto seq4 = std::make_unique<SequenceNode>();
+    seq4->AddChild(std::make_unique<RunningThenSuccessNode>(2));
+    seq4->AddChild(std::make_unique<SuccessNode>());
+    BTStatus r4 = seq4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("RunningThenSuccess (step 1/2)", r4);
+    r4 = seq4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("RunningThenSuccess (step 2/2)", r4);
+    r4 = seq4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("After RunningThenSuccess completed", r4);
+
+    // ----------------------------------------------------------------
+    // 2. SelectorNode 测试
+    // ----------------------------------------------------------------
+    std::cout << "\n--- 2. SelectorNode ---" << std::endl;
+
+    // 2.1 第一个成功 => Success
+    auto sel1 = std::make_unique<SelectorNode>();
+    sel1->AddChild(std::make_unique<SuccessNode>());
+    sel1->AddChild(std::make_unique<FailureNode>());
+    BTStatus s1 = sel1->Execute(ctx, 0.0f);
+    while (s1 == BTStatus::Running) s1 = sel1->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("First Success", s1);
+
+    // 2.2 全部失败 => Failure
+    auto sel2 = std::make_unique<SelectorNode>();
+    sel2->AddChild(std::make_unique<FailureNode>());
+    sel2->AddChild(std::make_unique<FailureNode>());
+    BTStatus s2 = sel2->Execute(ctx, 0.0f);
+    while (s2 == BTStatus::Running) s2 = sel2->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("All Failure", s2);
+
+    // 2.3 第一个 Running，第二个 Success => Running (然后最终 Success)
+    auto sel3 = std::make_unique<SelectorNode>();
+    sel3->AddChild(std::make_unique<RunningThenSuccessNode>());
+    sel3->AddChild(std::make_unique<SuccessNode>());
+    BTStatus s3 = sel3->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("First Running, then Success (step 1)", s3);
+    s3 = sel3->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("First Running, then Success (step 2 - should move to next)", s3);
+    while (s3 == BTStatus::Running) s3 = sel3->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("First Running, then Success (final)", s3);
+
+    // ----------------------------------------------------------------
+    // 3. ParallelNode 测试
+    // ----------------------------------------------------------------
+    std::cout << "\n--- 3. ParallelNode ---" << std::endl;
+
+    // 3.1 全部成功 => Success
+    auto par1 = std::make_unique<ParallelNode>();
+    par1->AddChild(std::make_unique<SuccessNode>());
+    par1->AddChild(std::make_unique<SuccessNode>());
+    par1->TotalAll();
+    BTStatus p1 = par1->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("All Success", p1);
+
+    // 3.2 任一失败 => Failure
+    auto par2 = std::make_unique<ParallelNode>();
+    par2->AddChild(std::make_unique<SuccessNode>());
+    par2->AddChild(std::make_unique<FailureNode>());
+    par2->TotalAll();
+    BTStatus p2 = par2->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("With Failure", p2);
+
+    // 3.3 部分 Running => Running
+    auto par3 = std::make_unique<ParallelNode>();
+    par3->AddChild(std::make_unique<RunningNode>());
+    par3->AddChild(std::make_unique<SuccessNode>());
+    par3->TotalAll();
+    BTStatus p3 = par3->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("With Running", p3);
+
+    // 3.4 多个 Running + 最终全部成功
+    auto par4 = std::make_unique<ParallelNode>();
+    par4->AddChild(std::make_unique<RunningThenSuccessNode>(2));
+    par4->AddChild(std::make_unique<RunningThenSuccessNode>(3));
+    par4->TotalAll();
+    BTStatus p4 = par4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("Parallel RunningThenSuccess (step 1)", p4);
+    p4 = par4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("Parallel RunningThenSuccess (step 2)", p4);
+    p4 = par4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("Parallel RunningThenSuccess (step 3 - one finishes, other still running)", p4);
+    p4 = par4->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("Parallel RunningThenSuccess (step 4 - all finished)", p4);
+
+    // ----------------------------------------------------------------
+     // 4. Reset 功能测试
+    // ----------------------------------------------------------------
+    std::cout << "\n--- 4. Reset Function ---" << std::endl;
+
+    auto seq_reset = std::make_unique<SequenceNode>();
+    auto running_node = std::make_unique<RunningThenSuccessNode>(2);
+    auto* raw_running = running_node.get();  // 保存指针用于检查状态
+    seq_reset->AddChild(std::move(running_node));
+    seq_reset->AddChild(std::make_unique<SuccessNode>());
+
+    BTStatus r_reset = seq_reset->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("Before reset (step 1)", r_reset);
+    r_reset = seq_reset->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("Before reset (step 2)", r_reset);
+
+    seq_reset->ResetNode();
+    std::cout << "[Test] Reset called" << std::endl;
+    r_reset = seq_reset->Execute(ctx, 0.0f);
+    PrintResult_ForBehaviorTree("After reset (should start from beginning)", r_reset);
+
+    // ----------------------------------------------------------------
+    // 总结
+    // ----------------------------------------------------------------
+    std::cout << "\n=== All tests completed ===" << std::endl;
 }

@@ -5,6 +5,7 @@
 #include <memory>
 #include "../FrameSync/ServerPlayerManager.h"
 #include "../../../build/proto_gen/game_event.pb.h"
+#include "../BehaviorTree/BehaviorTree.h"
 
 //class AOIManager;
 class CrossListAOI;
@@ -38,6 +39,8 @@ public:
 
     void TestFsm();
 
+    void TestBehaviorTree_Step2();
+    
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     
@@ -50,4 +53,6 @@ private:
     void PrintTopN(const RankManager& mgr, uint32_t n);
 
     void PrintStatus(const StateMachine& fsm, const StateContext& ctx, const char* msg = "");
+
+    void PrintResult_ForBehaviorTree(const std::string& test_name, BTStatus status);
 };

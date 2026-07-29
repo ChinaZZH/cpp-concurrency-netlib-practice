@@ -27,7 +27,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestFsm();
+    gameAlgorighm.TestBehaviorTree_Step2();
     return 0;
 }
 

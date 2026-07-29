@@ -17,7 +17,7 @@ public:
     virtual BTStatus Execute(StateContext& ctx, float delta_ms) = 0;
 
     // 重置节点状态（用于树的重置）
-    virtual void Reset() {}
+    virtual void ResetNode() {}
 
     // 获取节点名称（调试用）
     virtual std::string GetName() const = 0;
