@@ -76,7 +76,7 @@ public:
     // 核心执行接口
     // - ctx: 状态上下文（与 FSM 共用 StateContext）
     // - delta_ms: 时间步长（毫秒）
-    virtual BTStatus Execute(StateContext& ctx, float delta_ms)
+    virtual BTStatus Execute(StateContext& ctx, float delta_ms) override
     {
         // 在这边判断掩码是否有效
         {

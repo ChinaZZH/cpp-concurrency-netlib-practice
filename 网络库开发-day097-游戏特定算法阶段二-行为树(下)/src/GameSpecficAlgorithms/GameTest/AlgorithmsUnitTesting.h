@@ -40,7 +40,8 @@ public:
     void TestFsm();
 
     void TestBehaviorTree_Step2();
-    
+    void TestBehaviorTree_Step4();
+
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     

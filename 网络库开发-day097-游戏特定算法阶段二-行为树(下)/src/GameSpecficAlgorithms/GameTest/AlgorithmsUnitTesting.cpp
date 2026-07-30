@@ -31,6 +31,14 @@
 #include "../BehaviorTree/BTCompositeNode/SelectorNode.h"
 #include "../BehaviorTree/BTCompositeNode/ParallelNode.h"
 
+#include "../BehaviorTree/BTDecoratorNode/BTDecoratorNode.h"
+#include "../BehaviorTree/BTDecoratorNode/CooldownNode.h"
+#include "../BehaviorTree/BTDecoratorNode/InverterNode.h"
+#include "../BehaviorTree/BTDecoratorNode/RepeaterNode.h"
+#include "../BehaviorTree/BTDecoratorNode/TimeoutNode.h"
+#include "../BehaviorTree/BTDecoratorNode/UntilSuccessNode.h"
+
+
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
  {
 
@@ -1074,4 +1082,98 @@ void AlgorithmsUnitTesting::TestBehaviorTree_Step2()
     // 总结
     // ----------------------------------------------------------------
     std::cout << "\n=== All tests completed ===" << std::endl;
+}
+
+
+void AlgorithmsUnitTesting::TestBehaviorTree_Step4()
+{
+    std::cout << "=== Decorator Node Tests ===" << std::endl;
+    StateContext ctx;
+
+    // 1. Inverter: Success → Failure, Failure → Success, Running → Running
+    {
+        auto inv = InverterNode(std::make_unique<TestNode>(BTStatus::Success));
+        auto r = inv.Execute(ctx, 0.0f);
+        PrintResult_ForBehaviorTree("Inverter(Success)", r);
+        assert(r == BTStatus::Failure);
+    }
+
+    {
+        auto inv = InverterNode(std::make_unique<TestNode>(BTStatus::Failure));
+        auto r = inv.Execute(ctx, 0.0f);
+        PrintResult_ForBehaviorTree("Inverter(Failure)", r);
+        assert(r == BTStatus::Success);
+    }
+
+    {
+        auto inv = InverterNode(std::make_unique<TestNode>(BTStatus::Running));
+        auto r = inv.Execute(ctx, 0.0f);
+        PrintResult_ForBehaviorTree("Inverter(Running)", r);
+        assert(r == BTStatus::Running);
+    }
+
+    // 2. Repeater: 重复 3 次
+    {
+        auto rep = RepeaterNode(std::make_unique<CounterNode>(1), 3);
+        BTStatus r;
+        for (int i = 0; i < 4; i++) {
+            r = rep.Execute(ctx, 0.0f);
+            if (r != BTStatus::Running) break;
+        }
+        PrintResult_ForBehaviorTree("Repeater(3 times)", r);
+        assert(r == BTStatus::Success);
+    }
+
+    // 3. Repeater 无限（-1）: 应一直返回 Running
+    {
+        auto rep = RepeaterNode(std::make_unique<CounterNode>(1), -1);
+        auto r = rep.Execute(ctx, 0.0f);
+        PrintResult_ForBehaviorTree("Repeater(infinite)", r);
+        assert(r == BTStatus::Running);
+    }
+
+    // 4. UntilSuccess: 直到子节点成功
+    {
+        auto until = UntilSuccessNode(std::make_unique<CounterNode>(3));
+        BTStatus r;
+        for (int i = 0; i < 5; i++) {
+            r = until.Execute(ctx, 0.0f);
+            if (r == BTStatus::Success) break;
+        }
+        PrintResult_ForBehaviorTree("UntilSuccess(Counter 3)", r);
+        assert(r == BTStatus::Success);
+    }
+
+    // 5. Timeout: 超时返回 Failure
+    {
+        auto timeout = TimeoutNode(std::make_unique<RunningThenDoneNode>(5), 3.0f);
+        BTStatus r;
+        // 执行 5 帧，每帧 1.0ms → 第 3 帧后超时
+        for (int i = 0; i < 5; i++) {
+            r = timeout.Execute(ctx, 1.0f);
+            if (r != BTStatus::Running) break;
+        }
+        PrintResult_ForBehaviorTree("Timeout(3ms, RunningThenDone 5 steps)", r);
+        assert(r == BTStatus::Failure);
+    }
+
+
+     // 6. Cooldown: 冷却期间返回 Running
+    {
+        auto cooldown = CooldownNode(std::make_unique<TestNode>(BTStatus::Success), 2.0f);
+        // 第一次执行：子节点成功，返回 Success，触发冷却
+        auto r1 = cooldown.Execute(ctx, 0.0f);
+        PrintResult_ForBehaviorTree("Cooldown first exec", r1);
+        assert(r1 == BTStatus::Success);
+        // 第二次执行：冷却中（1.0ms < 2.0ms），返回 Running
+        auto r2 = cooldown.Execute(ctx, 1.0f);
+        PrintResult_ForBehaviorTree("Cooldown during cooldown (1ms)", r2);
+        assert(r2 == BTStatus::Running);
+        // 第三次执行：冷却结束（1.0 + 1.0 = 2.0ms），子节点再次执行
+        auto r3 = cooldown.Execute(ctx, 1.0f);
+        PrintResult_ForBehaviorTree("Cooldown after cooldown", r3);
+        assert(r3 == BTStatus::Success);
+    }
+
+    std::cout << "\n=== All Decorator Tests PASSED ===" << std::endl;
 }
