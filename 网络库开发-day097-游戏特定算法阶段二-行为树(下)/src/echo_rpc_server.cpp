@@ -19,6 +19,7 @@
 #include "GameSpecficAlgorithms/AOI/AOIPerformanceTest.h"
 #include "GameSpecficAlgorithms/GameTest/Test_TimeWheel.h"
 #include "GameSpecficAlgorithms/GameClient/Test_Client_Entity.h"
+#include "GameSpecficAlgorithms/GameTest/BehaviorTreeAction_TestFile.h"
 
 #include <signal.h>
 #include <thread>
@@ -41,7 +42,9 @@ int PerformanceTest()
 int main()
 {
     std::cout << "start unit testing" << std::endl;
-    UnitTesting();
+    //UnitTesting();
+    BehaviorTreeAction_TestFile testFile;
+    testFile.TestAllScenes();
     std::cout << "start PerformanceTest " << std::endl;
     //PerformanceTest();
     

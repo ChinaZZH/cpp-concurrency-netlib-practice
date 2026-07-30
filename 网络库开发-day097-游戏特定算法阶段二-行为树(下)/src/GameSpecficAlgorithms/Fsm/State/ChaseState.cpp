@@ -48,20 +48,18 @@ State* ChaseState::OnUpdate(StateContext& ctx, float delta_ms)
        return new AttackState();
     }
 
-    // 计算归一化方向（定点数除法）
-    Fixed norm = Fixed::One() / dist;  // 1.0 / dist
-
     // 计算本帧移动距离（定点数）
     Fixed move_dist = Fixed(speed_) * Fixed(delta_ms*1.00f); // 假设 speed_ 是 Fixed
-
     // 更新位置（定点数运算）
-    if((norm * move_dist) >= Fixed::One())
+    if(move_dist >= dist)
     {
         ctx.x = ctx.target_x;
         ctx.y = ctx.target_y;
     }
     else
     {
+        // 计算归一化方向（定点数除法）
+        Fixed norm = Fixed::One() / dist;  // 1.0 / dist
         ctx.x += ((ctx.target_x - ctx.x) * norm * move_dist);
         ctx.y += ((ctx.target_y - ctx.y) * norm * move_dist);
     }
