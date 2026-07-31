@@ -45,7 +45,7 @@ public:
 
     virtual ~BaseAOIManager() = default;
 
-    virtual void InitAoiData(int threadIdx, int moveThreshold, std::shared_ptr<PartitionedPool> parititionedPool, int forceMoveMsgDelaySeconds) override
+    void InitAoiData(int threadIdx, int moveThreshold, std::shared_ptr<PartitionedPool> parititionedPool, int forceMoveMsgDelaySeconds) 
     {
         threadIdx_ = threadIdx;
         squareMaxDis_ = moveThreshold * moveThreshold;
@@ -55,44 +55,31 @@ public:
 
 
     // 公共方法：广播回调注入（子类可直接复用）
-    virtual void SetSendMessageCallBack(SendMsgCallBack cb) override {
+    void SetSendMessageCallBack(SendMsgCallBack cb)  
+    {
         //sendMsgCallBack_ = cb;
         msgNotifyer_ = std::make_unique<AOIMsgNotifyer>(cb, this);
     }
 
    
-
-    virtual std::pair<int, int> GetGridCoord(int x, int y) const override {
-        return std::pair(x / gridSize_, y / gridSize_);
-    }
-
-     virtual bool IsInRangeForGridPosition(int gridX1, int gridY1, int gridX2, int gridY2, int radius) const override {
-        return std::abs(gridX1 - gridX2) <= radius && std::abs(gridY1 - gridY2) <= radius;
-     }
-
-     virtual bool IsInRange(int x1, int y1, int x2, int y2, int radius) const override {
+    bool IsInRange(int x1, int y1, int x2, int y2, int radius) const 
+    {
         std::pair<int, int> prePos = this->GetGridCoord(x1, y1);
         std::pair<int, int> nextPos = this->GetGridCoord(x2, y2);
         return this->IsInRangeForGridPosition(prePos.first, prePos.second, nextPos.first, nextPos.second, radius);
-     }
+    }
 
-
-     virtual bool IsBroadcastMoveMessage(int x1, int y1, int x2, int y2) override {
-        int deltaX = x1 - x2;
-        int deltaY = y1 - y2;
-        int squareDistance = deltaX * deltaX + deltaY * deltaY;
-        /*
-        if(squareDistance <= squareMaxDis_)
-        {
-            std::cout << "IsBroadcastMoveMessage broadcast failed" << std::endl;
-        }else{
-            std::cout << "IsBroadcastMoveMessage broadcast success" << std::endl;
-        }
-        */
-        return squareDistance > squareMaxDis_;
-     } 
-
+    virtual GridCoordResult GetGridPosition(int entityId) const = 0;
+    
 protected:
+    std::pair<int, int> GetGridCoord(int x, int y) const {
+        return std::pair(x / gridSize_, y / gridSize_);
+    }
+
+    bool IsInRangeForGridPosition(int gridX1, int gridY1, int gridX2, int gridY2, int radius) const {
+        return std::abs(gridX1 - gridX2) <= radius && std::abs(gridY1 - gridY2) <= radius;
+    }
+
     void ProcessMoveMessage(int entityId, EntityInfo& entityInfo, const std::vector<int>& oldNeighborsEntitys)  {
         if(!msgNotifyer_)
         {
@@ -159,6 +146,14 @@ protected:
         }
 
     }
+
+private:
+    bool IsBroadcastMoveMessage(int x1, int y1, int x2, int y2)  {
+        int deltaX = x1 - x2;
+        int deltaY = y1 - y2;
+        int squareDistance = deltaX * deltaX + deltaY * deltaY;
+        return squareDistance > squareMaxDis_;
+     } 
 
 
 protected:
