@@ -93,8 +93,6 @@ bool DynamicAOI::MoveEntity(int entity_id, int newX, int newY)
 
 std::vector<int> DynamicAOI::GetNeighbors(int entity_id, int radius /*= 1*/) const 
 {
-    static int GRID_SIZE = 100;
-
     auto itr = entity_to_region_.find(entity_id);
     if(itr == entity_to_region_.end())
     {
@@ -135,6 +133,41 @@ std::vector<int> DynamicAOI::GetNeighbors(int entity_id, int radius /*= 1*/) con
     std::erase(vecNeighborsId, entity_id);
     return vecNeighborsId;
 }
+
+
+
+std::vector<int> DynamicAOI::Query(int queryX, int queryY, int queryLength)
+{
+    AABB neighborAABB;
+    neighborAABB.min_x = queryX - queryLength;
+    neighborAABB.max_x = queryX + queryLength;
+    neighborAABB.min_y = queryY - queryLength;
+    neighborAABB.max_y = queryY + queryLength;
+
+    // 玩家个数小于阈值的话直接遍历
+    std::vector<int> vecNeighborsId;
+    if(entity_to_region_.size() <= 100) // 玩家个数小于阈值的话直接遍历
+    {
+        for(const auto& [entity_id, info] : entity_to_region_)
+        {
+            if(false == neighborAABB.Contains(info.pos.first, info.pos.second))
+            {
+                continue;
+            }
+
+            vecNeighborsId.push_back(entity_id);
+        }
+    }
+    else
+    {
+        // 否则使用递归算法找到合适区域来获取玩家
+        std::vector<int> vecResult = FindPosInAABB(root_region_id_, neighborAABB);
+        vecNeighborsId = std::move(vecResult);
+    }
+
+    return vecNeighborsId;
+}
+
 
 EntityPositionResult DynamicAOI::GetEntityPosition(int entity_id) const 
 {
@@ -231,7 +264,8 @@ float DynamicAOI::GetDensity(uint32_t region_id) const
     }
 
     const RegionNode& node = (itr->second);
-    return node.stats.player_count / node.stats.area_size;
+    //std::cout << "DynamicAOI::GetDensity player_count:=" <<  node.stats.player_count << " area_size:=" << node.stats.area_size << std::endl;
+    return static_cast<float>(node.stats.player_count * 1.0000f) / static_cast<float>(node.stats.area_size * 1.000f);
 }
 
 
@@ -340,43 +374,56 @@ void DynamicAOI::SplitRegion(uint32_t region_id)
         return;
     }
 
-    // 已经到达整数分裂的极限，不能再分裂了，再分裂构不成空间了。
+    // 已经到达整数分裂的极限，不能再分裂了，
     {
-        if((region_node.bounds.min_x + 1) >= region_node.bounds.max_x)
-        {
-            return;
-        }
-
-        if((region_node.bounds.min_y + 1) >= region_node.bounds.max_y)
+        int length_x = region_node.bounds.max_x - region_node.bounds.min_x;
+        int length_y = region_node.bounds.max_y - region_node.bounds.min_y; 
+        if(length_x <= grid_size_ || length_y <= grid_size_)
         {
             return;
         }
     }
 
+    std::vector<uint32_t> split_region_id;
+    int old_regions_num = regions_.size();
     std::vector<AABB> vecChild_AABB = region_node.bounds.Split();
     for(int i = 0; i < vecChild_AABB.size(); ++i)
     {
-        RegionNode node;
+        uint32_t child_region_id = this->AllocateRegionId();
+        RegionNode& node = regions_[child_region_id];
         node.parent_id = region_id;
         node.bounds = vecChild_AABB[i];
-    
-        uint32_t child_region_id = this->AllocateRegionId();
+            
         node.stats.region_id = child_region_id;
         node.stats.player_count = 0;                                 //  当前区域玩家数
         node.stats.area_size = node.bounds.GetArea();                //  区域面积（用于计算密度）
         node.stats.last_split_frame = 0;                             //  上次分裂帧号（防抖动）
         node.stats.last_merge_frame = 0;                             //  上次合并帧号（防抖动）
-        regions_[child_region_id] = (std::move(node));
 
         MigrateEntitiesFromRegion(region_id, child_region_id);
         region_node.children.push_back(child_region_id);
 
-        CheckAndAdjust(child_region_id);
+        uint32_t delta_frame = abs(current_frame_ - (node.stats.last_merge_frame));
+        //if(delta_frame >= merge_cooldown_frames_)
+        {
+            float fDensity = this->GetDensity(child_region_id);
+            if(fDensity >= merge_threshold_)
+            {
+                split_region_id.push_back(child_region_id);
+            }
+        }
     }
 
+    //std::cout << "DynamicAOI::SplitRegion old_regions_num:=" << old_regions_num << " new_regions_num:=" << regions_.size() << std::endl;
     region_node.stats.last_split_frame = current_frame_;
     region_node.stats.player_count = 0;
     region_node.entity_id_list.clear();
+
+    for(const auto& split_region_id: split_region_id)
+    {
+        // 是否继续分裂
+        SplitRegion(split_region_id);
+    }
 }
     
 void DynamicAOI::MergeRegion(uint32_t region_id)
@@ -394,23 +441,42 @@ void DynamicAOI::MergeRegion(uint32_t region_id)
         return;
     }
     
+    /*
     uint32_t delta_frame = abs(current_frame_ - (region_node.stats.last_merge_frame));
     if(delta_frame < merge_cooldown_frames_)
     {
         return;
     }
+    */
 
+    
     // 判断合并条件是否满足，需要的是每一个children的密度都小于阈值
     for(int i = 0; i < region_node.children.size(); ++i)
     {
+        // 四个节点都是叶子结点才可以。
         uint32_t child_region_id = region_node.children[i];
-        float fDensity = DynamicAOI::GetDensity(child_region_id);
+        auto itr_child = regions_.find(child_region_id); 
+        if(itr_child == regions_.end())
+        {
+            continue;
+        }
+
+        // 叶子结点应该没有子节点，所以叶子结点的children为空。
+        const RegionNode& child_node = (itr_child->second);
+        if(false == child_node.children.empty())
+        {
+            return;
+        }
+    
+        float fDensity = this->GetDensity(child_region_id);
         if(fDensity >= merge_threshold_)
         {
             return;
         }
     }
 
+    //std::cout << "DynamicAOI::MergeRegion region_id:=" << region_id << std::endl;
+    uint32_t old_regions_cout = regions_.size();
     // 所有子节点的密度都小于阈值，则可以合并。
     region_node.stats.player_count = 0;
     region_node.entity_id_list.clear();
@@ -422,19 +488,25 @@ void DynamicAOI::MergeRegion(uint32_t region_id)
         regions_.erase(child_region_id);
     }
 
+    //std::cout << "DynamicAOI::MergeRegion old_regions_num:=" << old_regions_cout << " new_regions_num:=" << regions_.size() << std::endl;
     region_node.stats.last_merge_frame = current_frame_;
     region_node.children.clear();
 
     // 判断是否需要向上合并。
-    CheckAndAdjust(region_id);
+    if(region_node.parent_id > 0)
+    {
+        MergeRegion(region_node.parent_id);
+    }
+   
 }
     
 void DynamicAOI::CheckAndAdjust(uint32_t region_id)
 {
     // 判断是否达到分裂或者合并的条件
-    float fDensity = DynamicAOI::GetDensity(region_id);
+    float fDensity = this->GetDensity(region_id);
    
     // 密度在合理的区间内
+    //std::cout << "DynamicAOI::CheckAndAdjust region_id:=" << region_id << " fDensity:=" << fDensity << std::endl;
     if(fDensity >= merge_threshold_ && fDensity <= split_threshold_)
     {
         return;
@@ -450,11 +522,13 @@ void DynamicAOI::CheckAndAdjust(uint32_t region_id)
     if(fDensity > split_threshold_)
     {
         // 分裂
+        /*
         uint32_t delta_frame = abs(current_frame_ - (ptr_region_node->stats.last_split_frame));
         if(delta_frame < split_cooldown_frames_)
         {
             return;
         }
+        */
 
         SplitRegion(region_id);
     }
@@ -571,7 +645,7 @@ void DynamicAOI::MigrateEntitiesFromRegion(uint32_t from_region_id, uint32_t to_
     }
 
     RegionNode& from_region_node = (itr_from_region->second); 
-    RegionNode& to_region_node = (itr_from_region->second);
+    RegionNode& to_region_node = (itr_to_region->second);
 
     for(auto& entity_id : from_region_node.entity_id_list)
     {
@@ -589,6 +663,7 @@ void DynamicAOI::MigrateEntitiesFromRegion(uint32_t from_region_id, uint32_t to_
 
         entity_info.region_id = to_region_id;
 
+        //std::cout << "DynamicAOI::MigrateEntitiesFromRegion region_id:=" << to_region_id
         to_region_node.stats.player_count += 1;
         to_region_node.entity_id_list.insert(entity_id);
     }

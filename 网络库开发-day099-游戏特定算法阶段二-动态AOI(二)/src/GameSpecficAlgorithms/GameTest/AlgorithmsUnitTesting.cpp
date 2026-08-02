@@ -30,13 +30,13 @@
 #include "../BehaviorTree/BTCompositeNode/SequenceNode.h"
 #include "../BehaviorTree/BTCompositeNode/SelectorNode.h"
 #include "../BehaviorTree/BTCompositeNode/ParallelNode.h"
-
 #include "../BehaviorTree/BTDecoratorNode/BTDecoratorNode.h"
 #include "../BehaviorTree/BTDecoratorNode/CooldownNode.h"
 #include "../BehaviorTree/BTDecoratorNode/InverterNode.h"
 #include "../BehaviorTree/BTDecoratorNode/RepeaterNode.h"
 #include "../BehaviorTree/BTDecoratorNode/TimeoutNode.h"
 #include "../BehaviorTree/BTDecoratorNode/UntilSuccessNode.h"
+#include "../AOI/DynamicAOI/DynamicAOI.h"
 
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
@@ -1176,4 +1176,100 @@ void AlgorithmsUnitTesting::TestBehaviorTree_Step4()
     }
 
     std::cout << "\n=== All Decorator Tests PASSED ===" << std::endl;
+}
+
+
+
+
+void AlgorithmsUnitTesting::TestBasicInsertAndQuery() {
+    std::cout << "[Test] Basic Insert and Query..." << std::endl;
+
+    DynamicAOI aoi;
+    aoi.SetSplitThreshold(10.0f);
+    aoi.SetMergeThreshold(3.0f);
+
+    // 插入 5 个实体（密度低，不应分裂）
+    for (int i = 0; i < 5; ++i) {
+        aoi.AddEntity(i, i * 10.0f, i * 10.0f);
+    }
+
+    // 查询半径 50 内的实体
+    auto result = aoi.Query(25.0f, 25.0f, 50.0f);
+    // 预期：至少包含实体 2（在 20,20）和 3（在 30,30）
+    assert(!result.empty());
+    std::cout << "[PASS] Basic Insert and Query" << std::endl;
+}
+
+void AlgorithmsUnitTesting::TestSplitTrigger() {
+    std::cout << "[Test] Split trigger..." << std::endl;
+
+    DynamicAOI aoi;
+    aoi.SetSplitThreshold(0.00001f);
+    aoi.SetMergeThreshold(3.0f);
+
+    // 在根区域中心插入大量实体（超过分裂阈值）
+    for (int i = 0; i < 15; ++i) {
+        float angle = i * 3.14159f * 2.0f / 15.0f;
+        float x = 500.0f + 50.0f * std::cos(angle);
+        float y = 500.0f + 50.0f * std::sin(angle);
+        aoi.AddEntity(i, x, y);
+    }
+
+    // 检查是否有分裂发生（区域数量应该 > 1）
+    auto infos = aoi.GetRegionInfos();
+    std::cout << "  Regions after inserting 15 entities: " << infos.size() << std::endl;
+    assert(infos.size() > 1);
+
+    std::cout << "[PASS] Split trigger" << std::endl;
+}
+
+void AlgorithmsUnitTesting::TestMergeTrigger() {
+    std::cout << "[Test] Merge trigger..." << std::endl;
+
+    DynamicAOI aoi;
+    aoi.SetSplitThreshold(0.00001f);
+    aoi.SetMergeThreshold(0.000003f);
+
+    // 先插入大量实体触发分裂
+    std::vector<uint32_t> ids;
+    for (int i = 0; i < 15; ++i) {
+        float x = 500.0f + (i - 7.5f) * 10.0f;
+        float y = 500.0f + (i - 7.5f) * 10.0f;
+        aoi.AddEntity(i, x, y);
+        ids.push_back(i);
+    }
+
+    // 记录分裂后的区域数量
+    auto infos_before = aoi.GetRegionInfos();
+    size_t count_before = infos_before.size();
+    std::cout << "  Regions before merge: " << count_before << std::endl;
+
+    // 移除所有实体（密度降为 0，应触发合并）
+    for (uint32_t id : ids) {
+        aoi.RemoveEntity(id);
+    }
+
+    auto infos_after = aoi.GetRegionInfos();
+    size_t count_after = infos_after.size();
+    std::cout << "  Regions after merge: " << count_after << std::endl;
+
+    // 执行多次 CheckAndAdjust 触发合并（因为密度变化需要冷却）
+    for (int i = 0; i < 5; ++i) {
+        aoi.Rebalance();
+    }
+
+    infos_after = aoi.GetRegionInfos();
+    count_after = infos_after.size();
+    std::cout << "Rebalance  Regions after merge: " << count_after << std::endl;
+    assert(count_after < count_before);
+
+    std::cout << "[PASS] Merge trigger" << std::endl;
+}
+
+void AlgorithmsUnitTesting::TestDynamicAOI() {
+    std::cout << "=== DynamicAOI Functional Tests ===" << std::endl;
+    //TestBasicInsertAndQuery();
+    //TestSplitTrigger();
+    TestMergeTrigger();
+    std::cout << "=== ALL FUNCTIONAL TESTS PASSED ===" << std::endl;
 }

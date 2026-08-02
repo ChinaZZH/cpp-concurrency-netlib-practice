@@ -28,7 +28,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestBehaviorTree_Step4();
+    gameAlgorighm.TestDynamicAOI();
     return 0;
 }
 

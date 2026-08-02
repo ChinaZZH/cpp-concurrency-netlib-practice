@@ -42,6 +42,8 @@ public:
     void TestBehaviorTree_Step2();
     void TestBehaviorTree_Step4();
 
+    void TestDynamicAOI();
+
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     
@@ -56,4 +58,12 @@ private:
     void PrintStatus(const StateMachine& fsm, const StateContext& ctx, const char* msg = "");
 
     void PrintResult_ForBehaviorTree(const std::string& test_name, BTStatus status);
+
+
+private:
+    void TestBasicInsertAndQuery();
+
+    void TestSplitTrigger();
+
+    void TestMergeTrigger();
 };

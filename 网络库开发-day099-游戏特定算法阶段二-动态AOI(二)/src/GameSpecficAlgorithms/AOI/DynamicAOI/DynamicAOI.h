@@ -60,6 +60,9 @@ public:
     virtual void SetMergeThreshold(float threshold) override    { merge_threshold_ = threshold; }
 
    
+public:
+    std::vector<int> Query(int queryX, int queryY, int queryLength);
+
 private:
     // ----- 核心访问接口（返回指针） -----
     RegionNode* GetRegion(uint32_t region_id);
