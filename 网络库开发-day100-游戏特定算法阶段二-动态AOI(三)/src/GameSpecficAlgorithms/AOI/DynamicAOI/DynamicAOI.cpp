@@ -4,13 +4,42 @@
 #include <iostream>
 #include <cstdlib> 
 
-DynamicAOI::DynamicAOI(int grid_size /*= 100*/)
+DynamicAOI::DynamicAOI(int grid_size /*= 100*/, int worldWidth /*= 1024*/, int worldHeight /*= 1024*/)
 :grid_size_(grid_size)
 {
+    // 必须是偶数，奇数则报错
+    if((grid_size & 0x001) > 0)
+    {
+        exit(1);
+    }
+
+    // 将worldWidth转化成2的幂次方
+    {
+        int transformValue = 1;
+        while(transformValue < worldWidth)
+        {
+            transformValue = transformValue << 1;
+        }
+
+        worldWidth = transformValue;
+    }
+    
+
+    // 将worldHeight转化成2的幂次方
+    {
+        int transformValue = 1;
+        while(transformValue < worldHeight)
+        {
+            transformValue = transformValue << 1;
+        }
+        
+        worldHeight = transformValue;
+    }
+
     root_region_id_ = this->AllocateRegionId();
     RegionNode node;
     node.parent_id = 0;
-    node.bounds = AABB{0, 0, MAP_SIZE_, MAP_SIZE_};
+    node.bounds = AABB{0, 0, worldWidth, worldHeight};
     
     node.stats.region_id = root_region_id_;
     node.stats.player_count = 0;                                 //  当前区域玩家数
@@ -158,6 +187,7 @@ std::vector<int> DynamicAOI::Query(int queryX, int queryY, int queryLength)
             vecNeighborsId.push_back(entity_id);
         }
     }
+
     else
     {
         // 否则使用递归算法找到合适区域来获取玩家

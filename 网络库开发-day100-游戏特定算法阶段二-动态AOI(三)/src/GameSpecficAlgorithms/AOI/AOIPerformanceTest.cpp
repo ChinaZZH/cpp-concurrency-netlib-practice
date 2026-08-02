@@ -3,6 +3,7 @@
 #include "GridAOI.h"
 #include "CrossListAOI.h"
 #include "QuadTreeAOI.h"
+#include "DynamicAOI/DynamicAOI.h"
 
 
   // 生成随机位置
@@ -136,6 +137,18 @@
         {
             // 四叉树需要世界大小，且要求为 2 的幂，这里传入 WORLD_SIZE，内部会调整
             QuadTreeAOI aoi(cfg.worldWidth, cfg.worldHeight, cfg.gridSize, 8, 8);
+            auto result = RunTest(aoi, cfg, gen);
+            PrintResult(result);
+        }
+
+        gen.seed(42);
+
+        // 4. 动态AOI
+        {
+            // 1024*1024
+            DynamicAOI aoi(cfg.gridSize, cfg.worldWidth, cfg.worldHeight);
+            aoi.SetSplitThreshold(0.00001f);
+            aoi.SetMergeThreshold(0.000003f);
             auto result = RunTest(aoi, cfg, gen);
             PrintResult(result);
         }

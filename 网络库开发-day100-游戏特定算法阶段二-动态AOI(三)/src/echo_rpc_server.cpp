@@ -41,12 +41,12 @@ int PerformanceTest()
 
 int main()
 {
-    std::cout << "start unit testing" << std::endl;
-    UnitTesting();
+    //std::cout << "start unit testing" << std::endl;
+    //UnitTesting();
     //BehaviorTreeAction_TestFile testFile;
     //testFile.TestAllScenes();
     std::cout << "start PerformanceTest " << std::endl;
-    //PerformanceTest();
+    PerformanceTest();
     
     
    // Test_TimeWheel timeWheel;

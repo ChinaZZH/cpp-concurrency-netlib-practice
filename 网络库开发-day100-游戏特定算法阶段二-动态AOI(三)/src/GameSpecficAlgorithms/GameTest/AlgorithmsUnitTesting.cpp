@@ -1268,8 +1268,8 @@ void AlgorithmsUnitTesting::TestMergeTrigger() {
 
 void AlgorithmsUnitTesting::TestDynamicAOI() {
     std::cout << "=== DynamicAOI Functional Tests ===" << std::endl;
-    //TestBasicInsertAndQuery();
-    //TestSplitTrigger();
+    TestBasicInsertAndQuery();
+    TestSplitTrigger();
     TestMergeTrigger();
     std::cout << "=== ALL FUNCTIONAL TESTS PASSED ===" << std::endl;
 }

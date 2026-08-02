@@ -33,7 +33,7 @@ struct RegionNode
 class DynamicAOI : public IDynamicAOI
 {
 public:
-    DynamicAOI(int grid_size = 100);
+    DynamicAOI(int grid_size = 100, int worldWidth = 1024, int worldHeight = 1024);
     virtual ~DynamicAOI() = default;
 
     // ----- IAOIManager 接口实现 -----
