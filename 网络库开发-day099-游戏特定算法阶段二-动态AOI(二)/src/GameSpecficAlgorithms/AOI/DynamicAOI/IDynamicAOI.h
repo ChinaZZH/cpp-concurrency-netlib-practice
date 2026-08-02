@@ -16,7 +16,7 @@ struct RegionInfo
 {
     uint32_t region_id;         // 区域唯一标识
     uint32_t player_count;      // 区域内玩家数量
-    float area_size;            // 区域面积（单位：地图单位²）
+    int area_size;            // 区域面积（单位：地图单位²）
     //float density;            // 玩家密度 = player_count / area_size
     RegionState state;          // 当前状态
     std::vector<uint32_t> children;     // 子区域 ID 列表（如果有）

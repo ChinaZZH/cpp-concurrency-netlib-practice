@@ -4,6 +4,7 @@
 #include "IDynamicAOI.h"
 #include "AABB.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <cstdint>
 
@@ -11,16 +12,28 @@ struct RegionStats
 {
     uint32_t region_id;
     uint32_t player_count;          //  当前区域玩家数
-    float area_size;                //  区域面积（用于计算密度）
+    int   area_size;                //  区域面积（用于计算密度）
     uint32_t last_split_frame;      //  上次分裂帧号（防抖动）
     uint32_t last_merge_frame;      //  上次合并帧号（防抖动）
 };
 
 
+struct RegionNode
+{
+    RegionStats stats;          // RegionStats
+    AABB bounds;                // 区域边界
+    uint32_t parent_id = 0;     // 父区域
+    std::vector<uint32_t> children; // 子区域列表
+    
+    std::unordered_set<uint32_t> entity_id_list;
+};
+
+
+
 class DynamicAOI : public IDynamicAOI
 {
 public:
-    DynamicAOI();
+    DynamicAOI(int grid_size = 100);
     virtual ~DynamicAOI() = default;
 
     // ----- IAOIManager 接口实现 -----
@@ -48,57 +61,49 @@ public:
 
    
 private:
+    // ----- 核心访问接口（返回指针） -----
+    RegionNode* GetRegion(uint32_t region_id);
+    const RegionNode* GetRegion(uint32_t region_id) const;
+
     // ----- 内部核心方法 -----
     void SplitRegion(uint32_t region_id);
     void MergeRegion(uint32_t region_id);
     void CheckAndAdjust(uint32_t region_id);
 
+    // ----- 辅助查找 -----
+    uint32_t FindLeafRegion(uint32_t region_id, int x, int y) const;
+    
+
+    // ----- 辅助管理 -----
+    // 分配新区域 ID
+    uint32_t AllocateRegionId();
+    void MoveEntityToRegion(uint32_t entity_id, uint32_t new_region_id, int new_x, int new_y);
+     // ----- 实体迁移（分裂/合并时使用） -----
+    void MigrateEntitiesFromRegion(uint32_t from_region_id, uint32_t to_region_id);
+
+    // ----- 帧号管理 -----
     // 获取当前帧号（由外部注入或使用计数器）
     uint32_t GetCurrentFrame() const { return current_frame_; }
     void Tick()  { current_frame_ += 1; }
+   
 
-    // 分配新区域 ID
-    uint32_t AllocateRegionId();
+    RegionState CalcuRegionState(const RegionNode& node) const;
 
-    // 获取实体所在区域
-    uint32_t GetEntityRegion(uint32_t entity_id) const;
-
-    // 区域边界管理
-    AABB GetRegionBounds(uint32_t region_id) const;
-    void SetRegionBounds(uint32_t region_id, const AABB& bounds);
-    void RemoveRegionBounds(uint32_t region_id);
-
-    // 层级管理
-    uint32_t GetRegionParent(uint32_t region_id) const;
-    void SetRegionParent(uint32_t region_id, uint32_t parent_id);
-    void RemoveRegionParent(uint32_t region_id);
-
-    std::vector<uint32_t> GetRegionChildren(uint32_t region_id) const;
-    void AddRegionChild(uint32_t parent_id, uint32_t child_id);
-    void RemoveRegionChild(uint32_t parent_id, uint32_t child_id);
-    void ClearRegionChildren(uint32_t region_id);
-
-    // 实体迁移
-    void MOveEntityToRegion(uint32_t entity_id, uint32_t new_region_id);
-
-    // 计算密度
-    float CalcDensity(uint32_t region_id);
+    std::vector<int> FindPosInAABB(uint32_t region_id, const AABB& neighborAABB) const;
 
 private:
-    // 区域统计 区域网格：将地图划分为粗粒度网格，每个网格独立统计 
-    std::unordered_map<uint32_t, RegionStats>   region_stats_;
+    // 整合后的单一存储：region_id -> RegionNode
+    std::unordered_map<uint32_t, RegionNode>   regions_;
 
     // 实体位置映射：用于更新密度统计
-    std::unordered_map<uint32_t, uint32_t> entity_to_region_;  // entity_id -> region_id
+    struct EntityRegionInfo
+    {
+        uint32_t region_id;
+        std::pair<int, int> pos;
+    };
 
-    // 区域边界
-    std::unordered_map<uint32_t, AABB> region_bounds_;
+    std::unordered_map<uint32_t, EntityRegionInfo> entity_to_region_;  // entity_id -> region_id
 
-    // 层级结构：父区域
-    std::unordered_map<uint32_t, uint32_t> region_parent_;
-
-    // 层级结构：子区域列表
-    std::unordered_map<uint32_t, std::vector<uint32_t>> region_children_;
 
     // 阈值配置
     float split_threshold_ = 10.0f;         // 密度 > 10 玩家/单位面积 → 分裂
@@ -112,8 +117,12 @@ private:
     uint32_t current_frame_ = 0;
 
     // 区域 ID 分配器
-    uint32_t next_region_id = 1;
+    uint32_t next_region_id_ = 1;
 
     // 根区域 ID（整个地图范围）
     uint32_t root_region_id_ = 0;
+
+    static constexpr int MAP_SIZE_ = 1024; // 必须为2的幂次方
+
+    int grid_size_ = 100;
 };
