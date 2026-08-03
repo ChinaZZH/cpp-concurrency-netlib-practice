@@ -69,6 +69,9 @@ public:
 
     virtual EntityPositionResult GetEntityPosition(int entityId) const override;
 
+    // 获取该节点内的所有实体
+    virtual std::vector<BaseEntityData> GetAllEntities() const override;
+    
 private:
     bool InsertNodeForX(std::shared_ptr<CrossListNode> node);
     bool InsertNodeForY(std::shared_ptr<CrossListNode> node);

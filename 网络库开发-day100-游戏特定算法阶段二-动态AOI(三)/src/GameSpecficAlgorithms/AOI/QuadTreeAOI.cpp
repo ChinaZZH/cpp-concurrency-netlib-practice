@@ -30,13 +30,16 @@ bool QuadTreeNode::Insert(int entityId, int x, int y)
     // x, y 不属于这个区域
     if(!boundary_.Contains(x, y))
     {
+        // std::cout << "QuadTreeNode::Insert 1111 error left_bottom_x:=" << boundary_.left_bottom_x << " left_bottom_y:=" << boundary_.left_bottom_y;
+        // std::cout << " right_top_x:=" << (boundary_.left_bottom_x + boundary_.width) << " right_top_y:=" << (boundary_.left_bottom_y + boundary_.height) << " (x:="  << x << " , y:=" << y << ")" << std::endl;
         return false;
     }
 
     if(isLeaf_)
     {
         // 递归深度已经超过极限 或者当前的实体ID列表还没有到达阈值
-        if(depth_ >= maxDepth_ || entityIdList_.size() < capacity_)
+        // capacity_ <= 0 则不进行分裂
+        if(capacity_ <= 0 || depth_ >= maxDepth_ || entityIdList_.size() < capacity_)
         {
             //std::cout << "QuadTreeNode::Insert entityId:=" << entityId << std::endl;
             entityIdList_.push_back(entityId);
@@ -429,8 +432,10 @@ void QuadTreeNode::Query(const Rect& range, std::set<int>& result) const
 /*******************QuadTreeAOI 四叉树的AOI算法实现*****************************/
 /*************************************************************************** */
 
-QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int nodeCapacity, int maxDepth)
+QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int nodeCapacity, int maxDepth, int min_x /*= 0*/, int min_y /*= 0*/)
     :BaseAOIManager(gridSize)
+    , start_min_x_(min_x)
+    , start_min_y_(min_y)
 {
     // 必须是偶数，奇数则报错
     if((gridSize & 0x001) > 0)
@@ -442,7 +447,7 @@ QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int node
     {
         int depth = 0;
         int transformValue = 1;
-        while(transformValue < worldWidth && depth < maxDepth)
+        while((transformValue < worldWidth) || (depth < maxDepth))
         {
             transformValue = transformValue << 1;
             depth += 1;
@@ -456,7 +461,7 @@ QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int node
     {
         int depth = 0;
         int transformValue = 1;
-        while(transformValue < worldHeight && depth < maxDepth)
+        while((transformValue < worldHeight) || (depth < maxDepth))
         {
             transformValue = transformValue << 1;
             depth += 1;
@@ -465,7 +470,7 @@ QuadTreeAOI::QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int node
         worldHeight = transformValue;
     }
 
-    QuadTreeNode::Rect rect(0, 0, worldWidth, worldHeight);
+    QuadTreeNode::Rect rect(min_x, min_y, worldWidth, worldHeight);
     root_ = std::make_unique<QuadTreeNode>(this, rect, nodeCapacity, maxDepth, 0);
 }
 
@@ -479,17 +484,12 @@ bool QuadTreeAOI::AddEntity(int entityId, int x, int y)
     auto itr = entityMap_.find(entityId);
     if(itr != entityMap_.end())
     {
-        std::stringstream ss;
-        ss << "QuadTreeAOI::AddEntity error entityID:=" << entityId << std::endl; 
-        LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("QuadTreeAOI.txt", ss.str());
-
-        std::cout << "QuadTreeAOI::AddEntity error entityID:=" << entityId << std::endl; 
-        return false;
+        return MoveEntity(entityId, x, y);
     }
 
     if(false == root_->Insert(entityId, x, y))
     {
+        std::cout << "QuadTreeAOI::AddEntity error222 entityID:=" << entityId << std::endl; 
         return false;
     }
 
@@ -562,17 +562,18 @@ bool QuadTreeAOI::RemoveEntity(int entityId)
 
 bool QuadTreeAOI::MoveEntity(int entityId, int newX, int newY)
 {
+    /*
+    {
+        newX = newX - start_min_x_;
+        newY = newY - start_min_y_;
+    }
+    */
+
     // 移动entity的前提是 原先entityId就已经在了。
     auto itrEntity = entityMap_.find(entityId);
     if(itrEntity == entityMap_.end())
     {
-        std::stringstream ss;
-        ss << "QuadTreeAOI::MoveEntity error entityID:=" << entityId << std::endl;
-        LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("QuadTreeAOI.txt", ss.str());
-
-        std::cout << "QuadTreeAOI::MoveEntity error entityID:=" << entityId << std::endl; 
-        return false;
+        return AddEntity(entityId, newX, newY);
     }
 
     // 位置没有发生变化的时候，直接返回
@@ -677,4 +678,21 @@ EntityPositionResult QuadTreeAOI::GetEntityPosition(int entityId) const
     result.y = entity.y;
     result.lastUpdateTime = entity.lastUpdateTime;
     return result;
+}
+
+std::vector<BaseEntityData> QuadTreeAOI::GetAllEntities() const
+{
+    std::vector<BaseEntityData> vecAllEntity;
+    vecAllEntity.reserve(entityMap_.size());
+    for(const auto& [entity_id, info] : entityMap_)
+    {
+        BaseEntityData data;
+        data.id = entity_id;
+        data.x = info.x;
+        data.y = info.y;
+        
+        vecAllEntity.emplace_back(std::move(data));
+    }
+
+    return vecAllEntity;
 }

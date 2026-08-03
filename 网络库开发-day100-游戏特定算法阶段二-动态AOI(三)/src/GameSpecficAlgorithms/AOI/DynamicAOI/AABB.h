@@ -21,6 +21,14 @@ struct AABB
         return (px >= min_x && px <= max_x) && (py >= min_y && py <= max_y);
     }
 
+    bool IsContain(const AABB& containAABB) const 
+    {
+        return (containAABB.min_x >= min_x && containAABB.min_x <= max_x)
+        && (containAABB.max_x >= min_x && containAABB.max_x <= max_x)
+        && (containAABB.min_y >= min_y && containAABB.min_y <= max_y)
+        && (containAABB.max_y >= min_y && containAABB.max_y <= max_y);
+    }
+
     // 判断两个区域是否相邻（用于合并检查）
     bool IsAdjacentTo(const AABB& other) const 
     {

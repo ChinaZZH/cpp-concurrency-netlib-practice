@@ -7,25 +7,32 @@
 #include <unordered_set>
 #include <vector>
 #include <cstdint>
+#include <memory>
 
-
-struct RegionNode
+// 整合后的单一存储：region_id -> RegionNode_V2
+struct RegionNode_V2
 {
     RegionStats stats;          // RegionStats
     AABB bounds;                // 区域边界
     uint32_t parent_id = 0;     // 父区域
     std::vector<uint32_t> children; // 子区域列表
     
-    std::unordered_set<uint32_t> entity_id_list;
+    int depth = 0;
+    std::unique_ptr<IAOIManager> storage; // 以min_x, min_y 为原点 只有叶子结点才有效
+
+    void AddPlayer(int player_id, int newX, int newY);
+    void RemovePlayer(int player_id);
+    void ClearPlayer();
+    void ClearStorage();
+    void CreateStorage(int aoi_type, int grid_size);
+    int PlayerCount() const;
 };
 
-
-
-class DynamicAOI : public IDynamicAOI
+class DynamicAOI_V2 : public IDynamicAOI
 {
 public:
-    DynamicAOI(int grid_size = 100, int worldWidth = 1024, int worldHeight = 1024);
-    virtual ~DynamicAOI() = default;
+    DynamicAOI_V2(int aoi_type, int max_depth = 0, int grid_size = 100, int worldWidth = 1024, int worldHeight = 1024);
+    virtual ~DynamicAOI_V2() = default;
 
     // ----- IAOIManager 接口实现 -----
 public:
@@ -36,7 +43,7 @@ public:
     virtual EntityPositionResult GetEntityPosition(int entityId) const override;
     // 获取该节点内的所有实体
     virtual std::vector<BaseEntityData> GetAllEntities() const override;
-
+    
     // ----- IDynamicAOI 接口实现 -----
 public:
     //  获取指定区域的玩家密度 (玩家数/区域面积)
@@ -58,8 +65,8 @@ public:
 
 private:
     // ----- 核心访问接口（返回指针） -----
-    RegionNode* GetRegion(uint32_t region_id);
-    const RegionNode* GetRegion(uint32_t region_id) const;
+    RegionNode_V2* GetRegion(uint32_t region_id);
+    const RegionNode_V2* GetRegion(uint32_t region_id) const;
 
     // ----- 内部核心方法 -----
     void SplitRegion(uint32_t region_id);
@@ -83,13 +90,13 @@ private:
     void Tick()  { current_frame_ += 1; }
    
 
-    RegionState CalcuRegionState(const RegionNode& node) const;
+    RegionState CalcuRegionState(const RegionNode_V2& node) const;
 
     std::vector<int> FindPosInAABB(uint32_t region_id, const AABB& neighborAABB) const;
 
+
 private:
-    // 整合后的单一存储：region_id -> RegionNode
-    std::unordered_map<uint32_t, RegionNode>   regions_;
+    std::unordered_map<uint32_t, RegionNode_V2>   regions_;
 
     // 实体位置映射：用于更新密度统计
     struct EntityRegionInfo
@@ -121,4 +128,8 @@ private:
     static constexpr int MAP_SIZE_ = 1024; // 必须为2的幂次方
 
     int grid_size_ = 100;
+
+    int aoi_type_ = 0;
+
+    int max_depth_ = 8;
 };

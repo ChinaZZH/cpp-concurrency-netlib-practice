@@ -43,6 +43,7 @@ public:
     void TestBehaviorTree_Step4();
 
     void TestDynamicAOI();
+    void TestDynamicAOI_V2();
 
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);

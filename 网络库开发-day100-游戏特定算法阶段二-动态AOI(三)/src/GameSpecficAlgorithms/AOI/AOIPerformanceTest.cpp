@@ -4,6 +4,7 @@
 #include "CrossListAOI.h"
 #include "QuadTreeAOI.h"
 #include "DynamicAOI/DynamicAOI.h"
+#include "DynamicAOI/DynamicAOI_V2.h"
 
 
   // 生成随机位置
@@ -152,6 +153,40 @@
             auto result = RunTest(aoi, cfg, gen);
             PrintResult(result);
         }
+
+
+        gen.seed(42);
+         // 5. 动态AOI
+         {
+            // 1024*1024
+            DynamicAOI_V2 aoi(1, 0, cfg.gridSize, cfg.worldWidth, cfg.worldHeight);
+            aoi.SetSplitThreshold(0.00001f);
+            aoi.SetMergeThreshold(0.000003f);
+            auto result = RunTest(aoi, cfg, gen);
+            PrintResult(result);
+         }
+
+         gen.seed(42);
+         // 5. 动态AOI
+         {
+            // 1024*1024
+            DynamicAOI_V2 aoi(0, 0, cfg.gridSize, cfg.worldWidth, cfg.worldHeight);
+            aoi.SetSplitThreshold(0.00001f);
+            aoi.SetMergeThreshold(0.000003f);
+            auto result = RunTest(aoi, cfg, gen);
+            PrintResult(result);
+         }
+
+         gen.seed(42);
+         // 5. 动态AOI
+         {
+            // 1024*1024
+            DynamicAOI_V2 aoi(2, 0, cfg.gridSize, cfg.worldWidth, cfg.worldHeight);
+            aoi.SetSplitThreshold(0.00001f);
+            aoi.SetMergeThreshold(0.000003f);
+            auto result = RunTest(aoi, cfg, gen);
+            PrintResult(result);
+         }
 
         return 0;
     }

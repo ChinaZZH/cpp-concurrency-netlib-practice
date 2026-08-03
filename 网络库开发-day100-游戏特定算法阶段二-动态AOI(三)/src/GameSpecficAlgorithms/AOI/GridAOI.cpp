@@ -9,13 +9,7 @@
     auto itr = entityMap_.find(entityId);
     if(itr != entityMap_.end())
     {
-        std::stringstream ss;
-        ss << "GridAOI::AddEntity error entityID:=" << entityId << std::endl; 
-        LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("GridAOI.txt", ss.str());
-
-        std::cout << "GridAOI::AddEntity error entityID:=" << entityId << std::endl; 
-        return false;
+        return MoveEntity(entityId, x, y);
     }
 
     // 存储数据修改
@@ -106,13 +100,7 @@ bool GridAOI::MoveEntity(int entityId, int newX, int newY)
     auto itrEntity = entityMap_.find(entityId);
     if(itrEntity == entityMap_.end())
     {
-        std::stringstream ss;
-        ss << "GridAOI::MoveEntity error entityID:=" << entityId << std::endl;
-        LogFile& logfile = LogFile::getInstance();
-        logfile.AppendContent("GridAOI.txt", ss.str());
-
-        std::cout << "GridAOI::MoveEntity error entityID:=" << entityId << std::endl; 
-        return false;
+        return AddEntity(entityId, newX, newY);
     }
 
     // 位置没有发生变化的时候，直接返回
@@ -261,3 +249,19 @@ EntityPositionResult GridAOI::GetEntityPosition(int entityId) const
     return result;
 }
 
+std::vector<BaseEntityData> GridAOI::GetAllEntities() const
+{
+    std::vector<BaseEntityData> vecAllEntity;
+    vecAllEntity.reserve(entityMap_.size());
+    for(const auto& [entity_id, info] : entityMap_)
+    {
+        BaseEntityData data;
+        data.id = entity_id;
+        data.x = info.x;
+        data.y = info.y;
+        
+        vecAllEntity.emplace_back(std::move(data));
+    }
+
+    return vecAllEntity;
+}

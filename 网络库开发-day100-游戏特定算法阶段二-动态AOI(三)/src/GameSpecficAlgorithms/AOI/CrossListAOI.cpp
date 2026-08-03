@@ -790,3 +790,22 @@ bool CrossListAOI::MoveNodeToNewY(int entityId, int newY, int newGridY)
     newNextNode->prevY = moveNode;
     return true;
 }
+
+
+// 获取该节点内的所有实体
+std::vector<BaseEntityData> CrossListAOI::GetAllEntities() const
+{
+    std::vector<BaseEntityData> vecAllEntity;
+    vecAllEntity.reserve(nodeMap_.size());
+    for(const auto& [entity_id, node] : nodeMap_)
+    {
+        BaseEntityData data;
+        data.id = entity_id;
+        data.x = node->info.x;
+        data.y = node->info.y;
+        
+        vecAllEntity.emplace_back(std::move(data));
+    }
+
+    return vecAllEntity;
+}

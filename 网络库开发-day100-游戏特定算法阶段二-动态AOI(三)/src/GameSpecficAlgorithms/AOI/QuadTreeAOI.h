@@ -28,7 +28,7 @@ public:
         bool Contains(int x, int y) const {
             int right_top_x = left_bottom_x + width;
             int right_top_y = left_bottom_y + height;
-            return (x >= left_bottom_x && x < right_top_x) && (y >= left_bottom_y && y < right_top_y);
+            return (x >= left_bottom_x && x <= right_top_x) && (y >= left_bottom_y && y <= right_top_y);
         }
 
         bool Intersets(const Rect& other) const {
@@ -77,7 +77,7 @@ private:
 class QuadTreeAOI : public BaseAOIManager
 {
 public:
-    QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int nodeCapacity, int maxDepth);
+    QuadTreeAOI(int worldWidth, int worldHeight, int gridSize, int nodeCapacity, int maxDepth, int min_x = 0, int min_y = 0);
     virtual ~QuadTreeAOI();
 
     // 接口
@@ -93,10 +93,16 @@ public:
 
     virtual EntityPositionResult GetEntityPosition(int entityId) const override;
 
+    // 获取该节点内的所有实体
+    virtual std::vector<BaseEntityData> GetAllEntities() const override;
 
 private:
     std::unique_ptr<QuadTreeNode> root_;
 
      // 实体ID → 实体信息（物理坐标）
     std::unordered_map<int, EntityInfo> entityMap_;
+
+    int start_min_x_ = 0;
+
+    int start_min_y_ = 0;
 };

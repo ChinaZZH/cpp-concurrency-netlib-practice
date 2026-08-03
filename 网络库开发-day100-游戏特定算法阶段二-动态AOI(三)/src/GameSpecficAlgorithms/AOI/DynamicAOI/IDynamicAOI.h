@@ -3,6 +3,8 @@
 #include "../IAOIManager.h"
 #include <vector>
 
+
+
 enum class RegionState
 {
     Stable,         // 稳定状态（密度在阈值范围内）
@@ -22,6 +24,17 @@ struct RegionInfo
     std::vector<uint32_t> children;     // 子区域 ID 列表（如果有）
     uint32_t parent_id;         // 父区域 ID（0 表示根区域）
 };
+
+
+struct RegionStats
+{
+    uint32_t region_id;
+    uint32_t player_count;          //  当前区域玩家数
+    int   area_size;                //  区域面积（用于计算密度）
+    uint32_t last_split_frame;      //  上次分裂帧号（防抖动）
+    uint32_t last_merge_frame;      //  上次合并帧号（防抖动）
+};
+
 
 class IDynamicAOI: public IAOIManager
 {

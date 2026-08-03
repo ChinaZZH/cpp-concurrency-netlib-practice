@@ -21,6 +21,13 @@ struct EntityPositionResult {
     std::chrono::steady_clock::time_point lastUpdateTime;
 };
 
+struct BaseEntityData
+{
+    uint32_t id;
+    uint32_t x;
+    uint32_t y;
+};
+
 // AOI 统一接口
 class PartitionedPool;
 class DeltaSyncManager;
@@ -42,4 +49,7 @@ public:
 
     // 辅助查询
     virtual std::vector<int> GetNeighbors(int entityId, int radius = 1) const = 0;
+
+    // 获取该节点内的所有实体
+    virtual std::vector<BaseEntityData> GetAllEntities() const = 0;
 };

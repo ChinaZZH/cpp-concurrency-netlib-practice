@@ -47,6 +47,9 @@ public:
 
     virtual EntityPositionResult GetEntityPosition(int entityId) const override;
 
+    // 获取该节点内的所有实体
+    virtual std::vector<BaseEntityData> GetAllEntities() const override;
+
 private:
     // 实体ID → 实体信息（物理坐标）
     std::unordered_map<int, EntityInfo> entityMap_;

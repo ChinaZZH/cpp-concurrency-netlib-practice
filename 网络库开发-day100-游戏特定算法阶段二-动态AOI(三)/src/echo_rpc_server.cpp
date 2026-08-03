@@ -28,7 +28,7 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestDynamicAOI();
+    gameAlgorighm.TestDynamicAOI_V2();
     return 0;
 }
 
@@ -41,8 +41,8 @@ int PerformanceTest()
 
 int main()
 {
-    //std::cout << "start unit testing" << std::endl;
-    //UnitTesting();
+    std::cout << "start unit testing" << std::endl;
+    UnitTesting();
     //BehaviorTreeAction_TestFile testFile;
     //testFile.TestAllScenes();
     std::cout << "start PerformanceTest " << std::endl;
