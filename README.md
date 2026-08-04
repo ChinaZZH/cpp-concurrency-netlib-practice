@@ -19,7 +19,7 @@
  - [monkey编译器实现的说明文档](./docs/monkey_compiler.md)
 
   ## 游戏特定算法
-  - [三种aoi算法的性能比对](./docs/aoi_performance_test.md)
+  - [多种aoi算法的性能比对](./docs/aoi_performance_test.md)
   - [帧同步插值方案对比：帧号 vs 时间戳](./docs/frame_interpolation_comparison.md)
   - [状态同步：从原理到落地的完整剖析](./docs/state_sync.md)
   - [帧同步：从理论到工程的完整实践](./docs/frame_sync.md)
