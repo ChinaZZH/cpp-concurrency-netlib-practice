@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+message FieldUpdate {
+    int32 field_id = 1;        // 枚举：1=HP, 2=MP, 3=Level, 4=WeaponID, 5=Gold...
+    int64 value = 2;           
+}
+
+message AttributeDelta {
+    int32 msg_client_id = 1;    // 这条消息包所属对象
+    int32 entity_id = 2;        
+    int32 version_no = 3;       // 单调递增，用于客户端排序
+    bool is_full_snapshot = 4; 
+    repeated FieldUpdate fields = 5;
+}
+
+
+message NackRequest {
+    int32 entity_id = 1;        
+    int32 from_version = 2;     // 客户端期望从此版本开始补发
+}
