@@ -16,7 +16,7 @@
 #include <iostream>
 
 #include "GameSpecficAlgorithms/GameServer.h"
-#include "GameSpecficAlgorithms/AOI/AOIPerformanceTest.h"
+#include "GameSpecficAlgorithms/GameTest/AOIPerformanceTest.h"
 #include "GameSpecficAlgorithms/GameTest/Test_TimeWheel.h"
 #include "GameSpecficAlgorithms/GameClient/Test_Client_Entity.h"
 #include "GameSpecficAlgorithms/GameTest/BehaviorTreeAction_TestFile.h"
@@ -28,7 +28,8 @@
 int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
-    gameAlgorighm.TestDynamicAOI_V2();
+    //gameAlgorighm.TestDynamicAOI_V2();
+    gameAlgorighm.TestPartitionCreation();
     return 0;
 }
 
@@ -45,8 +46,8 @@ int main()
     UnitTesting();
     //BehaviorTreeAction_TestFile testFile;
     //testFile.TestAllScenes();
-    std::cout << "start PerformanceTest " << std::endl;
-    PerformanceTest();
+    //std::cout << "start PerformanceTest " << std::endl;
+    //PerformanceTest();
     
     
    // Test_TimeWheel timeWheel;

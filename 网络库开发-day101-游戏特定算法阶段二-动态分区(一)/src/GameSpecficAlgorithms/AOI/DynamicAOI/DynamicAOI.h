@@ -2,7 +2,7 @@
 
 
 #include "IDynamicAOI.h"
-#include "AABB.h"
+#include "../../../Common/AABB.h"
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>

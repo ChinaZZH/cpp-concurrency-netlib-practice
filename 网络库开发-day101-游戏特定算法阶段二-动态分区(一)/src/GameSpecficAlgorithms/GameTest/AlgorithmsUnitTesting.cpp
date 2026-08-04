@@ -2,7 +2,6 @@
 #include "../AOI/GridAOI.h"
 #include "../AOI/CrossListAOI.h"
 #include "../AOI/QuadTreeAOI.h"
-#include "../AOI/AOIPerformanceTest.h"
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
 #include "../FrameSync/ServerPlayerManager.h"
@@ -38,6 +37,8 @@
 #include "../BehaviorTree/BTDecoratorNode/UntilSuccessNode.h"
 #include "../AOI/DynamicAOI/DynamicAOI.h"
 #include "../AOI/DynamicAOI/DynamicAOI_V2.h"
+#include "../DynamicPartition/PartitionManager.h"
+
 
 
  AlgorithmsUnitTesting::AlgorithmsUnitTesting()
@@ -1368,3 +1369,30 @@ void AlgorithmsUnitTesting::TestDynamicAOI_V2() {
     }
     std::cout << "=== ALL FUNCTIONAL TESTS PASSED ===" << std::endl;
 }
+
+
+ void AlgorithmsUnitTesting::TestPartitionCreation()
+ {
+    PartitionManager mgr;
+    AABB world{0, 0, 1000, 1000};
+    mgr.Init(world, 100);
+
+    auto partitions = mgr.GetAllPartitions();
+    assert(partitions.size() == 100);  // 10x10
+
+    // 测试位置查询
+    auto p = mgr.GetPartitionByPos(50, 50);
+    assert(p != nullptr);
+    assert(p->bounds.min_x == 0 && p->bounds.max_x == 100);
+    assert(p->bounds.min_y == 0 && p->bounds.max_y == 100);
+
+    // 测试 AOI 实例是否存在
+    auto* aoi = mgr.GetPartitionAOI(p->partition_id);
+    assert(aoi != nullptr);
+
+    // 测试向分区 AOI 添加实体
+    bool added = aoi->AddEntity(1, 50, 50);
+    assert(added);
+
+    std::cout << "Partition creation test PASSED" << std::endl;
+ }

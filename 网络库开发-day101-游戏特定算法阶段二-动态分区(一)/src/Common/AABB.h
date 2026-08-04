@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 // AABB（轴对齐包围盒）
 // 轴对齐（Axis-Aligned）：矩形的边永远平行于 X 轴和 Y 轴，不会旋转。
 // 包围盒（Bounding Box）：用来“框住”某个区域或物体
@@ -11,6 +13,7 @@ struct AABB
     int max_x;
     int max_y;
 
+    
     int GetWidth() const  { return max_x - min_x; }
     int GetHeight() const { return max_y - min_y; }
     int GetArea() const { return GetWidth()*GetHeight(); }

@@ -1,10 +1,10 @@
 #include "AOIPerformanceTest.h"
-#include "IAOIManager.h"
-#include "GridAOI.h"
-#include "CrossListAOI.h"
-#include "QuadTreeAOI.h"
-#include "DynamicAOI/DynamicAOI.h"
-#include "DynamicAOI/DynamicAOI_V2.h"
+#include "../AOI/IAOIManager.h"
+#include "../AOI/GridAOI.h"
+#include "../AOI/CrossListAOI.h"
+#include "../AOI/QuadTreeAOI.h"
+#include "../AOI/DynamicAOI/DynamicAOI.h"
+#include "../AOI/DynamicAOI/DynamicAOI_V2.h"
 
 
   // 生成随机位置
