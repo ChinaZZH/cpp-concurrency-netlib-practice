@@ -46,7 +46,8 @@ public:
     void TestDynamicAOI_V2();
 
     void TestPartitionCreation();
-    
+    void TestPartitionMigration();
+
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     
@@ -69,4 +70,10 @@ private:
     void TestSplitTrigger();
 
     void TestMergeTrigger();
+
+    void TestLoadMonitoring();
+
+    void TestMigrationDecision();
+
+    void TestUnderloadedMerge();
 };

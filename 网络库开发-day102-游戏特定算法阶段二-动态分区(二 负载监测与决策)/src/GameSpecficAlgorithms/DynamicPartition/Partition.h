@@ -17,7 +17,7 @@ struct Partition
 {
     uint32_t partition_id;
     AABB bounds;                    // 分区边界（矩形）
-    std::string node_address;       // 所在服务节点地址
+    std::string work_server_address;// 所在服务节点地址
     PartitionState state;
     uint32_t player_count;          // 当前玩家数（定期更新）
     uint32_t entity_count;          // 当前实体数（定期更新）

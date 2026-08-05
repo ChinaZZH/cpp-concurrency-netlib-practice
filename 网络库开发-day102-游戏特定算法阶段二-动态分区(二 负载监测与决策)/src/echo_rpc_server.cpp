@@ -29,7 +29,8 @@ int UnitTesting()
 {
     AlgorithmsUnitTesting gameAlgorighm;
     //gameAlgorighm.TestDynamicAOI_V2();
-    gameAlgorighm.TestPartitionCreation();
+    //gameAlgorighm.TestPartitionCreation();
+    gameAlgorighm.TestPartitionMigration();
     return 0;
 }
 

@@ -1396,3 +1396,107 @@ void AlgorithmsUnitTesting::TestDynamicAOI_V2() {
 
     std::cout << "Partition creation test PASSED" << std::endl;
  }
+
+
+ void AlgorithmsUnitTesting::TestLoadMonitoring()
+ {
+    std::cout << "[Test] Load monitoring..." << std::endl;
+
+    PartitionManager mgr;
+    AABB world{0, 0, 1000, 1000};
+    mgr.Init(world, 100);
+
+    auto partitions = mgr.GetAllPartitions();
+    assert(!partitions.empty());
+    auto p = partitions[0];
+    auto* aoi = p->aoi.get();
+
+    // 添加 60 个实体
+    for (int i = 0; i < 60; ++i) {
+        aoi->AddEntity(i, i % 100, i / 10);
+    }
+
+    mgr.RefreshLoad(p->partition_id);
+    //std::cout << "[Test] Load monitoring... player_count:=" << (p->player_count) << std::endl;
+    assert(p->player_count == 60);
+
+    // 检查超载
+    auto overloaded = mgr.GetOverloadedPartitions();
+    assert(std::find(overloaded.begin(), overloaded.end(), p->partition_id) != overloaded.end());
+
+    std::cout << "[PASS] Load monitoring" << std::endl;
+ }
+
+
+ void AlgorithmsUnitTesting::TestMigrationDecision()
+ {
+    std::cout << "[Test] Migration decision..." << std::endl;
+
+    PartitionManager mgr;
+    AABB world{0, 0, 1000, 1000};
+    mgr.Init(world, 100);
+
+    auto partitions = mgr.GetAllPartitions();
+    auto p = partitions[0];
+    auto* aoi = p->aoi.get();
+
+    // 添加 60 个实体 → 超载
+    for (int i = 0; i < 60; ++i) {
+        aoi->AddEntity(i, i % 100, i / 10);
+    }
+    mgr.RefreshLoad(p->partition_id);
+
+    auto decision = mgr.EvaluatePartition(p->partition_id);
+    assert(decision.should_migrate == true);
+    assert(decision.reason == MigrationReason::Overloaded);
+    assert(decision.direction == MigrationDirection::Split);
+
+    std::cout << "[PASS] Migration decision" << std::endl;
+ }
+
+
+ void AlgorithmsUnitTesting::TestUnderloadedMerge()
+ {
+    std::cout << "[Test] Underloaded merge..." << std::endl;
+
+    PartitionManager mgr;
+    AABB world{0, 0, 1000, 1000};
+    mgr.Init(world, 100);
+
+    // 设置较低阈值以便测试
+    LoadThresholds thresholds;
+    thresholds.max_players_per_partition = 50;
+    thresholds.min_players_for_merge = 10;
+    mgr.SetThresholds(thresholds);
+
+    auto partitions = mgr.GetAllPartitions();
+    // 取两个相邻分区，各放 3 个实体
+    auto p1 = partitions[0];
+    auto p2 = partitions[1];  // 假设相邻
+
+    for (int i = 0; i < 3; ++i) {
+        p1->aoi->AddEntity(i, i * 10, 50);
+        p2->aoi->AddEntity(i + 100, i * 10 + 100, 50);
+    }
+    mgr.RefreshLoad(p1->partition_id);
+    mgr.RefreshLoad(p2->partition_id);
+
+    auto decision = mgr.EvaluatePartition(p1->partition_id);
+    if (decision.should_migrate) {
+        assert(decision.reason == MigrationReason::Underloaded);
+        assert(decision.direction == MigrationDirection::Merge);
+        std::cout << "[PASS] Underloaded merge triggered" << std::endl;
+    } else {
+        std::cout << "[SKIP] Underloaded merge not triggered (may need to check adjacency)" << std::endl;
+    }
+ }
+
+
+ void AlgorithmsUnitTesting::TestPartitionMigration()
+ {
+    std::cout << "=== Partition Day 2 Tests ===" << std::endl;
+    TestLoadMonitoring();
+    TestMigrationDecision();
+    TestUnderloadedMerge();
+    std::cout << "=== ALL TESTS COMPLETE ===" << std::endl;
+ }

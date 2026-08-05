@@ -2,17 +2,10 @@
 #include "../AOI/GridAOI.h"
 #include <cmath>
 #include <iostream>
+#include <sstream>
 #include <chrono>
+#include <algorithm>
 
-/*
-std::unordered_map<uint32_t, Partition> partitions_;
-    
-    AABB world_bounds_;
-    
-    uint32_t grid_size_;
-    
-    uint32_t next_partition_id_ = 1;
-    */
 
  // --- 初始化 ---
 void PartitionManager::Init(const AABB& world_bounds, int grid_size)
@@ -105,7 +98,7 @@ std::vector<std::shared_ptr<Partition>> PartitionManager::GetAllPartitions()
 }
 
 // --- 管理 ---
-uint32_t PartitionManager::CreatePartition(const AABB& bounds, const std::string& node_address)
+uint32_t PartitionManager::CreatePartition(const AABB& bounds, const std::string& work_server_address)
 {
     uint32_t new_partition_id = next_partition_id_;
     {
@@ -116,7 +109,7 @@ uint32_t PartitionManager::CreatePartition(const AABB& bounds, const std::string
     {
         new_partition_ptr->partition_id = new_partition_id;
         new_partition_ptr->bounds = bounds;                   // 分区边界（矩形）
-        new_partition_ptr->node_address = node_address;      // 所在服务节点地址
+        new_partition_ptr->work_server_address = work_server_address;      // 所在服务节点地址
         new_partition_ptr->state = PartitionState::Active;
 
         new_partition_ptr->player_count = 0;          // 当前玩家数（定期更新）
@@ -166,9 +159,7 @@ bool PartitionManager::UpdateLoad(uint32_t partition_id, uint32_t player_count, 
     std::shared_ptr<Partition>& partition = (itr->second);
     partition->player_count = player_count;
     partition->entity_count = entity_count;
-
-    auto now = std::chrono::system_clock::now();
-    partition->last_update_time = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    partition->last_update_time = this->GetCurrentTimeMs();
     return true;
 }
 
@@ -194,4 +185,219 @@ std::unique_ptr<IAOIManager> PartitionManager::CreateAOIForPartition(const AABB&
     int minValue = std::min(bounds.GetWidth(), bounds.GetHeight());
     int gridSize = minValue / 10;
     return std::make_unique<GridAOI>(gridSize);
+}
+
+
+/*
+std::unordered_map<uint32_t, Partition> partitions_;
+    
+    AABB world_bounds_;
+    
+    uint32_t grid_size_;
+    
+    uint32_t next_partition_id_ = 1;
+
+    LoadThresholds thresholds_;
+
+    //////////////  工作服务器节点
+    std::unordered_map<uint32_t, std::string> work_servers_list_;
+    
+    uint32_t next_work_server_id_ = 1;
+    */
+
+//---------------------------------------------------------------------------------------------
+// --- ----------------------------------负载监测 与 迁移决策 -----------------------------------
+// --------------------------------------负载监测 与 迁移决策 -----------------------------------
+// ------------------------------------- 负载监测 与 迁移决策 -----------------------------------
+//---------------------------------------------------------------------------------------------
+
+// ------------------------------------- 负载监测
+void PartitionManager::RefreshAllLoads()
+{
+    for(const auto& [id, partition] : partitions_)
+    {
+        this->RefreshLoad(id);
+    }
+}
+
+void PartitionManager::RefreshLoad(uint32_t partition_id)
+{
+    // 1.判断是否能够找到这个分区
+    auto itr = partitions_.find(partition_id);
+    if(itr == partitions_.end())
+    {
+        return ;
+    }
+
+    // 2.判断分区的状态，如果不是正常运行，则不能做迁移的决定。
+    std::shared_ptr<Partition>& ptr_partition = (itr->second);
+    if(!(ptr_partition->aoi))
+    {
+        return;
+    }
+
+    auto entities = (ptr_partition->aoi)->GetAllEntities();
+    ptr_partition->player_count = entities.size();
+    ptr_partition->entity_count = (ptr_partition->player_count);
+    ptr_partition->last_update_time = this->GetCurrentTimeMs();
+}
+
+// 获取超载分区列表
+std::vector<uint32_t> PartitionManager::GetOverloadedPartitions() const
+{
+    std::vector<uint32_t> result;
+    for(const auto& [id, partition] : partitions_)
+    {
+        if((PartitionState::Active == partition->state) && (partition->player_count > thresholds_.max_players_per_partition))
+        {
+            result.push_back(id);
+        }
+    }
+
+    return result;
+}
+
+
+std::vector<uint32_t> PartitionManager::GetUnderloadedPartitions() const
+{
+    std::vector<uint32_t> result;
+    for(const auto& [id, partition] : partitions_)
+    {
+        if((PartitionState::Active == partition->state) && (partition->player_count < thresholds_.min_players_for_merge))
+        {
+            result.push_back(id);
+        }
+    }
+
+    return result;
+}
+
+// --- 迁移决策
+std::vector<MigrationDecision> PartitionManager::EvaluteAllPartitions()
+{
+    std::vector<MigrationDecision> result;
+    for(const auto& [id, partition] : partitions_)
+    {
+        MigrationDecision decision = this->EvaluatePartition(id);
+        if(decision.should_migrate)
+        {
+            result.push_back(decision);
+        }
+    }
+
+    return result;
+}
+
+
+MigrationDecision PartitionManager::EvaluatePartition(uint32_t partition_id)
+{
+    MigrationDecision decision;
+    decision.should_migrate = false;
+
+    // 1.判断是否能够找到这个分区
+    auto itr = partitions_.find(partition_id);
+    if(itr == partitions_.end())
+    {
+        return decision;
+    }
+
+    // 2.判断分区的状态，如果不是正常运行，则不能做迁移的决定。
+    std::shared_ptr<Partition>& ptr_partition = (itr->second);
+    {
+        if(PartitionState::Active != (ptr_partition->state))
+        {
+            return decision;
+        }
+    }
+
+    decision.source_partition_id = partition_id;
+    // 检查是否超载
+    {
+
+        if((ptr_partition->player_count) > thresholds_.max_players_per_partition)
+        {
+            decision.should_migrate = true;
+            // decision.target_partition_id   
+            decision.target_work_server_id = FindLeastLoadedWorkServer();
+            decision.reason = MigrationReason::Overloaded;
+            decision.direction = MigrationDirection::Split;
+
+            std::stringstream ss;
+            ss << "Overloaded: " << (ptr_partition->player_count) << " > " << (thresholds_.max_players_per_partition);
+            decision.reason_desc = ss.str();
+            return decision;
+        }
+    }
+
+    // 检查轻载（可合并）
+    {
+        if((ptr_partition->player_count) < thresholds_.min_players_for_merge)
+        {
+            // 找到相邻的结点，然后合并
+            const AABB& srcAABB = ptr_partition->bounds;
+            auto itr_merge = std::find_if(partitions_.begin(), partitions_.end(), [this, partition_id, &srcAABB](const auto& kv){
+                return  (partition_id != kv.first) &&
+                        (PartitionState::Active == kv.second->state) &&
+                        (kv.second->player_count < thresholds_.min_players_for_merge) &&
+                        (kv.second->bounds.IsAdjacentTo(srcAABB));
+            });
+
+            if(itr_merge != partitions_.end())
+            {
+                decision.should_migrate = true;
+                decision.target_partition_id = (itr_merge->first);  
+                decision.target_work_server_id = FindLeastLoadedWorkServer();
+                decision.reason = MigrationReason::Underloaded;
+                decision.direction = MigrationDirection::Merge;
+
+                std::stringstream ss;
+                ss << partition_id << " Underloaded, Merge with " << (itr_merge->first);
+                decision.reason_desc = ss.str();
+                return decision;
+            }
+        }
+        
+    }
+
+    decision.should_migrate = false;
+    return decision;
+}
+
+// 设置阈值
+void PartitionManager::SetThresholds(const LoadThresholds& thresholds)
+{
+    thresholds_ = thresholds;
+}
+ 
+// --- 节点管理
+void PartitionManager::RegisterWorkServer(uint32_t work_server_id, const std::string& work_server_address)
+{
+    work_servers_list_[work_server_id] = work_server_address;
+}
+
+void PartitionManager::UnregisterWokServer(uint32_t work_server_id)
+{
+    work_servers_list_.erase(work_server_id);
+}
+
+
+//////////////  工作服务器节点
+uint64_t PartitionManager::GetCurrentTimeMs() const
+{
+    auto now = std::chrono::system_clock::now();
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    return current_time;
+}
+
+uint32_t PartitionManager::FindLeastLoadedWorkServer() const
+{
+    // 简化实现：如果没有注册节点，返回 0（表示当前节点）
+    if(work_servers_list_.empty())
+    {
+        return 0;
+    }
+
+    // 找到负载最低的节点
+    // 由于目前没有节点负载统计，简单返回第一个
+    return (work_servers_list_.begin()->first);
 }
