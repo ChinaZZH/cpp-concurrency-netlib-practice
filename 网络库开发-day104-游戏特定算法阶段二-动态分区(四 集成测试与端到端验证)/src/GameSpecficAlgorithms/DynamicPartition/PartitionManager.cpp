@@ -188,23 +188,6 @@ std::unique_ptr<IAOIManager> PartitionManager::CreateAOIForPartition(const AABB&
 }
 
 
-/*
-std::unordered_map<uint32_t, Partition> partitions_;
-    
-    AABB world_bounds_;
-    
-    uint32_t grid_size_;
-    
-    uint32_t next_partition_id_ = 1;
-
-    LoadThresholds thresholds_;
-
-    //////////////  工作服务器节点
-    std::unordered_map<uint32_t, std::string> work_servers_list_;
-    
-    uint32_t next_work_server_id_ = 1;
-    */
-
 //---------------------------------------------------------------------------------------------
 // --- ----------------------------------负载监测 与 迁移决策 -----------------------------------
 // --------------------------------------负载监测 与 迁移决策 -----------------------------------

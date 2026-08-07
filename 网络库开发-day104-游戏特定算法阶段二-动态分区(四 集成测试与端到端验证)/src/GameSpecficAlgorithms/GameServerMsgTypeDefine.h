@@ -28,4 +28,9 @@ enum GameServerMsgType
 
     GSMT_RemovePlayerFromMatch = 41,
     GSMT_MatchSuccessdNotify   = 42,
+
+    // 动态分区
+    GSMT_MigrationRequest       = 51, // 客户端命令到服务端
+    GSMT_MigrationData          = 52, // 服务端命令从source服务端结点 到 target服务器结点
+    GSMT_MigrationAck           = 53, // target服务器结点回复迁移结果确认消息给source结点结点   
 };

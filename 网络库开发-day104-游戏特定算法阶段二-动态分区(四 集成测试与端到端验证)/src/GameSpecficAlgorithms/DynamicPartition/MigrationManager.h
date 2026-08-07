@@ -22,6 +22,8 @@ class MigrationManager
 public:
     MigrationManager(std::shared_ptr<PartitionManager> partition_mgr);
 
+public:
+    void OnTimerTick();
 
 // --- 核心接口 ---
 public:
@@ -56,7 +58,10 @@ public:
     using OnDataReadyCallback = std::function<void(const MigrationData& data)>;
     void SetOnDataReadyCallback(OnDataReadyCallback cb) { on_data_ready_cb_ = std::move(cb); }
 
-    using OnMigrationCompleteCallback = std::function<void(uint32_t partition_id, bool success)>;
+    using OnTargetMigrationAckCallback = std::function<void(uint32_t src_server_node_id, uint32_t partition_id, bool success, std::string strErrorMsg)>;
+    void SetOnTargetMigrationAckCallback(OnTargetMigrationAckCallback cb) { on_ack_cb_ = std::move(cb); }
+    
+    using OnMigrationCompleteCallback = std::function<void(uint32_t partition_id, bool success, std::string strErrorMsg)>;
     void SetOnMigrationCompleteCallback(OnMigrationCompleteCallback cb) { on_complete_cb_ = std::move(cb); }
 
 private:
@@ -80,4 +85,6 @@ private:
     OnDataReadyCallback on_data_ready_cb_;
 
     OnMigrationCompleteCallback on_complete_cb_;
+
+    OnTargetMigrationAckCallback on_ack_cb_;
 };

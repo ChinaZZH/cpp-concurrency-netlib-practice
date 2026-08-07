@@ -30,45 +30,60 @@ bool Test_Migration::MockReceiveFromSource(MigrationData& out) {
 void Test_Migration::TestMigrationStateMachine() {
     std::cout << "\n[Test 1] Migration State Machine..." << std::endl;
 
-    std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
-    AABB world{0, 0, 1000, 1000};
-    pmgr->Init(world, 100);
+    std::shared_ptr<MigrationManager> src_mmgr;
+    MigrationData received_migration_data;
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
+        
+        auto partitions = pmgr->GetAllPartitions();
+        uint32_t pid = partitions[0]->partition_id;
+        // 插入一些测试实体
+        auto* aoi = pmgr->GetPartitionAOI(pid);
+        for(int i = 0; i < 10; ++i) {
+            aoi->AddEntity(i, i * 10, i * 10);
+        }
 
-    MigrationManager mmgr(pmgr);
-    mmgr.SetOnDataReadyCallback(std::bind(&Test_Migration::MockSendToTarget, this, std::placeholders::_1));
+        src_mmgr = std::make_shared<MigrationManager>(pmgr);
+        src_mmgr->SetOnDataReadyCallback([&received_migration_data](const MigrationData& data){
+            received_migration_data = std::move(data);
+        });
 
-    auto partitions = pmgr->GetAllPartitions();
-    uint32_t pid = partitions[0]->partition_id;
+        // 1. 初始状态应为 Idle
+        assert(src_mmgr->GetMigrationState(pid) == MigrationState::Idle);
+        std::cout << "  Initial state: Idle ✓" << std::endl;
 
-    // 插入一些测试实体
-    auto* aoi = pmgr->GetPartitionAOI(pid);
-    for (int i = 0; i < 10; ++i) {
-        aoi->AddEntity(i, i * 10, i * 10);
+        // 2. 启动迁移
+        bool started = src_mmgr->StartMigration(pid, 999);
+        assert(started);
+        assert(src_mmgr->GetMigrationState(pid) == MigrationState::Transferring);
+        std::cout << "  After Start: Transferring ✓" << std::endl;
     }
+    
 
-    // 1. 初始状态应为 Idle
-    assert(mmgr.GetMigrationState(pid) == MigrationState::Idle);
-    std::cout << "  Initial state: Idle ✓" << std::endl;
-
-    // 2. 启动迁移
-    bool started = mmgr.StartMigration(pid, 999);
-    assert(started);
-    assert(mmgr.GetMigrationState(pid) == MigrationState::Transferring);
-    std::cout << "  After Start: Transferring ✓" << std::endl;
 
     // 3. 模拟目标节点收到数据并恢复
-    MigrationData received;
-    assert(MockReceiveFromSource(received));
-    bool restored = mmgr.ReceiveMigrationData(received);
-    assert(restored);
-    assert(mmgr.GetMigrationState(pid) == MigrationState::Done);
-    std::cout << "  After Receive: Done ✓" << std::endl;
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
+
+        std::shared_ptr<MigrationManager> target_mmgr = std::make_shared<MigrationManager>(pmgr);
+        bool restored = target_mmgr->ReceiveMigrationData(received_migration_data);
+        assert(restored);
+        assert(target_mmgr->GetMigrationState(received_migration_data.partition_id()) == MigrationState::Done);
+        std::cout << "  After Receive: Done ✓" << std::endl;
+    }
+
+    //MigrationData received;
+    //assert(MockReceiveFromSource(received));
+    
 
     // 4. 确认迁移完成
-    bool confirmed = mmgr.ConfirmMigration(pid);
+    bool confirmed = src_mmgr->ConfirmMigration(received_migration_data.partition_id());
     assert(confirmed);
     std::cout << "  After Confirm: Cleanup triggered ✓" << std::endl;
-
     std::cout << "[PASS] State machine complete" << std::endl;
 }
 
@@ -118,45 +133,58 @@ void Test_Migration::TestSerialization() {
 void Test_Migration::TestDeserializationAndRestore() {
     std::cout << "\n[Test 3] Deserialization and Restore..." << std::endl;
 
-    std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
-    AABB world{0, 0, 1000, 1000};
-    pmgr->Init(world, 100);
+    std::shared_ptr<MigrationManager> src_mmgr;
+    MigrationData received_migration_data;
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
+        
+        auto partitions = pmgr->GetAllPartitions();
+        uint32_t pid = partitions[0]->partition_id;
+        // 插入一些测试实体
+        auto* aoi = pmgr->GetPartitionAOI(pid);
+        for (int i = 0; i < 15; ++i) {
+            aoi->AddEntity(i, i * 10, i * 10);
+        }
 
-    MigrationManager mmgr(pmgr);
+        src_mmgr = std::make_shared<MigrationManager>(pmgr);
+        src_mmgr->SetOnDataReadyCallback([&received_migration_data, this](const MigrationData& data){
+            received_migration_data = std::move(data);
+            g_mock_network_data = data;
+            g_mock_network_has_data = true;
+        });
 
-    // 准备源分区
-    auto partitions = pmgr->GetAllPartitions();
-    uint32_t src_pid = partitions[0]->partition_id;
-    auto* src_aoi = pmgr->GetPartitionAOI(src_pid);
+        // 1. 初始状态应为 Idle
+        assert(src_mmgr->GetMigrationState(pid) == MigrationState::Idle);
+        std::cout << "  Initial state: Idle ✓" << std::endl;
 
-    for (int i = 0; i < 15; ++i) {
-        src_aoi->AddEntity(i, i * 10, i * 10);
+        // 2. 启动迁移
+        bool started = src_mmgr->StartMigration(pid, 999);
+        assert(started);
+        assert(src_mmgr->GetMigrationState(pid) == MigrationState::Transferring);
+        std::cout << "  After Start: Transferring ✓" << std::endl;
     }
 
-    // 模拟迁移数据
-    mmgr.SetOnDataReadyCallback([this](const MigrationData& data) {
-        g_mock_network_data = data;
-        g_mock_network_has_data = true;
-    });
+   
+    // 3. 模拟目标节点收到数据并恢复
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
 
-    // 发起迁移
-    bool started = mmgr.StartMigration(src_pid, 999);
-    assert(started);
+        std::shared_ptr<MigrationManager> target_mmgr = std::make_shared<MigrationManager>(pmgr);
+        bool restored = target_mmgr->ReceiveMigrationData(received_migration_data);
+        assert(restored);
+       // 验证：目标分区应该有 15 个实体
+        auto* target_aoi = pmgr->GetPartitionAOI(received_migration_data.partition_id());
+        auto entities = target_aoi->GetAllEntities();
+        assert(entities.size() == 15);
 
-    // 获取迁移数据
-    MigrationData data;
-    assert(MockReceiveFromSource(data));
-
-    // 在目标节点恢复（同一个分区，但这里我们把它当成目标节点处理）
-    bool restored = mmgr.ReceiveMigrationData(data);
-    assert(restored);
-
-    // 验证：目标分区应该有 15 个实体
-    auto* target_aoi = pmgr->GetPartitionAOI(src_pid);
-    auto entities = target_aoi->GetAllEntities();
-    assert(entities.size() == 15);
-
-    std::cout << "  Restored " << entities.size() << " entities ✓" << std::endl;
+        std::cout << "  Restored " << entities.size() << " entities ✓" << std::endl;
+    }
+    
+    
     std::cout << "[PASS] Deserialization and restore correct" << std::endl;
 }
 
@@ -164,43 +192,75 @@ void Test_Migration::TestDeserializationAndRestore() {
 void Test_Migration::TestSourceCleanup() {
     std::cout << "\n[Test 4] Source Cleanup..." << std::endl;
 
-    std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
-    AABB world{0, 0, 1000, 1000};
-    pmgr->Init(world, 100);
+    std::shared_ptr<MigrationManager> src_mmgr;
+    std::shared_ptr<PartitionManager> src_pmgr;
+    MigrationData received_migration_data;
+    std::vector<BaseEntityData> before_entities;
 
-    MigrationManager mmgr(pmgr);
+    {
+        src_pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        src_pmgr->Init(world, 100);
+        
+        auto partitions = src_pmgr->GetAllPartitions();
+        uint32_t pid = partitions[0]->partition_id;
+        // 插入一些测试实体
+        auto* aoi = src_pmgr->GetPartitionAOI(pid);
+        // 插入 20 个实体
+        for (int i = 0; i < 20; ++i) {
+            aoi->AddEntity(i, i * 5, i * 5);
+        }
 
-    auto partitions = pmgr->GetAllPartitions();
-    uint32_t pid = partitions[0]->partition_id;
-    auto* aoi = pmgr->GetPartitionAOI(pid);
+        before_entities = aoi->GetAllEntities();
+        assert(before_entities.size() == 20);
 
-    // 插入 20 个实体
-    for (int i = 0; i < 20; ++i) {
-        aoi->AddEntity(i, i * 5, i * 5);
+        src_mmgr = std::make_shared<MigrationManager>(src_pmgr);
+        // 模拟迁移
+        src_mmgr->SetOnDataReadyCallback([&received_migration_data, this](const MigrationData& data){
+            received_migration_data = std::move(data);
+            g_mock_network_data = data;
+            g_mock_network_has_data = true;
+        });
+
+        // 1. 初始状态应为 Idle
+        assert(src_mmgr->GetMigrationState(pid) == MigrationState::Idle);
+        std::cout << "  Initial state: Idle ✓" << std::endl;
+
+        // 2. 启动迁移
+        bool started = src_mmgr->StartMigration(pid, 999);
+        assert(started);
+        assert(src_mmgr->GetMigrationState(pid) == MigrationState::Transferring);
+        std::cout << "  After Start: Transferring ✓" << std::endl;
     }
 
-    auto before_entities = aoi->GetAllEntities();
-    assert(before_entities.size() == 20);
+    
 
-    // 模拟迁移
-    mmgr.SetOnDataReadyCallback([this](const MigrationData& data) {
-        g_mock_network_data = data;
-        g_mock_network_has_data = true;
-    });
+    // 3. 模拟目标节点收到数据并恢复
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
 
-    mmgr.StartMigration(pid, 999);
+        std::shared_ptr<MigrationManager> target_mmgr = std::make_shared<MigrationManager>(pmgr);
+        bool restored = target_mmgr->ReceiveMigrationData(received_migration_data);
+        assert(restored);
+        assert(target_mmgr->GetMigrationState(received_migration_data.partition_id()) == MigrationState::Done);
+        std::cout << "  After Receive: Done ✓" << std::endl;
+    }
 
-    MigrationData data;
-    MockReceiveFromSource(data);
+   
 
-    mmgr.ReceiveMigrationData(data);
-    mmgr.ConfirmMigration(pid);
-
+    
+    // 4. 确认迁移完成
+    bool confirmed = src_mmgr->ConfirmMigration(received_migration_data.partition_id());
+    assert(confirmed);
+    
+    
     // 验证：源分区应该已被清空（Inactive 状态）
-    auto p = pmgr->GetPartition(pid);
-    assert(p->state == PartitionState::Active);
+    auto p = src_pmgr->GetPartition(received_migration_data.partition_id());
+    assert(p->state == PartitionState::Inactive);
 
-    auto after_entities = aoi->GetAllEntities();
+    auto after_entities = (p->aoi)->GetAllEntities();
     assert(after_entities.size() == 0);
 
     std::cout << "  Cleanup: " << before_entities.size() << " -> " << after_entities.size() << " entities ✓" << std::endl;
@@ -259,47 +319,64 @@ void Test_Migration::TestRollback() {
 void Test_Migration::TestEndToEndMigration() {
     std::cout << "\n[Test 6] End-to-End Migration..." << std::endl;
 
-    std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
-    AABB world{0, 0, 1000, 1000};
-    pmgr->Init(world, 100);
-
-    MigrationManager mmgr(pmgr);
-
-    auto partitions = pmgr->GetAllPartitions();
-    uint32_t src_pid = partitions[0]->partition_id;
-    auto* src_aoi = pmgr->GetPartitionAOI(src_pid);
-
-    // 在源分区插入 30 个实体
-    for (int i = 0; i < 30; ++i) {
-        src_aoi->AddEntity(i, i * 3, i * 3);
-    }
-
-    // 设置回调：模拟网络传输
-    mmgr.SetOnDataReadyCallback([this](const MigrationData& data) {
-        std::cout << "[E2E] Data ready: " << data.total_players() << " players" << std::endl;
-        g_mock_network_data = data;
-        g_mock_network_has_data = true;
-    });
-
-    // 注册完成回调
+    std::shared_ptr<MigrationManager> src_mmgr;
+    MigrationData received_migration_data;
     bool migration_completed = false;
-    mmgr.SetOnMigrationCompleteCallback([&, this](uint32_t pid, bool success) {
-        migration_completed = true;
-        std::cout << "[E2E] Migration " << (success ? "success" : "failed") << " for partition " << pid << std::endl;
-    });
+    IAOIManager* src_aoi = nullptr;
+    std::shared_ptr<PartitionManager> src_pmgr;
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
+        src_pmgr = pmgr;
+        
+        auto partitions = pmgr->GetAllPartitions();
+        uint32_t pid = partitions[0]->partition_id;
+        // 插入一些测试实体
+        src_aoi = pmgr->GetPartitionAOI(pid);
+        // 在源分区插入 30 个实体
+        for (int i = 0; i < 30; ++i) {
+            src_aoi->AddEntity(i, i * 3, i * 3);
+        }
 
-    // 1. 启动迁移
-    assert(mmgr.StartMigration(src_pid, 999));
+        src_mmgr = std::make_shared<MigrationManager>(pmgr);
+        // 设置回调：模拟网络传输
+        src_mmgr->SetOnDataReadyCallback([this, &received_migration_data](const MigrationData& data) {
+            received_migration_data = std::move(data);
 
-    // 2. 模拟传输
-    MigrationData data;
-    assert(MockReceiveFromSource(data));
+            std::cout << "[E2E] Data ready: " << data.total_players() << " players" << std::endl;
+            g_mock_network_data = data;
+            g_mock_network_has_data = true;
+        });
 
-    // 3. 目标节点恢复
-    assert(mmgr.ReceiveMigrationData(data));
+        // 注册完成回调
+        src_mmgr->SetOnMigrationCompleteCallback([&, this](uint32_t pid, bool success, std::string strErrorMsg) {
+            migration_completed = true;
+            std::cout << "[E2E] Migration " << (success ? "success" : "failed") << " for partition " << pid << std::endl;
+        });
+
+        // 1. 启动迁移
+        assert(src_mmgr->StartMigration(pid, 999));
+    }
+    
+
+    
+    // 3. 模拟目标节点收到数据并恢复
+    {
+        std::shared_ptr<PartitionManager> pmgr = std::make_shared<PartitionManager>();
+        AABB world{0, 0, 1000, 1000};
+        pmgr->Init(world, 100);
+
+        std::shared_ptr<MigrationManager> target_mmgr = std::make_shared<MigrationManager>(pmgr);
+        bool restored = target_mmgr->ReceiveMigrationData(received_migration_data);
+        assert(restored);
+        assert(target_mmgr->GetMigrationState(received_migration_data.partition_id()) == MigrationState::Done);
+        std::cout << "  After Receive: Done ✓" << std::endl;
+    }
+    
 
     // 4. 确认完成
-    assert(mmgr.ConfirmMigration(src_pid));
+    assert(src_mmgr->ConfirmMigration(received_migration_data.partition_id()));
 
     // 5. 验证完成回调被调用
     assert(migration_completed);
@@ -309,8 +386,8 @@ void Test_Migration::TestEndToEndMigration() {
     assert(src_entities.size() == 0);
 
     // 验证状态
-    auto p = pmgr->GetPartition(src_pid);
-    assert(p->state == PartitionState::Active);
+    auto p = src_pmgr->GetPartition(received_migration_data.partition_id());
+    assert(p->state == PartitionState::Inactive);
 
     std::cout << "  End-to-end migration completed successfully ✓" << std::endl;
     std::cout << "[PASS] End-to-End migration correct" << std::endl;

@@ -22,7 +22,8 @@
 #include "EventSink/EventSink.h"
 #include "EventSink/EventStore.h"
 #include "Match/MatchManager.h"
-
+#include "DynamicPartition/PartitionManager.h"
+#include "DynamicPartition/MigrationManager.h"
 
 GameServer::GameServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
@@ -47,6 +48,41 @@ GameServer::GameServer(EventLoop* loop, int nPort)
 
     event_sink_ptr_->Init("../logs/events.bin");
     event_store_ptr_->Init(event_sink_ptr_);
+
+    partition_mgr_ = std::make_shared<PartitionManager>();
+    migration_mgr_ = std::make_shared<MigrationManager>(partition_mgr_);
+
+    AABB world_bounds{0, 0, 1024, 1024};
+    partition_mgr_->Init(world_bounds, 100);
+    
+    migration_mgr_->SetOnDataReadyCallback([](const MigrationData& data){
+        // 发送给目标节点 消息类型 GSMT_MigrationData
+        // 可以考虑各个游戏服务器都直连，然后存一个 服务器结点id->服务器info的映射
+        // 或者所有的服务器服务器都连一个中心/中转 服务器，让中心/中转服务器进行转发
+    });
+
+    migration_mgr_->SetOnTargetMigrationAckCallback([](uint32_t src_server_node_id, uint32_t partition_id, bool success, std::string strErrorMsg){
+         // 发送给客户端目前迁移完成的结果
+        MigrationAck result_ack;
+        result_ack.set_partition_id(partition_id);
+        result_ack.set_success(success);
+        result_ack.set_error_msg(strErrorMsg);
+
+        std::string strAckInfo = result_ack.SerializeAsString();
+        // 发送 GSMT_MigrationAck 给 src_server_node_id 服务器节点进程
+        // this->SendMessage(src_server_node_id, strFrame, GSMT_FrameServerPackage);
+    });
+
+    migration_mgr_->SetOnMigrationCompleteCallback([](uint32_t partition_id, bool success, std::string strErrorMsg){
+        // 发送给客户端目前迁移完成的结果
+        MigrationAck result_ack;
+        result_ack.set_partition_id(partition_id);
+        result_ack.set_success(success);
+        result_ack.set_error_msg(strErrorMsg);
+
+        std::string strFrame = result_ack.SerializeAsString();
+        // this->SendMessage(entityId, strFrame, GSMT_FrameServerPackage);
+    });
  }
     
 
@@ -92,6 +128,11 @@ void GameServer::Start()
 
     // 帧同步 补偿
     RegisterHandler(GSMT_FrameAttackRequest, std::bind(&GameServer::OnFrameAttackRequest, this, std::placeholders::_1, std::placeholders::_2));
+
+    // 动态分区
+    RegisterHandler(GSMT_MigrationRequest, std::bind(&GameServer::OnMigrationRequest, this, std::placeholders::_1, std::placeholders::_2));
+    RegisterHandler(GSMT_MigrationData, std::bind(&GameServer::OnMigrationData, this, std::placeholders::_1, std::placeholders::_2));
+    RegisterHandler(GSMT_MigrationAck, std::bind(&GameServer::OnMigrationAck, this, std::placeholders::_1, std::placeholders::_2));
 
     // 设置分区线程池个数
     //std::cout << "GameServer::Start  22222" << std::endl;
@@ -811,4 +852,48 @@ void GameServer::KickPlayer(uint32_t player_id)
             con->Shutdown();
         }
     });
+}
+
+
+bool GameServer::OnMigrationRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    MigrationRequest request;
+    if(false == request.ParseFromString(strParamData))
+    {
+        return false;
+    }
+
+    return migration_mgr_->StartMigration(request.partition_id(), request.target_node_id());
+}
+
+bool GameServer::OnMigrationData(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    MigrationData data;
+    if(false == data.ParseFromString(strParamData))
+    {
+        return false;
+    }
+
+    return migration_mgr_->ReceiveMigrationData(data);
+}
+
+bool GameServer::OnMigrationAck(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    MigrationAck ack;
+    if(false == ack.ParseFromString(strParamData))
+    {
+        return false;
+    }
+
+    uint32_t partition_id = ack.partition_id();
+    bool on_ack_result = false;
+    if(ack.success())
+    {
+        on_ack_result = migration_mgr_->ConfirmMigration(partition_id);
+    }
+    else{
+        on_ack_result = migration_mgr_->RollbackMigration(partition_id);
+    }
+
+    return on_ack_result;
 }

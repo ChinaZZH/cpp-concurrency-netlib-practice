@@ -1,4 +1,5 @@
 #include "MigrationManager.h"
+#include <sstream>
 
 MigrationManager::MigrationManager(std::shared_ptr<PartitionManager> partition_mgr)
 :partition_mgr_(partition_mgr)
@@ -6,6 +7,49 @@ MigrationManager::MigrationManager(std::shared_ptr<PartitionManager> partition_m
 
 }
 
+void MigrationManager::OnTimerTick()
+{
+    // 1. 刷新所有分区的负载数据
+    partition_mgr_->RefreshAllLoads();
+
+    // 2. 获取所有迁移决策
+    auto decisions = partition_mgr_->EvaluteAllPartitions();
+
+    for(const auto& decision : decisions) 
+    {
+        if (!decision.should_migrate) 
+        {
+            continue;
+        }
+
+        // 检查是否已经在迁移中，避免重复触发
+        if(this->IsMigrating(decision.source_partition_id)) 
+        {
+            continue;
+        }
+
+        switch (decision.direction) {
+            case MigrationDirection::Split:
+                // 分裂：创建一个新分区，然后将部分玩家迁移过去
+                // 这里需要先创建新分区，再执行迁移
+                //HandleSplit(decision);
+                break;
+
+            case MigrationDirection::Merge:
+                // 合并：将目标分区迁移到源分区，然后删除目标分区
+                //HandleMerge(decision);
+                break;
+
+            case MigrationDirection::Relocate:
+                // 跨节点迁移：整个分区搬走
+                //this->StartMigration(decision.source_partition_id, decision.target_node_id);
+                break;
+
+            default:
+                break;
+        }
+    }
+}
 
 // --- --------------------------------- ---------------------------------------------------------------------
 // --- ----------------------核心接口 ---------------------------------------------------------------------
@@ -95,35 +139,73 @@ bool MigrationManager::ReceiveMigrationData(const MigrationData& data)
     std::cout << " (" << data.total_players() << " players)" << std::endl;
 
     // 1. 在目标节点恢复数据
-    SetState(partition_id, MigrationState::Activating);
-    bool success = DeserializeAndResetore(data);
-    if(!success) {
-        std::cerr << "[Migration] Failed to restore partition " << partition_id << std::endl;
-        SetState(partition_id, MigrationState::Rollback);
-        return false;
+    bool migration_data = false;
+    std::stringstream ss;
+    do
+    {
+        SetState(partition_id, MigrationState::Activating);
+        bool success = DeserializeAndResetore(data);
+        if(!success) {
+            SetState(partition_id, MigrationState::Idle); // 还原
+            ss << "DeserializeAndResetore Fail";
+            std::cerr << "[Migration] Failed to restore partition " << partition_id << std::endl;
+            break;
+        }
+
+        
+        // 2. 确认迁移完成
+        SetState(partition_id, MigrationState::Done);
+        std::cout << "[Migration] Partition " << partition_id << " restored successfully" << std::endl;
+        migration_data = true;
+        ss << "Successed";
+
+        break;
+
+    }while(0);
+
+    
+    if(on_ack_cb_)
+    {
+        on_ack_cb_(data.source_node_id(), partition_id, migration_data, ss.str());
     }
 
-    // 2. 确认迁移完成
-    SetState(partition_id, MigrationState::Done);
-    std::cout << "[Migration] Partition " << partition_id << " restored successfully" << std::endl;
     return true;
 }
 
-// 确认迁移完成(目标节点回复完成后调用)
+// 确认迁移完成
 bool MigrationManager::ConfirmMigration(uint32_t partition_id)
 {
-    if(MigrationState::Done != GetMigrationState(partition_id))
+    bool result = false;
+    std::stringstream ss;
+    do
     {
-        std::cerr << "[Migration] Partition " << partition_id << " not in Done state" << std::endl;
-        return false;
-    }
+        MigrationState state = GetMigrationState(partition_id);
+        if(MigrationState::Transferring != state)
+        {
+            std::cerr << "[Migration] Partition " << partition_id << " not in Done state" << std::endl;
+            ss << "MigrationState state error state:=" << static_cast<int>(state);
+            break;
+        }
 
-    // 清理分区
-    CleanupSource(partition_id);
+        std::shared_ptr<Partition> ptr_partition = partition_mgr_->GetPartition(partition_id);
+        if(!ptr_partition)
+        {
+            ss << "RollBack Failed partition nullptr";
+            break;
+        }
+
+        // 清理分区
+        CleanupSource(partition_id);
+        ptr_partition->state = PartitionState::Inactive;
+        ss << "Successed";
+        result = true;
+        break;
+    }while(0);
+    
 
     if(on_complete_cb_)
     {
-        on_complete_cb_(partition_id, true);
+        on_complete_cb_(partition_id, result, ss.str());
     }
 
    return true;
@@ -132,19 +214,28 @@ bool MigrationManager::ConfirmMigration(uint32_t partition_id)
 // 取消/回滚 迁移
 bool MigrationManager::RollbackMigration(uint32_t partition_id)
 {
-    std::shared_ptr<Partition> ptr_partition = partition_mgr_->GetPartition(partition_id);
-    if(!ptr_partition)
+    std::stringstream ss;
+    do
     {
-        return false;
-    }
+        std::shared_ptr<Partition> ptr_partition = partition_mgr_->GetPartition(partition_id);
+        if(!ptr_partition)
+        {
+            ss << "RollBack Failed partition nullptr";
+            break;
+        }
 
-    SetState(partition_id, MigrationState::Rollback);
-    ptr_partition->state = PartitionState::Active;
+        SetState(partition_id, MigrationState::Rollback);
+        ptr_partition->state = PartitionState::Active;
 
-    std::cout << "[Migration] Partition " << partition_id << " rolled back" << std::endl;
+        std::cout << "[Migration] Partition " << partition_id << " rolled back" << std::endl;
+        ss << "RollBack Failed";
+        break;
+
+    }while(0);
+    
     if(on_complete_cb_)
     {
-        on_complete_cb_(partition_id, false);
+        on_complete_cb_(partition_id, false, ss.str());
     }
 
     return true;

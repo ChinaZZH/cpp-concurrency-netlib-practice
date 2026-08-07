@@ -24,6 +24,8 @@ class ServerPlayerManager;
 class EventSink;
 class EventStore;
 class MatchManager;
+class PartitionManager;
+class MigrationManager;
 
 class GameServer 
 {
@@ -65,6 +67,13 @@ public:
     bool OnFrameReconnect(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
 
     bool OnFrameAttackRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
+    // 动态分区
+    bool OnMigrationRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
+    bool OnMigrationData(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
+    bool OnMigrationAck(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
 
     void SetHp(int entityId, int64_t newHp);
 
@@ -125,4 +134,8 @@ private:
     // 匹配算法
     std::shared_ptr<MatchManager> match_mgr_;
     uint64_t match_timer_id_;
+
+    // 动态迁移
+    std::shared_ptr<PartitionManager> partition_mgr_;
+    std::shared_ptr<MigrationManager> migration_mgr_;
 };
