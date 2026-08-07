@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+// 事件类型枚举
+enum EventType {    
+    EVENT_UNKNOW    = 0;
+    EVENT_ATTACK    = 1;    // 玩家发动攻击
+    EVENT_HIT       = 2;    // 攻击命中目标（造成伤害）
+    EVENT_PICKUP    = 3;    // 拾取道具
+    EVENT_LEVEL_UP  = 4;    // 升级
+    EVENT_DEATH     = 5;    // 死亡
+    EVENT_RESPAWN   = 6;    // 重生
+}
+
+
+// 攻击事件专用数据
+message AttackPayload {
+    uint32 target_id = 1;
+    uint32 skill_id = 2;
+    int64 dir_x = 3;     // 定点数原始值
+    int64 dir_y = 4;
+}
+
+// 命中事件专用数据
+message HitPayload {
+    uint32 target_id = 1;
+    int32 damage = 2;
+    uint32 remaining_hp = 3;
+}
+
+// 拾取事件专用数据
+message PickupPayload {
+    uint32 item_id = 1;
+    uint32 count = 2;
+}
+
+
+// 通用事件消息
+message GameEvent 
+{
+    uint32 player_id        = 1;
+    uint32 server_frame     = 2;
+    uint64 timestamp_ms     = 3;
+    EventType event_type    = 4;
+
+    // 不同事件类型的负载（使用 oneof 节省空间）
+    oneof payload {
+        AttackPayload attack = 10;
+        HitPayload    hit = 11;
+        PickupPayload pickup = 12;
+    }
+
+    // LEVEL_UP 和 DEATH 暂时不需要额外字段，可后续扩展
+}
