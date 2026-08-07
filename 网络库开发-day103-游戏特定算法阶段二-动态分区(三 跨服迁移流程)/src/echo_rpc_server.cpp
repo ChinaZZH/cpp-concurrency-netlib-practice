@@ -20,6 +20,7 @@
 #include "GameSpecficAlgorithms/GameTest/Test_TimeWheel.h"
 #include "GameSpecficAlgorithms/GameClient/Test_Client_Entity.h"
 #include "GameSpecficAlgorithms/GameTest/BehaviorTreeAction_TestFile.h"
+#include "GameSpecficAlgorithms/GameTest/Test_Migration.h"
 
 #include <signal.h>
 #include <thread>
@@ -44,7 +45,7 @@ int PerformanceTest()
 int main()
 {
     std::cout << "start unit testing" << std::endl;
-    UnitTesting();
+    // UnitTesting();
     //BehaviorTreeAction_TestFile testFile;
     //testFile.TestAllScenes();
     //std::cout << "start PerformanceTest " << std::endl;
@@ -54,8 +55,8 @@ int main()
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
 
-    //TestClientEntity test;
-    //test.Test();
+    Test_Migration test;
+    test.TestMigrationAll();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
