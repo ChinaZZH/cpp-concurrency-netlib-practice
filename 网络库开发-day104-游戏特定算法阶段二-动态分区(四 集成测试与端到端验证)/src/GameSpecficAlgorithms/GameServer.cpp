@@ -244,10 +244,18 @@ void GameServer::Start()
 
 
         int threadIdx = 100 % parititionedPool_->GetParitionedCount();
-        match_timer_id_ = parititionedPool_->DelayRunOnce(threadIdx, 1, [this](){
+        match_timer_id_ = parititionedPool_->DelayRunEvery(threadIdx, 30, [this](){
             match_mgr_->Tick();
         });
 
+    }
+
+    // 动态分区 每40秒一个tick
+    {
+        int threadIdx = 100 % parititionedPool_->GetParitionedCount();
+        match_timer_id_ = parititionedPool_->DelayRunEvery(threadIdx, 30, [this](){
+            migration_mgr_->OnTimerTick();
+        });
     }
 
     //std::cout << "GameServer::Start  44444" << std::endl;

@@ -35,8 +35,33 @@ struct AABB
     // 判断两个区域是否相邻（用于合并检查）
     bool IsAdjacentTo(const AABB& other) const 
     {
-        return (min_x == other.max_x || max_x == other.min_x) 
-        || (min_y == other.max_y || max_y == other.min_y);
+        // 相邻边为 y轴
+        if((min_x == other.max_x || max_x == other.min_x) && (min_y == other.min_y && max_y == other.max_y))
+        {
+            return true;
+        }
+
+        // 相邻边为 x轴
+        if((min_y == other.max_y || max_y == other.min_y) && (min_x == other.min_x && max_x == other.max_x))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    bool Merge(const AABB& other)
+    {
+        if(false == IsAdjacentTo(other))
+        {
+            return false;
+        }
+
+        min_x = std::min(min_x, other.min_x);
+        max_x = std::max(max_x, other.max_x);
+        min_y = std::min(min_y, other.min_y);
+        max_y = std::max(max_y, other.max_y);
+        return true;
     }
 
     // 生成四个子区域（四叉树分裂）

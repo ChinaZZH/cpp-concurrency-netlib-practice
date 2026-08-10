@@ -32,24 +32,22 @@ void MigrationManager::OnTimerTick()
             case MigrationDirection::Split:
                 // 分裂：创建一个新分区，然后将部分玩家迁移过去
                 // 这里需要先创建新分区，再执行迁移
-                //HandleSplit(decision);
+                partition_mgr_->HandleSplit(decision);
                 break;
 
             case MigrationDirection::Merge:
                 // 合并：将目标分区迁移到源分区，然后删除目标分区
-                //HandleMerge(decision);
-                break;
-
-            case MigrationDirection::Relocate:
-                // 跨节点迁移：整个分区搬走
-                //this->StartMigration(decision.source_partition_id, decision.target_node_id);
+                partition_mgr_->HandleMerge(decision);
                 break;
 
             default:
                 break;
         }
     }
+
 }
+
+
 
 // --- --------------------------------- ---------------------------------------------------------------------
 // --- ----------------------核心接口 ---------------------------------------------------------------------

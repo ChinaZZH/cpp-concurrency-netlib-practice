@@ -1,15 +1,21 @@
 #include "PartitionManager.h"
-#include "../AOI/GridAOI.h"
+
 #include <cmath>
 #include <iostream>
 #include <sstream>
 #include <chrono>
 #include <algorithm>
+#include "../AOI/GridAOI.h"
+#include "../../Common/ConfigManager.h"
 
 
  // --- 初始化 ---
 void PartitionManager::Init(const AABB& world_bounds, int grid_size)
 {
+    // 当前服务器id 读取server配置信息
+    auto& cfg = ConfigManager::getInstance();
+    currnet_work_server_id_ = cfg.getInt("GameInfo", "server_id", 8888);
+
     if(grid_size <= 0)
     {
         throw std::runtime_error("PartitionManager::Init grid_size <= 0");
@@ -383,4 +389,173 @@ uint32_t PartitionManager::FindLeastLoadedWorkServer() const
     // 找到负载最低的节点
     // 由于目前没有节点负载统计，简单返回第一个
     return (work_servers_list_.begin()->first);
+}
+
+
+
+// 分区函数，默认分成四份
+void PartitionManager::HandleSplit(const MigrationDecision& decision)
+{
+    std::shared_ptr<Partition> src_partition = this->GetPartition(decision.source_partition_id);
+    if(!src_partition || !src_partition->aoi)
+    {
+        return;
+    }
+
+    auto entities = src_partition->aoi->GetAllEntities();
+    auto vecPartition = SplitBounds(decision.source_partition_id);
+    for(const auto& info : entities)
+    {
+        for(auto& new_partition : vecPartition)
+        {
+            if(false == new_partition->bounds.Contains(info.x, info.y))
+            {
+                continue;
+            }
+
+            new_partition->aoi->AddEntity(info.id, info.x, info.y);
+            break;
+        }
+
+        src_partition->aoi->RemoveEntity(info.id);
+    }
+
+    bool firstTag = true;
+    std::stringstream ss;
+    for(auto& new_partition : vecPartition)
+    {
+        if(firstTag)
+        {
+            ss << (new_partition->partition_id);
+        }
+        else
+        {
+            ss << ", " << (new_partition->partition_id);
+        }
+        
+        this->RefreshLoad(new_partition->partition_id);
+    }
+    
+    this->RemovePartition(decision.source_partition_id);
+    std::cout << "[HandleSplit] Partition " << decision.source_partition_id;
+    std::cout << " split into (" << ss.str() << " ) ";
+    std::cout << " migrated " << vecPartition.size() << " entities" << std::endl;
+}
+
+
+std::vector<std::shared_ptr<Partition>> PartitionManager::SplitBounds(uint32_t partition_id)
+{
+    std::vector<std::shared_ptr<Partition>> result;
+    std::shared_ptr<Partition> ptr_partition = this->GetPartition(partition_id);
+    if(!ptr_partition || !ptr_partition->aoi)
+    {
+        return result;
+    }
+
+    // 判断是否可以进行分裂
+    const AABB& rectAABB = (ptr_partition->bounds);
+    int width_value = rectAABB.GetWidth();    
+    int height_value = rectAABB.GetHeight();
+    if(width_value <= 1 && height_value <= 1)
+    {
+        return result;
+    }
+
+    // 可以进行四等分
+    std::vector<uint32_t> vecResultBounds;
+    vecResultBounds.reserve(4);
+    if(width_value >= 2 && height_value >= 2)
+    {
+        int middle_x_pos  = rectAABB.min_x + (width_value / 2);
+        int middle_y_pos  = rectAABB.min_y + (height_value / 2);
+
+        AABB left_bottom_bounds{rectAABB.min_x, rectAABB.min_y, middle_x_pos, middle_y_pos};
+        vecResultBounds.emplace_back(this->CreatePartition(left_bottom_bounds, "localhost"));  
+
+        AABB right_bottom_bounds{middle_x_pos, rectAABB.min_y, rectAABB.max_x, middle_y_pos};
+        vecResultBounds.emplace_back(this->CreatePartition(right_bottom_bounds, "localhost"));  
+
+        AABB left_top_bounds{rectAABB.min_x, middle_y_pos, middle_x_pos, rectAABB.max_y};
+        vecResultBounds.emplace_back(this->CreatePartition(left_top_bounds, "localhost"));  
+
+        AABB right_top_bounds{middle_x_pos, middle_y_pos, rectAABB.max_x, rectAABB.max_y};
+        vecResultBounds.emplace_back(this->CreatePartition(right_top_bounds, "localhost"));  
+    }
+    else if(width_value >= 2)
+    {
+        int middle_x_pos  = rectAABB.min_x + (width_value / 2);
+
+        std::vector<uint32_t> vecResultBounds(2);
+        AABB left_bounds{rectAABB.min_x, rectAABB.min_y, middle_x_pos, rectAABB.max_y};
+        vecResultBounds.emplace_back(this->CreatePartition(left_bounds, "localhost"));  
+
+        AABB right_bounds{middle_x_pos, rectAABB.min_y, rectAABB.max_x, rectAABB.max_y};
+        vecResultBounds.emplace_back(this->CreatePartition(right_bounds, "localhost"));  
+    }
+    else 
+    {
+        int middle_y_pos = rectAABB.min_y + (height_value / 2);
+
+        std::vector<uint32_t> vecResultBounds(2);
+        AABB bottom_bounds{rectAABB.min_x, rectAABB.min_y, rectAABB.max_x, middle_y_pos};
+        vecResultBounds.emplace_back(this->CreatePartition(bottom_bounds, "localhost"));  
+
+        AABB top_bounds{rectAABB.min_x, middle_y_pos, rectAABB.max_x, rectAABB.max_y};
+        vecResultBounds.emplace_back(this->CreatePartition(top_bounds, "localhost")); 
+    }
+
+    for(const auto& result_id : vecResultBounds){
+        if(0 == result_id){
+            continue;
+        }
+
+        auto it = partitions_.find(result_id);
+        if(it == partitions_.end()){
+            continue;
+        }
+
+        result.push_back(it->second);
+    }
+
+    return result;
+}
+
+
+void PartitionManager::HandleMerge(const MigrationDecision& decision)
+{
+    std::shared_ptr<Partition> src_partition = this->GetPartition(decision.source_partition_id);
+    if(!src_partition || !src_partition->aoi)
+    {
+        return;
+    }
+
+   std::shared_ptr<Partition> target_partition = this->GetPartition(decision.target_partition_id);
+   if(!target_partition || !target_partition->aoi)
+   {
+        return;
+   }
+
+   // 将目标分区合并到源分区上
+   if(false == src_partition->bounds.Merge(target_partition->bounds))
+   {
+        return;
+   }
+
+   // 1. 从目标分区获取所有实体，迁移到源分区
+    auto entities = target_partition->aoi->GetAllEntities();
+    for(const auto& info : entities)
+    {
+        src_partition->aoi->AddEntity(info.id, info.x, info.y);
+        target_partition->aoi->RemoveEntity(info.id);
+    }
+
+    // 2. 更新负载统计
+    this->RefreshLoad(decision.source_partition_id);
+
+    // 3. 删除目标分区
+    this->RemovePartition(decision.target_partition_id);
+
+    std::cout << "[HandleMerge] Partition " << decision.target_partition_id;
+    std::cout << " merged into " << decision.source_partition_id;
+    std::cout << ", migrated " << entities.size() << " entities" << std::endl;
 }

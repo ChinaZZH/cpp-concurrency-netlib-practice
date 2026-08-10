@@ -63,6 +63,12 @@ public:
 
     void UnregisterWokServer(uint32_t work_server_id);
 
+    // 分区函数
+    void HandleSplit(const MigrationDecision& decision);
+
+    // 合并函数
+    void HandleMerge(const MigrationDecision& decision);
+
 private:
     // 内部辅助：创建分区时自动创建对应的 AOI 实例
     std::unique_ptr<IAOIManager> CreateAOIForPartition(const AABB& bounds);
@@ -71,6 +77,8 @@ private:
     uint64_t GetCurrentTimeMs() const;
 
     uint32_t FindLeastLoadedWorkServer() const;
+
+    std::vector<std::shared_ptr<Partition>> SplitBounds(uint32_t partition_id);
 
 private:
     std::unordered_map<uint32_t, std::shared_ptr<Partition>> partitions_;
@@ -86,5 +94,5 @@ private:
     //////////////  工作服务器节点
     std::unordered_map<uint32_t, std::string> work_servers_list_;
     
-    uint32_t next_work_server_id_ = 1;
+    uint32_t currnet_work_server_id_ = 1;
 };
