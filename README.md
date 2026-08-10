@@ -18,14 +18,15 @@
  - [monkey解释器实现的说明文档](./docs/monkey_interpter.md)
  - [monkey编译器实现的说明文档](./docs/monkey_compiler.md)
 
-  ## 游戏特定算法
-  - [多种aoi算法的性能比对](./docs/aoi_performance_test.md)
-  - [帧同步插值方案对比：帧号 vs 时间戳](./docs/frame_interpolation_comparison.md)
-  - [状态同步：从原理到落地的完整剖析](./docs/state_sync.md)
-  - [帧同步：从理论到工程的完整实践](./docs/frame_sync.md)
+ ## 游戏特定算法
+ - [多种aoi算法的性能比对](./docs/aoi_performance_test.md)
+ - [帧同步插值方案对比：帧号 vs 时间戳](./docs/frame_interpolation_comparison.md)
+ - [状态同步：从原理到落地的完整剖析](./docs/state_sync.md)
+ - [帧同步：从理论到工程的完整实践](./docs/frame_sync.md)
   
-  - [有限状态机（FSM）设计与实现](./docs/state_machine.md)
-   - [行为树设计与实现](./docs/behavior_tree_design.md)
+ - [有限状态机（FSM）设计与实现](./docs/state_machine.md)
+ - [行为树设计与实现](./docs/behavior_tree_design.md)   
+- [动态分区模块设计与实现](./docsdynamic_partition.md)
  
  
 （C++并发基础 → 手写网络库 → monkey解释器和monkey编译器 → 游戏特定算法）
