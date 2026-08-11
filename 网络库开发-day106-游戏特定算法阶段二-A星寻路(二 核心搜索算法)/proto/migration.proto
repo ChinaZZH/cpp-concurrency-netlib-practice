@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+message MsgPlayerState
+{
+    uint32 player_id = 1;
+    uint32 x = 2;
+    uint32 y = 3;
+    uint32 hp = 4;
+    // ... 其他属性
+}
+
+message MigrationRequest 
+{
+    uint32  partition_id = 1;
+    uint32  target_node_id = 2;
+}
+
+
+message MigrationData 
+{
+    uint32 partition_id = 1;
+    uint32  source_node_id = 2;
+    uint32  target_node_id = 3;
+    uint64 snapshot_time = 4;
+
+    repeated MsgPlayerState players = 5;
+    uint32 total_players = 6;
+}
+
+message MigrationAck
+{
+    uint32 partition_id = 1;
+    bool success = 2;
+    string error_msg = 3;
+}
