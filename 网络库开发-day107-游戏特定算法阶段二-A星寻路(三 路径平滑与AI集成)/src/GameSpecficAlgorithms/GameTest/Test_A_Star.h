@@ -8,6 +8,8 @@ public:
 
     void Test_PathFinder();
 
+    void Test_PathSmoother();
+
 private:
     void TestGridMap();
     
@@ -18,6 +20,10 @@ private:
     void TestWithObstacle();
     void TestDiagonalPath();
     void TestUnreachable();
+
+private:
+    void TestHelpPathSmoothing();
+    void TestLineOfSight();
 };
 
 

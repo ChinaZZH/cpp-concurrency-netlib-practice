@@ -4,6 +4,7 @@
 #include "../A_Star/GridMap.h"
 #include "../A_Star/NodeManager.h"
 #include "../A_Star/PathFinder.h"
+#include "../A_Star/PathSmoother.h"
 
 
 void Test_A_Star::TestDataStruct_1()
@@ -191,4 +192,64 @@ void Test_A_Star::TestUnreachable() {
     assert(result.found == false);
 
     std::cout << "[PASS] Unreachable path" << std::endl;
+}
+
+
+void Test_A_Star::Test_PathSmoother()
+{
+    std::cout << "=== A* Day 3 Tests ===" << std::endl;
+    TestHelpPathSmoothing();
+    TestLineOfSight();
+    std::cout << "=== ALL TESTS PASSED ===" << std::endl;
+}
+
+
+void Test_A_Star::TestHelpPathSmoothing()
+{
+    std::cout << "[Test] Path smoothing..." << std::endl;
+
+    std::shared_ptr<A_Star::GridMap> map = std::make_shared<A_Star::GridMap>(10, 10, 1.0f);
+    std::shared_ptr<A_Star::NodeManager> nmgr = std::make_shared<A_Star::NodeManager>(10, 10);
+    A_Star::PathFinder finder(map, nmgr);
+    A_Star::PathSmoother smoother(map);
+
+    // 生成一条路径（带弯折）
+    std::vector<A_Star::PathPoint> path = {
+        {0, 0, 0.0f, 0.0f},
+        {1, 0, 1.0f, 0.0f},
+        {2, 0, 2.0f, 0.0f},
+        {3, 1, 3.0f, 1.0f},
+        {4, 2, 4.0f, 2.0f},
+        {4, 3, 4.0f, 3.0f},
+        {4, 4, 4.0f, 4.0f}
+    };
+
+    auto smoothed = smoother.SmoothPath(path);
+    assert(smoothed.size() < path.size());
+    assert(smoothed.front().grid_x == path.front().grid_x);
+    assert(smoothed.back().grid_x == path.back().grid_x);
+
+    std::cout << "[PASS] Path smoothing" << std::endl;
+}
+
+void Test_A_Star::TestLineOfSight()
+{
+    std::cout << "[Test] Line of sight..." << std::endl;
+
+    std::shared_ptr<A_Star::GridMap> map = std::make_shared<A_Star::GridMap>(10, 10, 1.0f);
+    A_Star::PathSmoother smoother(map);
+
+    // 设置障碍物
+    map->SetWalkable(2, 0, false);
+    map->SetWalkable(2, 1, false);
+
+    // 从 (0,0) 到 (3,0) 直线应该不可行（穿过障碍物）
+    bool los = smoother.HasLineOfSight(0, 0, 3, 0);
+    assert(los == false);
+
+    // 从 (0,0) 到 (3,3) 应该可行（对角线绕过）
+    los = smoother.HasLineOfSight(0, 0, 3, 3);
+    assert(los == true);
+
+    std::cout << "[PASS] Line of sight" << std::endl;
 }

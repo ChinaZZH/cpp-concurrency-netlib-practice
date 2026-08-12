@@ -10,8 +10,8 @@ namespace A_Star
     {
         int32_t grid_x;
         int32_t grid_y;
-        int32_t world_x;
-        int32_t world_y;
+        float world_x;
+        float world_y;
     };
 
 
@@ -28,10 +28,10 @@ namespace A_Star
         // 设置平滑强度
         void SetSmoothStrength(float smooth_strength) { smooth_strength_ = smooth_strength; }
 
-    private:
-         // 检查两点之间是否可直线通行（无障碍物）
+        // 检查两点之间是否可直线通行（无障碍物）
          bool HasLineOfSight(int32_t src_x, int32_t src_y, int32_t target_x, int32_t target_y) const;
 
+    private:
          // Bresenham 直线算法，检查路径上的所有格子
          bool IsLineWalkable(int32_t src_x, int32_t src_y, int32_t target_x, int32_t target_y) const;
 
