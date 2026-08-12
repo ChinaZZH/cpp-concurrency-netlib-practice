@@ -26,7 +26,7 @@
   
  - [有限状态机（FSM）设计与实现](./docs/state_machine.md)
  - [行为树设计与实现](./docs/behavior_tree_design.md)   
-- [动态分区模块设计与实现](./docsdynamic_partition.md)
+- [动态分区模块设计与实现](./docs/dynamic_partition.md)
  
  
 （C++并发基础 → 手写网络库 → monkey解释器和monkey编译器 → 游戏特定算法）
