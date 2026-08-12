@@ -10,20 +10,20 @@ namespace A_Star
         int x = 0;
         int y = 0;
 
-        int src_to_cur = 0;        // 起点到当前节点的实际代价
-        int cur_to_target = 0;     // 当前节点到终点的估计代价
-        int final_total = 0;       //  g + h
+        float src_to_cur = 0.0f;        // 起点到当前节点的实际代价 g
+        float cur_to_target = 0.0f;     // 当前节点到终点的估计代价 h
+        float final_total = 0.0f;       //  g + h
 
-        GridNode* parent_node = nullptr; // 路径回调用
+        std::shared_ptr<GridNode> parent_node = nullptr; // 路径回调用
 
         bool in_open_list = false;
         bool in_closed_list = false;
 
         void Reset()
         {
-            src_to_cur = 0;        // 起点到当前节点的实际代价
-            cur_to_target = 0;     // 当前节点到终点的估计代价
-            final_total = 0;       //  g + h
+            src_to_cur = 0.0f;        // 起点到当前节点的实际代价 
+            cur_to_target = 0.0f;     // 当前节点到终点的估计代价
+            final_total = 0.0f;       //  g + h
 
             parent_node = nullptr; // 路径回调用
             in_open_list = false;
@@ -32,6 +32,11 @@ namespace A_Star
 
         bool operator>(const GridNode& other) const {
             return final_total > other.final_total;
+        }
+
+
+        bool operator<(const GridNode& other) const {
+            return final_total < other.final_total;
         }
     };
 

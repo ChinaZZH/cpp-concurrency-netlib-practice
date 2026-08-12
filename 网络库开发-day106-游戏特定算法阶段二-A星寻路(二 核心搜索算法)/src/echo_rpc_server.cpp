@@ -57,7 +57,7 @@ int main()
     //timeWheel.TestAll();
 
     Test_A_Star test;
-    test.TestDataStruct_1();
+    test.Test_PathFinder();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

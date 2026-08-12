@@ -25,9 +25,7 @@ namespace A_Star
     GridNode_Ptr NodeManager::GetNode(uint32_t x, uint32_t y)
     {
         const GridNode_Ptr const_node_ptr = this->GetConstNode(x, y);
-        std::cout << "[Test] 212121 NodeManager::GetNode..." << std::endl;
         GridNode_Ptr common_node_ptr = const_node_ptr;
-        std::cout << "[Test] 232323 NodeManager::GetNode..." << std::endl;
         return common_node_ptr;
     }
 
@@ -35,20 +33,14 @@ namespace A_Star
     {
         if(x >= width_ || y >= height_)
         {
-            std::cout << "[Test] 1111 NodeManager::GetNode..." << std::endl;
             return nullptr;
         }
 
+        // x 和 y转化为index
         int index = y * width_ + x;
         if(index < 0 || index >= nodes_list_.size())
         {
-            std::cout << "[Test] 2222 NodeManager::GetNode..." << std::endl;
             return nullptr;
-        }
-
-        if(!nodes_list_[index])
-        {
-            std::cout << "[Test] 3333 NodeManager::GetNode..." << std::endl;
         }
 
         return nodes_list_[index];
