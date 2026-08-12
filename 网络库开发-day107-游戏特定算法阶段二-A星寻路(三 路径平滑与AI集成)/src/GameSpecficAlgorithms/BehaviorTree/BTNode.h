@@ -4,6 +4,7 @@
 #include "../../Common/FixedPoint.h"
 #include "../../Common/FixedPonitMaxFunc.h"
 #include "../StateContext.h"
+#include <string>
 
 // 节点基类
 class BTNode
