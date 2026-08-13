@@ -22,6 +22,7 @@
 #include "GameSpecficAlgorithms/GameTest/BehaviorTreeAction_TestFile.h"
 #include "GameSpecficAlgorithms/GameTest/Test_Migration.h"
 #include "GameSpecficAlgorithms/GameTest/Test_A_Star.h"
+#include "GameSpecficAlgorithms/GameTest/Test_Move_To_Target.h"
 
 #include <signal.h>
 #include <thread>
@@ -56,8 +57,8 @@ int main()
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
 
-    Test_A_Star test;
-    test.Test_PathSmoother();
+    Test_Move_To_Target moveTest;
+    moveTest.TestAllMoveCases(); 
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

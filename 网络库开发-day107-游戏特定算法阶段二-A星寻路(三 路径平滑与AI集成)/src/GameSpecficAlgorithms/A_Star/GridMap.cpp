@@ -1,5 +1,6 @@
 #include "GridMap.h"
 #include <stdexcept>
+#include <iostream>
 
 namespace A_Star
 {
@@ -62,9 +63,12 @@ namespace A_Star
         int gridX = x / cell_size_;
         int gridY = y / cell_size_;
 
+        //std::cout << "GridMap::WorldToGrid_1111 grid_x:=" << gridX << " grid_y:=" << gridY << std::endl;
+
         // 边界裁剪
         gridX = std::min(static_cast<int>(width_-1), std::max(0, gridX));
-        gridX = std::min(static_cast<int>(height_-1), std::max(0, gridY));
+        gridY = std::min(static_cast<int>(height_-1), std::max(0, gridY));
+        //std::cout << "GridMap::WorldToGrid_2222 grid_x:=" << gridX << " grid_y:=" << gridY << std::endl;
         return std::pair(gridX, gridY);
     }
 
