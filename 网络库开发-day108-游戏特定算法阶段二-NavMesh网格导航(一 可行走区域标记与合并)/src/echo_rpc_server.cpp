@@ -23,6 +23,7 @@
 #include "GameSpecficAlgorithms/GameTest/Test_Migration.h"
 #include "GameSpecficAlgorithms/GameTest/Test_A_Star.h"
 #include "GameSpecficAlgorithms/GameTest/Test_Move_To_Target.h"
+#include "GameSpecficAlgorithms/GameTest/Test_NavMesh.h"
 
 #include <signal.h>
 #include <thread>
@@ -57,8 +58,8 @@ int main()
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
 
-    Test_Move_To_Target moveTest;
-    moveTest.TestAllMoveCases(); 
+    Test_NavMesh navMesh;
+    navMesh.Test_RegionMarker(); 
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
