@@ -59,7 +59,7 @@ int main()
     //timeWheel.TestAll();
 
     Test_NavMesh navMesh;
-    navMesh.Test_RegionMarker(); 
+    navMesh.TestCenterOfPolygon(); 
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

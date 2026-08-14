@@ -1,10 +1,12 @@
 #include "Test_NavMesh.h" 
 #include <iostream>
+#include <sstream>
 #include <cassert>
 #include <memory>
+#include <cassert>
 #include "../A_Star/GridMap.h"
 #include "../A_NavMesh/RegionMarker.h"
-
+#include "../A_NavMesh/PolygonExtractor.h"
 
 
 void Test_NavMesh::Test_RegionMarker()
@@ -71,4 +73,139 @@ void Test_NavMesh::Test_RegionMarker()
     assert(marker.GetRegionCount() >= 2);
 
     std::cout << "=== Sub-task 1.1 PASSED ===" << std::endl;
+}
+
+
+void Test_NavMesh::TestPolygon()
+{
+    std::cout << "=== Sub-task 1.2: Polygon Extraction ===" << std::endl;
+
+    // 创建 10x10 地图
+    auto map = std::make_shared<A_Star::GridMap>(10, 10, 1.0f);
+
+    // 设置一堵墙从 (3,0) 到 (6,9)
+    for (int y = 0; y < 10; ++y) {
+        for (int x = 3; x <= 6; ++x) {
+            map->SetWalkable(x, y, false);
+        }
+    }
+
+    // 1. 区域标记
+    NavMesh::RegionMarker marker;
+    auto region_ids = marker.MarkRegions(map);
+    std::cout << "Regions marked: " << marker.GetRegionCount() << std::endl;
+
+    /*
+    bool firstTag;
+    std::stringstream ss;
+    for (const auto& region_id_value : region_ids) 
+    {
+        if(firstTag)
+        {
+            firstTag = false;
+            ss << region_id_value;
+        }
+        else
+        {
+            ss << " , " << region_id_value;
+        }
+    }
+
+    std::cout << "Regions id list( " << ss.str() << " )" << std::endl;
+    */
+
+    // 2. 多边形提取
+    NavMesh::PolygonExtractor extractor;
+    auto region_polygons = extractor.Extract(map, region_ids);
+
+    // 验证
+    assert(region_polygons.size() == 2);  // 左右两个区域
+
+    for (const auto& rp : region_polygons) {
+        std::cout << "Region " << rp.region_id
+                  << ": vertices=" << rp.polygon.vertices.size()
+                  << ", area=" << rp.polygon.GetArea()
+                  << ", center=(" << rp.polygon.center_x << ", " << rp.polygon.center_y << ")"
+                  << std::endl;
+
+        assert(rp.polygon.vertices.size() >= 3);
+        assert(rp.polygon.GetArea() > 0.0f);
+    }
+
+    
+    
+    for(const auto& rp : region_polygons) 
+    {
+        if(1 == rp.region_id)
+        {
+            // 验证多边形包含区域内的点
+            // 左侧区域 (1,1) 应该在左侧多边形内
+            std::pair<int, int> world_pos = map->GridToWorld(1, 1);
+            bool contains = rp.polygon.ContainsPoint(world_pos.first, world_pos.second);
+            assert(contains);
+            std::cout << "Polygon contains (1,1): " << (contains ? "✓" : "✗") << std::endl;
+        }
+        else if(2 == rp.region_id)
+        {
+            // 右侧区域 (8,1) 应该在右侧多边形内
+            std::pair<int, int> world_pos = map->GridToWorld(8, 1);
+            bool contains = rp.polygon.ContainsPoint(world_pos.first, world_pos.second);
+            assert(contains);
+            std::cout << "Polygon contains (8,1): " << (contains ? "✓" : "✗") << std::endl;
+        }
+    }
+
+   
+    // 墙上的点 (4,4) 不应该在任何多边形内
+    std::pair<int, int> world_pos = map->GridToWorld(4, 4);
+    bool in_left = region_polygons[0].polygon.ContainsPoint(world_pos.first, world_pos.second);
+    bool in_right = region_polygons[1].polygon.ContainsPoint(world_pos.first, world_pos.second);
+    assert(!in_left && !in_right);
+    std::cout << "Wall (4,4) not in any polygon: ✓" << std::endl;
+
+    std::cout << "=== Sub-task 1.2 PASSED ===" << std::endl;
+}
+
+
+void Test_NavMesh::TestCenterOfPolygon()
+{
+    std::cout << "=== Sub-task 1.3: Center Point Calculation ===" << std::endl;
+
+    // 构建一个简单的多边形（方形）
+    NavMesh::Polygon poly;
+    poly.vertices = {
+        {0.0f, 0.0f},
+        {2.0f, 0.0f},
+        {2.0f, 2.0f},
+        {0.0f, 2.0f}
+    };
+    poly.CalculateCentroid();
+
+    assert(poly.center_x == 1.0f);
+    assert(poly.center_y == 1.0f);
+    std::cout << "Square center: (1.0, 1.0) ✓" << std::endl;
+
+    // 验证中心点在多边形内部
+    bool inside = poly.ContainsPoint(poly.center_x, poly.center_y);
+    assert(inside);
+    std::cout << "Center point is inside polygon ✓" << std::endl;
+
+     // 测试不规则多边形（L形）
+    NavMesh::Polygon poly2;
+    poly2.vertices = {
+        {0.0f, 0.0f},
+        {3.0f, 0.0f},
+        {3.0f, 1.0f},
+        {1.0f, 1.0f},
+        {1.0f, 2.0f},
+        {0.0f, 2.0f}
+    };
+    poly2.CalculateCentroid();
+    std::cout << "L-shape center: (" << poly2.center_x << ", " << poly2.center_y << ")" << std::endl;
+
+    bool inside2 = poly2.ContainsPoint(poly2.center_x, poly2.center_y);
+    assert(inside2);
+    std::cout << "Center point is inside L-shape ✓" << std::endl;
+
+    std::cout << "=== Sub-task 1.3 PASSED ===" << std::endl;
 }
