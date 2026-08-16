@@ -9,6 +9,8 @@ public:
     void TestPolygon();
 
     void TestCenterOfPolygon();
+
+    void TestPortalDetector();
 };
 
 

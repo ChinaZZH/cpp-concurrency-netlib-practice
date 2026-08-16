@@ -5,8 +5,10 @@
 #include <memory>
 #include <cassert>
 #include "../A_Star/GridMap.h"
+#include "../A_NavMesh/NavMeshTypes.h"
 #include "../A_NavMesh/RegionMarker.h"
 #include "../A_NavMesh/PolygonExtractor.h"
+#include "../A_NavMesh/PortalDetector.h"
 
 
 void Test_NavMesh::Test_RegionMarker()
@@ -116,7 +118,7 @@ void Test_NavMesh::TestPolygon()
 
     // 2. 多边形提取
     NavMesh::PolygonExtractor extractor;
-    auto region_polygons = extractor.Extract(map, region_ids);
+    auto region_polygons = extractor.ExtractPolygons(map, region_ids);
 
     // 验证
     assert(region_polygons.size() == 2);  // 左右两个区域
@@ -208,4 +210,48 @@ void Test_NavMesh::TestCenterOfPolygon()
     std::cout << "Center point is inside L-shape ✓" << std::endl;
 
     std::cout << "=== Sub-task 1.3 PASSED ===" << std::endl;
+}
+
+
+void Test_NavMesh::TestPortalDetector()
+{
+    
+    // 创建地图
+    {
+        std::cout << "=== Day 2: Connectivity:Mode  ===" << std::endl;
+        auto map = std::make_shared<A_Star::GridMap>(10, 10, 1.0f);
+
+        // 【方案一】左右完全隔开，不留任何通道
+        // 墙从 (3,0) 到 (3,9)，连续贯穿
+        for (int y = 0; y < 10; ++y) {
+            map->SetWalkable(3, y, false);
+        }
+
+        // 中间 (3,5) 是通的 → 通道
+
+        // Day 1: 区域标记 + 多边形提取
+        NavMesh::RegionMarker marker;
+        auto region_ids = marker.MarkRegions(map);
+    
+        NavMesh::PolygonExtractor extractor;
+        auto regions = extractor.ExtractPolygons(map, region_ids);
+    
+        // 验证区域数量
+        std::cout << "Regions: " << regions.size() << std::endl;
+        assert(regions.size() == 2);
+
+        // Day 2: 门户检测
+        NavMesh::PortalDetector detector(regions, region_ids, map);
+        detector.DetectPortals();
+        const auto& portals = detector.GetPortals();
+
+        // 验证：没有可通行的门户（因为被墙完全隔开）
+        std::cout << "Portals found: " << portals.size() << std::endl;
+        assert(portals.size() == 0);
+        std::cout << "=== Connectivity:Mode  PASSED ===" << std::endl;
+    }
+    
+    
+
+    std::cout << "=== Subtask 2.1 All PASSED ===" << std::endl;
 }
