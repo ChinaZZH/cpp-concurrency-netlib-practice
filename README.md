@@ -29,6 +29,7 @@
 - [动态分区模块设计与实现](./docs/dynamic_partition.md)
 
 - [A星寻路设计与实现](./docs/a_star_path_finder_design.md)
+- [网格导航](./docs/navmesh_design.md)
  
  
 （C++并发基础 → 手写网络库 → monkey解释器和monkey编译器 → 游戏特定算法）
