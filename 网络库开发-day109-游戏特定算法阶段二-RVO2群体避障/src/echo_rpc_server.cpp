@@ -24,6 +24,7 @@
 #include "GameSpecficAlgorithms/GameTest/Test_A_Star.h"
 #include "GameSpecficAlgorithms/GameTest/Test_Move_To_Target.h"
 #include "GameSpecficAlgorithms/GameTest/Test_NavMesh.h"
+#include "GameSpecficAlgorithms/GameTest/Test_Rvo2_Agent.h"
 
 #include <signal.h>
 #include <thread>
@@ -58,8 +59,8 @@ int main()
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
 
-    Test_NavMesh navMesh;
-    navMesh.TestPortalDetector(); 
+    Test_Rvo2_Agent rvo2_agent;
+    rvo2_agent.Test_Simulator_Update(); 
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
