@@ -10,6 +10,14 @@ namespace RVO2
         float x;
         float y;
 
+        Point2D()
+        :x(0.0f), y(0.0f)
+        { }
+
+        Point2D(float tmp_x, float tmp_y)
+        :x(tmp_x), y(tmp_y) {}
+
+
         bool operator==(const Point2D& other) const  {
             return std::abs(x - other.x) < 0.001f && std::abs(y - other.y) < 0.001f;
         }
@@ -29,5 +37,6 @@ namespace RVO2
         float       max_speed = 0.1f;       // 最大速度（单位/毫秒）
         float       max_accel = 0.05f;      // 最大加速度
         bool        enabled = true;         // 是否参与模拟
+
     };
 }

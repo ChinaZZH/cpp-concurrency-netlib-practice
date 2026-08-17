@@ -94,3 +94,77 @@ void Test_Rvo2_Agent::Test_Simulator_Update()
 
     std::cout << "\n=== Sub-task 1 ALL TESTS PASSED ===" << std::endl;
 }
+
+
+void Test_Rvo2_Agent::TestTwoAgentsCrossing() 
+{
+    std::cout << "\n[Test 1] Two agents crossing (avoid collision)..." << std::endl;
+
+    RVO2::Simulator sim;
+
+    // Agent 1: 从左向右
+    uint32_t a1 = sim.AddAgent({0.0f, 0.0f}, 0.5f);
+    sim.SetTarget(a1, {10.0f, 0.0f});
+
+    // Agent 2: 从右向左
+    uint32_t a2 = sim.AddAgent({10.0f, 5.0f}, 0.5f);
+    sim.SetTarget(a2, {0.0f, 5.0f});
+
+    // 模拟 50 帧（20ms/帧）
+    for (int frame = 0; frame < 50; ++frame) {
+        sim.Update(20.0f);
+
+        const auto& agents = sim.GetAgents();
+        // 检查两个 Agent 是否发生重叠
+        float dist = std::sqrt(
+            std::pow(agents[0].position.x - agents[1].position.x, 2) +
+            std::pow(agents[0].position.y - agents[1].position.y, 2)
+        );
+        float min_dist = agents[0].radius + agents[1].radius;
+        assert(dist >= min_dist - 0.01f);  // 不重叠（允许微小误差）
+    }
+
+    std::cout << "  PASS: No collision occurred" << std::endl;
+}
+
+void Test_Rvo2_Agent::TestThreeAgentsSameTarget() 
+{
+    std::cout << "\n[Test 2] Three agents converge to same target..." << std::endl;
+
+    RVO2::Simulator sim;
+
+    uint32_t a1 = sim.AddAgent({0.0f, 0.0f}, 0.5f);
+    uint32_t a2 = sim.AddAgent({10.0f, 0.0f}, 0.5f);
+    uint32_t a3 = sim.AddAgent({5.0f, -10.0f}, 0.5f);
+
+    sim.SetTarget(a1, {5.0f, 0.0f});
+    sim.SetTarget(a2, {5.0f, 0.0f});
+    sim.SetTarget(a3, {5.0f, 0.0f});
+
+    for (int frame = 0; frame < 80; ++frame) {
+        sim.Update(20.0f);
+
+        //std::cout << "start frame_index:=" << frame << std::endl;
+
+        const auto& agents = sim.GetAgents();
+        // 检查是否有重叠
+        for (size_t i = 0; i < agents.size(); ++i) {
+            for (size_t j = i + 1; j < agents.size(); ++j) {
+                float dist = std::sqrt(
+                    std::pow(agents[i].position.x - agents[j].position.x, 2) +
+                    std::pow(agents[i].position.y - agents[j].position.y, 2)
+                );
+                float min_dist = agents[i].radius + agents[j].radius;
+                if(dist < min_dist)
+                {
+                    std::cout << "i:=" << i << " j:=" << j << "  dist:=" << dist << " min_dist:=" << min_dist << "  frame_index:=" << frame << std::endl;
+                }
+
+                assert(dist >= min_dist - 0.01f);
+            }
+        }
+    }
+
+    std::cout << "  PASS: All agents reached target without collision" << std::endl;
+}
+

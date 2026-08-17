@@ -60,7 +60,8 @@ int main()
     //timeWheel.TestAll();
 
     Test_Rvo2_Agent rvo2_agent;
-    rvo2_agent.Test_Simulator_Update(); 
+    rvo2_agent.TestTwoAgentsCrossing(); 
+    rvo2_agent.TestThreeAgentsSameTarget();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

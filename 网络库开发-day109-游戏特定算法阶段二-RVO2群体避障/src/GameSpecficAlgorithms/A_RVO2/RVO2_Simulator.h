@@ -30,8 +30,23 @@ namespace RVO2
         // 设置 Agent 目标
         void SetTarget(uint32_t agent_id, const Point2D& target);
 
+        // 设置避障参数
+        void SetAvoidanceStrength(float strength) { avoidance_strength_ = strength; }
+
+    private:
+        std::vector<Point2D> GenerateCandidateVelocities(const Agent& agent, const Point2D& ideal_vel) const;    
+    
+        bool IsCollision(const Agent& agent, const Point2D& candidates_vel, float delta_ms, const std::vector<Agent>& others) const;    
+
+        Point2D SelectBestVelocity(const Agent& agent, const std::vector<Point2D>& candidates, const Point2D& ideal_ve, float delta_msl) const;
+
+        float Distance(const Point2D& a, const Point2D& b) const;
+        
     private:
         std::vector<Agent> agents_;
+
         uint32_t next_agent_id_ = 1;
+
+        float avoidance_strength_ = 1.0f;   // 避障强度（预留）
     };
 }
