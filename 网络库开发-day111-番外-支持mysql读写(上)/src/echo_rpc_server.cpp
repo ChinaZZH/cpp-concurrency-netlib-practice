@@ -25,9 +25,11 @@
 #include "GameSpecficAlgorithms/GameTest/Test_Move_To_Target.h"
 #include "GameSpecficAlgorithms/GameTest/Test_NavMesh.h"
 #include "GameSpecficAlgorithms/GameTest/Test_Rvo2_Agent.h"
+#include "GameSpecficAlgorithms/GameTest/Test_DB_Mysql.h"
 
 #include <signal.h>
 #include <thread>
+#include <mysql/mysql.h>
 
 
 int UnitTesting()
@@ -46,22 +48,31 @@ int PerformanceTest()
     return 0;
 }
 
+int MysqlTest()
+{
+    std::cout << "MySQL client version: " << mysql_get_client_info() << std::endl;
+    
+    // 测试连接对象（只是验证 API 能调用）
+    MYSQL* conn = mysql_init(nullptr);
+    if (conn) {
+        std::cout << "mysql_init() succeeded" << std::endl;
+        mysql_close(conn);
+    } else {
+        std::cout << "mysql_init() failed" << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+
 int main()
 {
-    std::cout << "start unit testing" << std::endl;
-    UnitTesting();
-    //BehaviorTreeAction_TestFile testFile;
-    //testFile.TestAllScenes();
-    //std::cout << "start PerformanceTest " << std::endl;
-    //PerformanceTest();
-    
-    
-   // Test_TimeWheel timeWheel;
-    //timeWheel.TestAll();
-
-    //Test_Rvo2_Agent rvo2_agent;
-    //rvo2_agent.TestTwoAgentsCrossing(); 
-    //rvo2_agent.TestThreeAgentsSameTarget();
+    //std::cout << "start unit testing" << std::endl;
+    //UnitTesting();
+    //MysqlTest();
+    Test_DB_Mysql mysql_test;
+    mysql_test.Test_Connection_Pool();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
