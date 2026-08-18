@@ -33,6 +33,7 @@ public:
 
     virtual void ResetNode() override;
 
+
 private:
     Fixed CalcuDirForGridPos(int src_grid_value, int target_grid_value)
     {
@@ -86,5 +87,4 @@ private:
     uint32_t last_target_id_ = 0;
     Fixed last_target_x_;
     Fixed last_target_y_;
-
 };

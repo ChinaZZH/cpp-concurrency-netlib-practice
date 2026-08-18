@@ -4,7 +4,7 @@
 
 MoveToTargetAction::MoveToTargetAction(float speed /*= 0.08f*/,  
     std::shared_ptr<A_Star::GridMap> map /*= nullptr*/, 
-    std::shared_ptr<A_Star::NodeManager> node_mgr /*= nullptr*/)
+    std::shared_ptr<A_Star::NodeManager> node_mgr /*= nullptr*/)   
     
     : BTActionNode()
     , speed_(Fixed(speed))

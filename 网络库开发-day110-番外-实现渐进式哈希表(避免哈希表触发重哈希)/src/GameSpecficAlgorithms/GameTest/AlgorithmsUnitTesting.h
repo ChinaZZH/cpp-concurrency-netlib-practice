@@ -48,6 +48,8 @@ public:
     void TestPartitionCreation();
     void TestPartitionMigration();
 
+    void Test_IncrementalHashTable();
+    
 private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
     

@@ -35,7 +35,7 @@ int UnitTesting()
     AlgorithmsUnitTesting gameAlgorighm;
     //gameAlgorighm.TestDynamicAOI_V2();
     //gameAlgorighm.TestPartitionCreation();
-    gameAlgorighm.TestPartitionMigration();
+    gameAlgorighm.Test_IncrementalHashTable();
     return 0;
 }
 
@@ -49,7 +49,7 @@ int PerformanceTest()
 int main()
 {
     std::cout << "start unit testing" << std::endl;
-    // UnitTesting();
+    UnitTesting();
     //BehaviorTreeAction_TestFile testFile;
     //testFile.TestAllScenes();
     //std::cout << "start PerformanceTest " << std::endl;
@@ -59,9 +59,9 @@ int main()
    // Test_TimeWheel timeWheel;
     //timeWheel.TestAll();
 
-    Test_Rvo2_Agent rvo2_agent;
-    rvo2_agent.TestTwoAgentsCrossing(); 
-    rvo2_agent.TestThreeAgentsSameTarget();
+    //Test_Rvo2_Agent rvo2_agent;
+    //rvo2_agent.TestTwoAgentsCrossing(); 
+    //rvo2_agent.TestThreeAgentsSameTarget();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);

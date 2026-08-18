@@ -38,6 +38,7 @@
 #include "../AOI/DynamicAOI/DynamicAOI.h"
 #include "../AOI/DynamicAOI/DynamicAOI_V2.h"
 #include "../DynamicPartition/PartitionManager.h"
+#include "../../Common/IncrementalHashTable.h"
 
 
 
@@ -1499,4 +1500,35 @@ void AlgorithmsUnitTesting::TestDynamicAOI_V2() {
     TestMigrationDecision();
     TestUnderloadedMerge();
     std::cout << "=== ALL TESTS COMPLETE ===" << std::endl;
+ }
+
+
+ void AlgorithmsUnitTesting::Test_IncrementalHashTable()
+ {
+    // 创建增量哈希表，初始桶数 4，负载因子阈值 0.75，每次迁移 2 个元素
+    IncrementalHashTable<int, std::string> table(8, 0.75f, 2);
+
+    // 插入 100 个元素，会在插入过程中逐步触发迁移
+    for (int i = 0; i < 1000; ++i) {
+        auto start = std::chrono::steady_clock::now();
+        table.Insert({i, "value" + std::to_string(i)});
+        auto end = std::chrono::steady_clock::now();
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+        if(elapsed > 5)
+        {
+            std::cout << "insert i:=" << i << " cost microseconds:=" << elapsed << std::endl;
+        }
+    }
+
+    // 查找
+    auto result = table.Find(50);
+    if (result) {
+        std::cout << "Found: " << result.value() << std::endl;
+    }
+
+    // 删除
+    table.Erase(30);
+
+    std::cout << "Size: " << table.Size() << std::endl;
  }
