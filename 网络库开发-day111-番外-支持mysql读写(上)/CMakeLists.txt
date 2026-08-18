@@ -13,6 +13,29 @@ find_package(Protobuf REQUIRED)
 # 查找添加absl库
 find_package(absl REQUIRED)
 
+# ---------- 查找 MySQL 客户端库（手动指定路径） ----------
+set(MYSQL_INCLUDE_DIR "/usr/include/mysql")
+set(MYSQL_LIBRARY "/usr/lib/x86_64-linux-gnu/libmysqlclient.so")
+
+# 检查头文件是否存在
+if(NOT EXISTS "${MYSQL_INCLUDE_DIR}/mysql.h")
+    message(FATAL_ERROR "mysql.h not found at ${MYSQL_INCLUDE_DIR}")
+endif()
+
+# 检查库文件是否存在
+if(NOT EXISTS "${MYSQL_LIBRARY}")
+    message(FATAL_ERROR "libmysqlclient.so not found at ${MYSQL_LIBRARY}")
+endif()
+
+set(MYSQL_INCLUDE_DIRS ${MYSQL_INCLUDE_DIR})
+set(MYSQL_LIBRARIES ${MYSQL_LIBRARY})
+
+message(STATUS "MySQL found: ${MYSQL_INCLUDE_DIRS}")
+message(STATUS "MySQL libraries: ${MYSQL_LIBRARIES}")
+
+message(STATUS "MySQL found: ${MYSQL_INCLUDE_DIRS}")
+message(STATUS "MySQL libraries: ${MYSQL_LIBRARIES}")
+
 # 假设 .proto 文件放在项目根目录下的 proto/ 文件夹
 set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 file(GLOB PROTO_FILES "${PROTO_DIR}/*.proto")
@@ -58,6 +81,7 @@ add_executable(rpc_server ${ALL_SOURCES})
 target_include_directories(rpc_server PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
     ${Protobuf_INCLUDE_DIRS}
+	${MYSQL_INCLUDE_DIRS}
 )
 
 
@@ -65,6 +89,7 @@ target_include_directories(rpc_server PRIVATE
 target_link_libraries(rpc_server
 	Threads::Threads
 	${Protobuf_LIBRARIES}
+	${MYSQL_LIBRARIES}
 	absl::flat_hash_map          # 主要的哈希图
 	absl::flat_hash_set          # 主要的哈希图
     absl::hash                    # 哈希函数实现
