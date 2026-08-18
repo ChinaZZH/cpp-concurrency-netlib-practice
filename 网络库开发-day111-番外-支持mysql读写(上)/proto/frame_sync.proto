@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+// 客户端上行：单帧单玩家的操作指令
+message ClientInput {
+    uint32 player_id = 1;
+    uint32 frame_index = 2;      // 客户端当前帧号（服务器会以服务端帧号覆盖，该字段仅作参考）
+    int32 move_x = 3;            // 摇杆/方向输入（-32768 ~ 32767）
+    int32 move_y = 4;
+    bool attack = 5;
+    uint32 skill_id = 6;         // 0 表示无技能
+    uint32 buttons = 7;          // 位掩码：跳跃/防御/冲刺等
+    uint32 client_seq = 8;
+
+    // 【新增】客户端预测后的坐标（定点数原始值，Q24.40 格式）
+    int64 predicted_x = 9;
+    int64 predicted_y = 10;
+}
+
+message PlayerState {
+    uint32 player_id = 1;
+    int64 x = 2;  // 定点数原始值
+    int64 y = 3;
+}
+
+// 服务端下行：全局帧包（包含同一帧内所有玩家的指令）
+message FramePackage {
+    uint32 frame_index = 1;      // 全局帧号（单调递增）
+    uint64 timestamp_ms = 2;     // 服务端生成时间戳
+    repeated ClientInput inputs = 3;
+    repeated PlayerState states = 4;
+}
+
+// 由于当前的服务端为多个客户端共用一条连接，则采用这个模式
+message ServerFramePackage {
+    int32  msg_client_id = 1;    // 这条消息包所属对象
+    bytes  package = 2;          // frame包
+}
+
+// 测试使用
+message TestAckPackage {
+    uint32 acked_client_frame = 1;   // 服务端确认的客户端帧号
+    uint32 server_frame = 2;         // 服务端当前帧号
+}
+
+
+// 帧同步的模式下加入玩家
+message FrameSyncAddPlayer {
+   uint32 player_id = 1;
+}
+
+
+// 帧同步的模式下移除玩家
+message FrameSyncRemovePlayer {
+    uint32 player_id = 1;
+}
+
+
+// 服务端强制矫正指令（单播给特定玩家）
+message ServerCorrection {
+    uint32 player_id = 1;              // 目标玩家
+    uint32 client_frame = 2;           // 【关键】该玩家当初上报的客户端帧号（回滚锚点）
+    int64  authoritative_x = 3;        // 服务端算出的权威位置（定点数 Raw 值）
+    int64  authoritative_y = 4;
+    // 可选：速度、朝向等，按需添加
+}
+
+// 客户端发起攻击的消息
+message AttackRequest
+{
+    uint32 player_id = 1;
+    uint32 server_frame_index = 2;     // 客户端预测帧号（用于延迟补偿）
+    uint32 target_id = 3;       // 攻击目标玩家 ID（可选）
+    int64  dir_x = 4;           // 攻击方向（如果是自由瞄准）
+    int64  dir_y = 5;
+
+    uint32 skill_id = 6;        // 使用的技能 ID（0 表示普通攻击）
+}
+
+
+
+// 攻击后的结果
+message HitResult {
+    uint32 attacker_id = 1;
+    uint32 target_id = 2;
+    uint32 damage = 3;
+    bool hit = 4;               // true=命中，false=未命中
+    uint32 frame_index = 5;     // 回显帧号，用于客户端日志
+}
