@@ -24,6 +24,9 @@
 #include "Match/MatchManager.h"
 #include "DynamicPartition/PartitionManager.h"
 #include "DynamicPartition/MigrationManager.h"
+#include "../MySql/DBTask.h"
+#include "../MySql/DBConnectionPool.h"
+#include "../../build/proto_gen/mysql.pb.h"
 
 GameServer::GameServer(EventLoop* loop, int nPort)
 :server_(loop, nPort)
@@ -109,6 +112,21 @@ GameServer::GameServer(EventLoop* loop, int nPort)
 
 void GameServer::Start()
 {
+    // 启动的时候设置db任务线程池
+    {
+        std::unique_ptr<MySql::DBConnectionPool> db_connection_pool = std::make_unique<MySql::DBConnectionPool>();
+        if(false == db_connection_pool->Init("127.0.0.1", "root", "zzh@890918", "game_server", 3306, 5)) {
+            std::cout << "connection to mysql db error!!!" << std::endl;
+            return;
+        }
+    
+        db_thread_pool_ = std::make_unique<MySql::DBThreadPool>(std::move(db_connection_pool));
+    }
+
+    // 异步执行sql语句
+    RegisterHandler(GSMT_AsyncDbRequest, std::bind(&GameServer::OnAsyncDbRequest, this, std::placeholders::_1, std::placeholders::_2));
+    RegisterHandler(GSMT_SyncDbRequest, std::bind(&GameServer::OnSyncDbRequest, this, std::placeholders::_1, std::placeholders::_2));
+
     // 注册处理函数
     //std::cout << "GameServer::Start  1111" << std::endl;
     RegisterHandler(GSMT_AddEntity, std::bind(&GameServer::AddEntity, this, std::placeholders::_1, std::placeholders::_2));
@@ -331,6 +349,79 @@ void GameServer::OnMessage(const std::shared_ptr<TcpConnection>& con, std::strin
 
 }
 
+bool GameServer::OnAsyncDbRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    mysqlDb::AsyncDbRequest request;
+    if(!request.ParseFromString(strParamData))
+    {
+        throw std::runtime_error("parse DbRequest failed");
+    }  
+
+    uint32_t query_player_id = request.player_id();
+    auto HandleAsyncDbResponse = [this, query_player_id](const MySql::DBResult& result){
+        if(false == result.success)
+        {
+            mysqlDb::DbResponse response;
+            response.set_player_id(query_player_id);
+            response.set_success_code(0);
+
+            std::string strData;
+            response.SerializeToString(&strData);
+            this->SendMessage(query_player_id, strData, GSMT_RetDbResponse);
+            return ;
+        }
+
+        // 查询成功，则判断是update/insert/delete
+        if(result.affected_rows > 0){
+            this->HandleAsyncDbUpdateResponse(query_player_id, result);
+        }else{
+            this->HandleAsyncDbSelectResponse(query_player_id, result);
+        }
+    };
+
+    std::shared_ptr<MySql::DBTask> db_task = std::make_shared<MySql::DBTask>();
+    db_task->sql = std::move(request.sql_context());
+    db_task->conn_id = query_player_id;
+    db_task->callback = HandleAsyncDbResponse;
+    db_thread_pool_->SubmitTask(db_task);
+    return true;
+}
+
+
+bool GameServer::OnSyncDbRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
+{
+    mysqlDb::DbSyncRequest request;
+    if(!request.ParseFromString(strParamData))
+    {
+        throw std::runtime_error("parse DbRequest failed");
+    }  
+
+    uint32_t query_player_id = request.player_id();
+    std::shared_ptr<MySql::DBTask> db_task = std::make_shared<MySql::DBTask>();
+    db_task->sql = std::move(request.sql_context());
+    db_task->conn_id = query_player_id;
+    MySql::DBResult result = db_thread_pool_->ExecuteSync(db_task);
+    if(false == result.success)
+    {
+        mysqlDb::DbResponse response;
+        response.set_player_id(query_player_id);
+        response.set_success_code(0);
+
+        std::string strData;
+        response.SerializeToString(&strData);
+        this->SendMessage(query_player_id, strData, GSMT_RetDbResponse);
+        return true;
+    }
+
+    // 查询成功，则判断是update/insert/delete
+    if(result.affected_rows > 0){
+        this->HandleAsyncDbUpdateResponse(query_player_id, result);
+    }else{
+        this->HandleAsyncDbSelectResponse(query_player_id, result);
+    }
+
+    return true;
+}
 
 bool GameServer::AddEntity(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData)
 {
@@ -905,3 +996,46 @@ bool GameServer::OnMigrationAck(const std::weak_ptr<TcpConnection>& weak_connect
 
     return on_ack_result;
 }
+
+
+
+bool GameServer::HandleAsyncDbSelectResponse(uint32_t player_id, const MySql::DBResult& result)
+{
+    mysqlDb::DbResponse response;
+    response.set_player_id(player_id);
+    response.set_success_code(1);
+    response.set_affect_rows(0);
+    for(const auto& column_value : result.columns)
+    {
+        response.add_columns(column_value);
+    }
+
+    for(const auto& row_data : result.rows)
+    {
+        mysqlDb::DbFieldValueSet* pFieldValueSet = response.add_rows();
+        for(const auto& field_value : row_data)
+        {
+            pFieldValueSet->add_field_value(field_value);
+        }
+    }
+    
+
+    std::string strData;
+    response.SerializeToString(&strData);
+    this->SendMessage(player_id, strData, GSMT_RetDbResponse);
+    return true;
+}
+    
+bool GameServer::HandleAsyncDbUpdateResponse(uint32_t player_id, const MySql::DBResult& result)
+{
+    mysqlDb::DbResponse response;
+    response.set_player_id(player_id);
+    response.set_success_code(1);
+    response.set_affect_rows(result.affected_rows);
+
+    std::string strData;
+    response.SerializeToString(&strData);
+    this->SendMessage(player_id, strData, GSMT_RetDbResponse);
+    return true;
+}
+ 

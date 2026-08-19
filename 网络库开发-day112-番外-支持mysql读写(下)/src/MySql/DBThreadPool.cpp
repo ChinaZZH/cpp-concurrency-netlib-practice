@@ -14,6 +14,8 @@ namespace MySql
                 this->WorkerLoop();
             });
         }
+
+        std::cout << "[DBThreadPool] Created " << thread_count << " worker threads." << std::endl;
     }
     
     DBThreadPool::~DBThreadPool()
@@ -32,6 +34,35 @@ namespace MySql
         task_data_.enqueue(task);
         task_count_.fetch_add(1);
     }
+
+     // 同步执行sql语句
+    DBResult DBThreadPool::ExecuteSync(std::shared_ptr<DBTask> task)
+    {
+        if(stop_.load())
+        {
+            throw std::runtime_error("enqueue on stopped DBThreadPool");
+        }
+
+        std::promise<DBResult> sync_promise;
+        std::future<DBResult> fut = sync_promise.get_future();
+        task->callback = [&sync_promise](const DBResult& result){
+            sync_promise.set_value(result);
+        };
+
+    
+       SubmitTask(task);
+       auto status = fut.wait_for(std::chrono::milliseconds(500));
+       if(std::future_status::timeout == status)
+       {
+            DBResult result;
+            result.success = false;
+            result.error_msg = "execute sync time out";
+            return result;
+       }
+
+       return fut.get();
+    }
+
 
     // 停止所有工作线程（等待当前任务完成）
     void DBThreadPool::Stop()

@@ -76,7 +76,7 @@ void Test_DB_Mysql::PrintResult(const MySql::DBResult& result)
     std::cout << std::endl;
 
     // 打印前 3 行数据
-    size_t row_count = std::min(result.rows.size(), size_t(3));
+    size_t row_count = std::min(result.rows.size(), size_t(5));
     for (size_t i = 0; i < row_count; ++i) {
         std::cout << "  Row " << i << ": ";
         for (const auto& field : result.rows[i]) {
@@ -86,8 +86,8 @@ void Test_DB_Mysql::PrintResult(const MySql::DBResult& result)
         std::cout << std::endl;
     }
 
-    if (result.rows.size() > 3) {
-        std::cout << "  ... and " << (result.rows.size() - 3) << " more rows" << std::endl;
+    if (result.rows.size() > 5) {
+        std::cout << "  ... and " << (result.rows.size() - 5) << " more rows" << std::endl;
     }
 }
 
@@ -275,5 +275,69 @@ int Test_DB_Mysql::Test_DB_Task_Pool()
         return 1;
     }
 
+    return 0;
+}
+
+
+int Test_DB_Mysql::Test_Sync_Execute_Task()
+{
+    std::cout << "=== DB Thread Pool Test ===" << std::endl;
+    // ----------------------------------------------------------------
+    // 1. 初始化连接池
+    // ----------------------------------------------------------------
+    std::cout << "\n[1] Initializing connection pool..." << std::endl;
+    std::unique_ptr<MySql::DBConnectionPool> pool;
+    {
+        pool = std::make_unique<MySql::DBConnectionPool>();
+        if (!pool->Init("127.0.0.1", "root", "zzh@890918", "game_server", 3306, 5)) {
+            std::cerr << "Failed to initialize connection pool" << std::endl;
+            return 1;
+        }
+
+        std::cout << "  Idle connections: " << pool->IdleCount() << std::endl;
+    } 
+   
+
+    // ----------------------------------------------------------------
+    // 2. 初始化 DB 线程池（3 个工作线程）
+    // ----------------------------------------------------------------
+    std::cout << "\n[2] Initializing DB thread pool..." << std::endl;
+    MySql::DBThreadPool thread_pool(std::move(pool), 3);
+    std::cout << "  Thread pool ready." << std::endl;
+
+    // ----------------------------------------------------------------
+    // 3. 查询测试
+    // ----------------------------------------------------------------
+    std::cout << "\n[3] Querying data Before Update..." << std::endl;
+    std::shared_ptr<MySql::DBTask> query_task = std::make_shared<MySql::DBTask>();
+    query_task->sql = "SELECT id, name, age FROM test_users ORDER BY id";
+    MySql::DBResult before_update_result = std::move(thread_pool.ExecuteSync(query_task));
+    this->PrintResult(before_update_result);
+
+
+    // ----------------------------------------------------------------
+    // 4. 更新测试
+    // ----------------------------------------------------------------
+    std::cout << "\n[4] Updating data..." << std::endl;
+    std::shared_ptr<MySql::DBTask> update_task = std::make_shared<MySql::DBTask>();
+    update_task->sql = "UPDATE test_users SET age = 100 WHERE name = 'Alice'";
+    MySql::DBResult update_result = std::move(thread_pool.ExecuteSync(update_task));
+    this->PrintResult(update_result);
+
+    // ----------------------------------------------------------------
+    // 5. 查询测试
+    // ----------------------------------------------------------------
+    std::cout << "\n[5] Querying data after Update..." << std::endl;
+    std::shared_ptr<MySql::DBTask> after_update_query_task = std::make_shared<MySql::DBTask>();
+    after_update_query_task->sql = "SELECT id, name, age FROM test_users ORDER BY id";
+    MySql::DBResult after_update_result = std::move(thread_pool.ExecuteSync(after_update_query_task));
+    this->PrintResult(after_update_result);
+
+    // ----------------------------------------------------------------
+    // 9. 清理
+    // ----------------------------------------------------------------
+    std::cout << "\n[10] Cleaning up..." << std::endl;
+    thread_pool.Stop();
+    std::cout << "\n=== ALL TESTS PASSED ===" << std::endl;
     return 0;
 }

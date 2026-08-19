@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package mysqlDb;
+
+
+message AsyncDbRequest {
+    uint32 player_id    = 1;
+    string sql_context  = 2;
+}
+
+message DbFieldValueSet {
+    repeated string field_value = 1;
+}
+
+message DbResponse {
+    uint32 player_id    = 1;
+    int32 success_code  = 2;
+    int32 affect_rows   = 3;
+    repeated string columns = 4;
+    repeated DbFieldValueSet rows = 5;
+}
+
+
+message DbSyncRequest {
+    uint32 player_id    = 1;
+    string sql_context  = 2;
+}

@@ -33,4 +33,9 @@ enum GameServerMsgType
     GSMT_MigrationRequest       = 51, // 客户端命令到服务端
     GSMT_MigrationData          = 52, // 服务端命令从source服务端结点 到 target服务器结点
     GSMT_MigrationAck           = 53, // target服务器结点回复迁移结果确认消息给source结点结点   
+
+    // mysql操作
+    GSMT_AsyncDbRequest         = 101,
+    GSMT_SyncDbRequest          = 101,
+    GSMT_RetDbResponse          = 102,
 };

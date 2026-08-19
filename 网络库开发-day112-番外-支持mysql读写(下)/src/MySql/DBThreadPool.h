@@ -5,6 +5,7 @@
 #include <queue>
 #include <atomic>
 #include <memory>
+#include <future>
 #include "DBTask.h"
 #include "DBConnectionPool.h"
 #include "../Common/BlockingConcurrentQueue.h"
@@ -18,6 +19,9 @@ namespace MySql
         DBThreadPool(std::unique_ptr<DBConnectionPool> pool, size_t thread_count = 4);
         ~DBThreadPool();
         
+        // 同步执行sql语句
+        DBResult ExecuteSync(std::shared_ptr<DBTask> task);
+
         // 提交一个任务（线程安全，由 Reactor 调用） 
         void SubmitTask(std::shared_ptr<DBTask> task);
 

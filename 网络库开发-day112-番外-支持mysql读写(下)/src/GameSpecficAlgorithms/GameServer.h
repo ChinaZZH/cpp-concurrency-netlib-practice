@@ -11,7 +11,7 @@
 #include <absl/container/flat_hash_map.h>
 #include "PartitionedPool.h"
 #include "GameServerMsgTypeDefine.h"
-
+#include "../MySql/DBThreadPool.h"
 
 class EventLoop;
 class TcpConnection;
@@ -50,6 +50,10 @@ public:
     void KickPlayer(uint32_t player_id);
         
 public:
+    bool OnAsyncDbRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
+    bool OnSyncDbRequest(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
+
     bool AddEntity(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
 
     bool RemoveEntity(const std::weak_ptr<TcpConnection>& weak_connection_ptr, const std::string& strParamData);
@@ -83,6 +87,10 @@ private:
     void PrintNeighbors(std::shared_ptr<IAOIManager> aoi, int id);
 
     uint32_t GetCurrentTimeMs();
+
+    bool HandleAsyncDbSelectResponse(uint32_t player_id, const MySql::DBResult& result);
+    
+    bool HandleAsyncDbUpdateResponse(uint32_t player_id, const MySql::DBResult& result);
 
 public:
     // 状态同步， 位置同步
@@ -138,4 +146,7 @@ private:
     // 动态迁移
     std::shared_ptr<PartitionManager> partition_mgr_;
     std::shared_ptr<MigrationManager> migration_mgr_;
+
+    // mysql任务池
+    std::unique_ptr<MySql::DBThreadPool> db_thread_pool_; // 异步执行队列
 };
