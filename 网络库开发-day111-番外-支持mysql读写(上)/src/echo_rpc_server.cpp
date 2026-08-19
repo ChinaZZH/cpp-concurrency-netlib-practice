@@ -72,7 +72,7 @@ int main()
     //UnitTesting();
     //MysqlTest();
     Test_DB_Mysql mysql_test;
-    mysql_test.Test_Connection_Pool();
+    mysql_test.Test_DB_Task_Pool();
     
     std::cout << "start game server " << std::endl;
     signal(SIGPIPE, SIG_IGN);
