@@ -225,7 +225,7 @@ int test_http_client()
     return 0;
 }
 
-int echo_client_test()
+int echo_cliet_test()
 {
     auto& cfg = ConfigManager::getInstance();
     if (!cfg.loadConfig("./config/client.ini")) {
@@ -288,6 +288,8 @@ int echo_client_test()
     std::this_thread::sleep_for(std::chrono::seconds(30)); 
     */
 
-    test_game_server_frame_sync();
+    // test_game_server_frame_sync();
+
+    test_mysql_db_request();
     return 0;
 }

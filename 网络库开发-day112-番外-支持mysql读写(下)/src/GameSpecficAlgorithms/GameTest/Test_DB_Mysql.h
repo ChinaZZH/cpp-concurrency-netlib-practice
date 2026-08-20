@@ -11,6 +11,8 @@ public:
     // 测试同步的情况
     int Test_Sync_Execute_Task();
 
+    int Test_Prepared_Statement();
+
 private:
-    void PrintResult(const MySql::DBResult& result);
+    void PrintResult(const std::string& label, const MySql::DBResult& result);
 };

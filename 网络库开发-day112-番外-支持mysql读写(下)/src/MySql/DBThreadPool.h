@@ -22,6 +22,8 @@ namespace MySql
         // 同步执行sql语句
         DBResult ExecuteSync(std::shared_ptr<DBTask> task);
 
+        //DBResult ExecuteSyncPrepared(uint32_t player_id, const std::string& sql, const std::vector<std::string>& params);
+
         // 提交一个任务（线程安全，由 Reactor 调用） 
         void SubmitTask(std::shared_ptr<DBTask> task);
 
@@ -47,6 +49,11 @@ namespace MySql
 
         // 解析结果集
         DBResult ParseResultSet(MYSQL_RES* res);
+
+        // ---------- 预处理执行函数 ----------
+        //DBResult ExecutePreparedQuery(MYSQL* conn, const std::string& sql, const std::vector<std::string>& params);
+
+        //DBResult ExecutePreparedUpdate(MYSQL* conn, const std::string& sql, const std::vector<std::string>& params);
 
     private:
         std::vector<std::thread> workers_;

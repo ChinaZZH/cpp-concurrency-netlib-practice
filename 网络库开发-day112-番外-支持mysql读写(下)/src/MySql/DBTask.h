@@ -22,7 +22,8 @@ namespace MySql
     // 任务结构
     struct DBTask
     {
-        std::string sql;
+        std::string sql;                                    // SQL 语句（普通SQL或带占位符的预处理SQL）
+        std::vector<std::string> params;                    // 参数列表（非空时启用预处理）
         std::function<void(const DBResult&)> callback;
         uint32_t conn_id;            // 哪个客户端发起的请求（用于回包）
         uint32_t request_id;         // 用于匹配请求/响应（可选）

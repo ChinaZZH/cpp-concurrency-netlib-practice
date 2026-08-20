@@ -12,6 +12,7 @@
 #include "../../build/proto_gen/add.pb.h"
 #include "../../build/proto_gen/aoi.pb.h"
 #include "../../build/proto_gen/frame_sync.pb.h"
+#include "../../build/proto_gen/mysql.pb.h"
 #include "../GameSpecficAlgorithms/GameServerMsgTypeDefine.h"
 #include "../GameSpecficAlgorithms/GameClient/ClientEntityMgr.h"
 #include "../GameSpecficAlgorithms/FrameSync/ClientPredictionManager.h"
@@ -988,7 +989,225 @@ void test_game_server_reconnection() {
     //return 0;
 }
 
+void PrintDbResponseResult(const mysqlDb:: DbResponse& result)
+{
+    if(result.success_code() <= 0) {
+        std::cerr << "  [ERROR] " << std::endl;
+        return;
+    }
+
+    std::cout << "  Success! ";
+    // 执行 update/insert/delete
+    if (result.affect_rows() > 0) 
+    {
+        std::cout << "Affected rows: " << result.affect_rows(); 
+        return;
+    }
+
+    // 执行select，返回的是空内容
+    if (result.rows_size() <= 0) {
+        std::cout << "No data returned." << std::endl;
+        return;
+    }
+
+    // 打印select出来的内容集合
+    std::cout << "Rows: " << result.rows_size(); 
+    std::cout << ", Columns: " << result.columns_size() << std::endl;
+
+    // 打印列名
+    std::cout << "  Columns: ";
+    for (int i = 0; i < result.columns_size(); ++i) 
+    {
+        std::cout << result.columns(i) << " ";
+    }
+    std::cout << std::endl;
+
+     // 打印前 3 行数据
+    size_t row_count = std::min(result.rows_size(), int(5));
+    for (size_t i = 0; i < row_count; ++i) {
+        std::cout << "  Row " << i << ": ";
+        const mysqlDb::DbFieldValueSet& field_value_set = result.rows(i);
+        for (int j = 0; j < field_value_set.field_value_size(); ++j) {
+            std::cout << field_value_set.field_value(j) << " ";
+        }
+
+        std::cout << std::endl;
+    }
+
+    if (result.rows_size() > 5) {
+        std::cout << "  ... and " << (result.rows_size() - 5) << " more rows" << std::endl;
+    }
+}
 
 
+void test_mysql_db_request() {
+    // 创建 EventLoop 对象（将在独立线程中运行）
+    EventLoop loop;
+
+    // 创建 TcpClient 和 RpcClient
+    auto client = std::make_shared<TcpClient>(&loop, "127.0.0.1", 8888);
+    auto rpcClient = std::make_shared<RpcClient>(nullptr);
+
+    // 用于等待连接建立的同步
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool connected = false;
+
+    std::weak_ptr<RpcClient> rpcPtr = rpcClient->shared_from_this();
+    client->SetConnectionCallBack([&, rpcPtr](const TcpConnectionPtr& conn) {
+        auto rpcClient = rpcPtr.lock();
+        if(rpcClient)
+        {
+            //std::cout << "Connected to server" << std::endl;
+            auto msg_type_decoder = std::make_unique<LengthAndTypePrefixDecoder>();
+            conn->SetDecoder(std::move(msg_type_decoder));
+            rpcClient->SetConnection(conn);
+            
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                connected = true;
+            }
+        }
+        
+
+        cv.notify_one();
+    });
+    
+
+    int defaultPlayerID = 1;
+    client->SetMessageCallBack([rpcPtr, defaultPlayerID](const TcpConnectionPtr&, std::string& msg, uint32_t msgType) {
+        switch(msgType)
+        {
+            case GSMT_RetDbResponse:
+            {
+                mysqlDb:: DbResponse response;
+                if(!response.ParseFromString(msg))
+                {
+                    std::cout << "client onMessageCallBack parse GSMT_RetDbResponse error!!!" << std::endl;
+                    return;
+                }
+
+                if(response.player_id() != defaultPlayerID)
+                {
+                    std::cout << "GSMT_RetDbResponse playerID error!!!" << std::endl;
+                    return;
+                }
+
+                PrintDbResponseResult(response);
+            }
+            break;
+ 
+            default:
+                break;
+        }
+    });
+
+    client->Connect();
+    
+
+    // 启动 I/O 线程
+    std::thread io_thread([&loop, connected]() {
+        //std::cout << "io_thread thread_id:=" << std::this_thread::get_id() << std::endl;
+        loop.Loop();
+    });
+    
+    // 等待连接建立
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        cv.wait(lock, [&] { return connected; });
+    }
+
+
+    // 发送登录地图
+    aoi::EntityEnterRequest newRequest;
+    newRequest.set_map_id(100);
+    aoi::EntityInfo* pEntity = newRequest.mutable_new_entity();
+    if(pEntity)
+    {
+        pEntity->set_entity_id(1);
+        pEntity->set_x(50);
+        pEntity->set_y(50);
+    }
+
+    std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(newRequest.SerializeAsString(), GSMT_AddEntity));
+    rpcClient->CallAsyncIgnoreResponse(strContent);
+
+    {
+        std::cout << "Start Aysnc Mysql Sql Exec..." << std::endl;
+        // 先测试异步 先查询
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "Querying data Before Update..." << std::endl;
+
+        mysqlDb::AsyncDbRequest async_request;
+        async_request.set_player_id(1);
+    
+        std::string sql_query_data = "SELECT id, name, age FROM test_users ORDER BY id";
+        async_request.set_sql_context(sql_query_data);
+        strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(async_request.SerializeAsString(), GSMT_AsyncDbRequest));
+        rpcClient->CallAsyncIgnoreResponse(strContent);
+
+        // 再更新
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "Updating data..." << std::endl;
+
+        sql_query_data = "UPDATE test_users SET age = age + 10 WHERE name = 'Alice'";
+        async_request.set_sql_context(sql_query_data);
+        strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(async_request.SerializeAsString(), GSMT_AsyncDbRequest));
+        rpcClient->CallAsyncIgnoreResponse(strContent);
+
+         // 继续查询
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::cout << "Querying data after Update..." << std::endl;
+
+        sql_query_data = "SELECT id, name, age FROM test_users ORDER BY id";
+        async_request.set_sql_context(sql_query_data);
+        strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(async_request.SerializeAsString(), GSMT_AsyncDbRequest));
+        rpcClient->CallAsyncIgnoreResponse(strContent);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        std::cout << "End Aysnc Mysql Sql Exec..." << std::endl;
+    }
+   
+
+    {
+        std::cout << "Start Sync Mysql Sql Exec..." << std::endl;
+        std::cout << "Sync Querying data Before Update..." << std::endl;
+
+        mysqlDb::DbSyncRequest sync_request;
+        sync_request.set_player_id(1);
+    
+        std::string sql_query_data = "SELECT id, name, age FROM test_users ORDER BY id";
+        sync_request.set_sql_context(sql_query_data);
+        std::string strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(sync_request.SerializeAsString(), GSMT_SyncDbRequest));
+        rpcClient->CallAsyncIgnoreResponse(strContent);
+
+
+        // 再更新
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::cout << "Sync Updating data..." << std::endl;
+
+        sql_query_data = "UPDATE test_users SET age = age + 100 WHERE name = 'Alice'";
+        sync_request.set_sql_context(sql_query_data);
+        strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(sync_request.SerializeAsString(), GSMT_SyncDbRequest));
+        rpcClient->CallAsyncIgnoreResponse(strContent);
+
+        // 继续查询
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::cout << "Sync Querying data after Update..." << std::endl;
+
+        sql_query_data = "SELECT id, name, age FROM test_users ORDER BY id";
+        sync_request.set_sql_context(sql_query_data);
+        strContent = std::move(LengthAndTypePrefixDecoder::MakeRequestString(sync_request.SerializeAsString(), GSMT_AsyncDbRequest));
+        rpcClient->CallAsyncIgnoreResponse(strContent);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        std::cout << "End Sync Mysql Sql Exec..." << std::endl;
+    }
+
+
+    loop.Quit();
+    io_thread.join();
+    //return 0;
+}
 
 
