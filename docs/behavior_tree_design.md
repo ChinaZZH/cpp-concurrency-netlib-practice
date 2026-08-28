@@ -50,7 +50,7 @@ markdown
 | **叶子节点（Leaf）** | 执行具体行为或判断条件 | 0 个 | MoveToTarget、Attack、CheckDistance |
 
 ## 模块结构
-
+```text
 BehaviorTree/
 ├── BTNode.h # 节点基类与状态枚举
 ├── BTCompositeNode.h # 组合节点基类
@@ -61,4 +61,6 @@ BehaviorTree/
 ├── DecoratorNodes.h # Inverter / Repeater / UntilSuccess / Timeout / Cooldown
 ├── Conditions.h # CheckTargetExists / CheckDistance
 └── Actions.h # MoveToTarget / Attack / Patrol
+
+```
 
