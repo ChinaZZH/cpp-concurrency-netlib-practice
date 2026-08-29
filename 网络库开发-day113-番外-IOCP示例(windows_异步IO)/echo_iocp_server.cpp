@@ -17,6 +17,7 @@ const int WORKER_THREAD_COUNT = (std::thread::hardware_concurrency() * 2); // �
 enum CompletionKey {
     COMP_KEY_LISTEN_SOCKET = 0,
     COMP_KEY_CLIENT_SOCKET = 1,
+    COMP_KEY_EXIT   = 999,          // 退出事件
 };
 
 // ---------- 全局变量 ----------
@@ -26,22 +27,74 @@ std::atomic<bool> g_server_running{ true };         // 服务器运行标志
 
 std::vector<std::thread> g_worker_threads;          // 工作线程列表
 
-// ---------- 工作线程函数 （暂时只做等待）----------
+std::atomic<int> g_active_workers{ 0 };
+
+// ---------- 工作线程主循环----------
 void WorkerThread()
 {
+    g_active_workers.fetch_add(1);
     std::stringstream ss;
-    ss << "[Worker] Thread " << std::this_thread::get_id() << " started." << std::endl;
-    std::cout << ss.str();
+    {
+        ss << "[Worker] Thread " << std::this_thread::get_id() << " started." << std::endl;
+        std::cout << ss.str();
+    }
+    
+    
     while(g_server_running)
     {
-        // 这里先空转，后续会填入 GetQueuedCompletionStatus
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        DWORD bytes_transferred = 0;
+        ULONG_PTR completion_key = 0;
+        OVERLAPPED* overlapped = nullptr;
+
+        // ================================================================
+        // 核心：等待完成端口上的事件
+        // ================================================================
+        // INFINITE 无限等待，直到有事件或退出
+        BOOL result = GetQueuedCompletionStatus(g_iocp_handle, &bytes_transferred, &completion_key, &overlapped, INFINITE);
+
+        // 检查退出事件
+        if(!g_server_running)
+        {
+            break;
+        }
+
+        // 检查 GetQueuedCompletionStatus 是否失败
+        if(!result) {
+            DWORD error = GetLastError();
+            if (error == ERROR_ABANDONED_WAIT_0 || error == ERROR_OPERATION_ABORTED) {
+                // 正常的关闭或取消操作
+                std::cout << "[Worker] I/O operation canceled." << std::endl;
+                continue;
+            }
+            std::cerr << "[Worker] GetQueuedCompletionStatus failed, error: " << error << std::endl;
+            continue;
+        }
+
+        switch(completion_key)
+        {
+        case COMP_KEY_LISTEN_SOCKET:
+            std::cout << "[Worker] Listen socket event (AcceptEx complete) - not implemented yet." << std::endl;
+            break;
+        case COMP_KEY_CLIENT_SOCKET:
+            std::cout << "[Worker] Client socket event - bytes: " << bytes_transferred << std::endl;
+            break;
+        case COMP_KEY_EXIT:
+            std::cout << "[Worker] Exit event received." << std::endl;
+            g_server_running = false;
+            break;
+        default:
+            std::cout << "[Worker] Unknown completion key: " << completion_key << std::endl;
+            break;
+        }
     }
 
-    ss.str("");
-    ss.clear();
-    ss << "[Worker] Thread " << std::this_thread::get_id() << " stoped." << std::endl;
-    std::cout << ss.str();
+    g_active_workers.fetch_add(-1);
+    {
+        ss.str("");
+        ss.clear();
+        ss << "[Worker] Thread " << std::this_thread::get_id() << " stoped." << std::endl;
+        std::cout << ss.str();
+    }
 }
 
 
@@ -171,6 +224,21 @@ int main() {
     std::cout << ss.str();
 
     std::cin.get();
+    // ================================================================
+    // 9. 【新增】发送退出事件，唤醒所有工作线程
+    // ================================================================
+    std::cout << "[Step3] Sending exit events to workers..." << std::endl;
+    // 向完成端口发送 WORKER_THREAD_COUNT 个退出事件
+    // 每个工作线程收到一个退出事件后都会退出
+    for(auto& th : g_worker_threads)
+    {
+        PostQueuedCompletionStatus(
+            g_iocp_handle,              // 完成端口句柄
+            0,                          // 传输字节数（无意义）
+            COMP_KEY_EXIT,              // 完成键：标识为退出事件
+            nullptr                     // OVERLAPPED（无意义）
+        );
+    }
 
     // 停止服务器
     g_server_running = false;
