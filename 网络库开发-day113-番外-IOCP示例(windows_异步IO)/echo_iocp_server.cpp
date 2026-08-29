@@ -10,8 +10,14 @@
 #pragma comment(lib, "ws2_32.lib")
 
 // ---------- 常量 ----------
+const int DEFAULT_PORT = 8888;
 const int WORKER_THREAD_COUNT = (std::thread::hardware_concurrency() * 2); // 工作线程数，通常 = CPU 核心数 * 2
 
+// ---------- 完成键 ----------
+enum CompletionKey {
+    COMP_KEY_LISTEN_SOCKET = 0,
+    COMP_KEY_CLIENT_SOCKET = 1,
+};
 
 // ---------- 全局变量 ----------
 HANDLE g_iocp_handle = nullptr;                      // 完成端口句柄
@@ -20,7 +26,7 @@ std::atomic<bool> g_server_running{ true };         // 服务器运行标志
 
 std::vector<std::thread> g_worker_threads;          // 工作线程列表
 
-// ---------- 工作线程函数 ----------
+// ---------- 工作线程函数 （暂时只做等待）----------
 void WorkerThread()
 {
     std::stringstream ss;
@@ -28,23 +34,24 @@ void WorkerThread()
     std::cout << ss.str();
     while(g_server_running)
     {
-        // 暂时只做等待，后续会填充 GetQueuedCompletionStatus
-        // 这里先用 Sleep 模拟等待，避免 CPU 空转
+        // 这里先空转，后续会填入 GetQueuedCompletionStatus
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    std::stringstream server_end;
-    server_end << "[Worker] Thread " << std::this_thread::get_id() << " stoped." << std::endl;
-    std::cout << server_end.str();
+    ss.str("");
+    ss.clear();
+    ss << "[Worker] Thread " << std::this_thread::get_id() << " stoped." << std::endl;
+    std::cout << ss.str();
 }
 
 
 // ---------- 主函数 ----------
 int main() {
     std::cout << "=== IOCP Step 1: Framework ===" << std::endl;
+    std::cout << "=== IOCP Step 2: Bind Listen Socket ===" << std::endl;
 
     // ================================================================
-    // 1.1 Winsock 初始化
+    // 2.1 Winsock 初始化
     // ================================================================
     WSADATA wsaData;
     int ret = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -55,7 +62,7 @@ int main() {
     std::cout << "[Step1] Winsock initialized successfully." << std::endl;
     
     // ================================================================
-    // 1.2 创建完成端口
+    // 2.2 创建完成端口
     // ================================================================
     g_iocp_handle = CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
     if(!g_iocp_handle)
@@ -67,7 +74,81 @@ int main() {
     std::cout << "[Step1] IOCP handle created successfully." << std::endl;
 
     // ================================================================
-    // 1.3 启动工作线程
+    // 2.3 创建监听Socket(支持重叠IO)
+    // ================================================================
+    SOCKET listen_socket = WSASocket(
+        AF_INET,            // IPv4
+        SOCK_STREAM,        // 流式
+        0,                  // 协议（0 = TCP）
+        nullptr,            // 协议信息
+        0,                  // 保留
+        WSA_FLAG_OVERLAPPED // 关键：支持重叠 I/O
+    );
+
+    if(listen_socket == INVALID_SOCKET)
+    {
+        std::cerr << "[Step2] WSASocket failed, error: " << WSAGetLastError() << std::endl;
+        CloseHandle(g_iocp_handle);
+        WSACleanup();
+        return -1;
+    }
+    std::cout << "[Step2] Listen socket created (overlapped)." << std::endl;
+
+    // ================================================================
+    // 2.4 绑定地址和端口
+    // ================================================================
+    sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;            // 监听所有网卡
+    server_addr.sin_port = htons(DEFAULT_PORT);
+
+    if(SOCKET_ERROR == bind(listen_socket, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr)))
+    {
+        std::cerr << "[Step2] bind failed, error: " << WSAGetLastError() << std::endl;
+        closesocket(listen_socket);
+        CloseHandle(g_iocp_handle);
+        WSACleanup();
+        return -1;
+    }
+    std::cout << "[Step2] Bound to port " << DEFAULT_PORT << "." << std::endl;
+
+    // ================================================================
+    // 2.5 开始监听
+    // ================================================================
+    if(SOCKET_ERROR == listen(listen_socket, SOMAXCONN))
+    {
+        std::cerr << "[Step2] listen failed, error: " << WSAGetLastError() << std::endl;
+        closesocket(listen_socket);
+        CloseHandle(g_iocp_handle);
+        WSACleanup();
+        return -1;
+     }
+    std::cout << "[Step2] Listening..." << std::endl;
+    
+    // ================================================================
+    // 2.6 【新增】将监听 Socket 关联到完成端口
+    // ================================================================
+    // 虽然当前我们用 accept（同步方式）接受连接，
+    // 但将监听 Socket 绑定到 IOCP 是后续使用 AcceptEx 的前提。
+    // 这里先做绑定，为后续扩展做准备。
+    HANDLE iocp_result = CreateIoCompletionPort(
+        reinterpret_cast<HANDLE>(listen_socket),
+        g_iocp_handle,
+        COMP_KEY_LISTEN_SOCKET,  // 完成键：标识这是监听 Socket
+        0
+    );
+
+    if (!iocp_result) {
+        std::cerr << "[Step2] Bind listen socket to IOCP failed, error: " << GetLastError() << std::endl;
+        closesocket(listen_socket);
+        CloseHandle(g_iocp_handle);
+        WSACleanup();
+        return -1;
+    }
+    std::cout << "[Step2] Listen socket bound to IOCP." << std::endl;
+
+    // ================================================================
+    // 2.7 启动工作线程
     // ================================================================
     g_worker_threads.reserve(WORKER_THREAD_COUNT);
     for(int i = 0; i < WORKER_THREAD_COUNT; ++i)
@@ -75,11 +156,20 @@ int main() {
         g_worker_threads.emplace_back(WorkerThread);
     }
 
+    std::stringstream ss;
+    ss << "[Step2] Started " << WORKER_THREAD_COUNT << " worker threads." << std::endl;
+    std::cout << ss.str();
 
     // ================================================================
-    // 1.4 运行一段时间后退出（演示用）
-    // ================================================================
-    std::cout << "[Step1] Server is running. Press Enter to stop..." << std::endl;
+   // 2.8 运行
+   // ================================================================
+    std::cout << "[Step2] Server is running. Press Enter to stop..." << std::endl;
+    
+    ss.str("");
+    ss.clear();
+    ss << "[Step2] Use telnet 127.0.0.1 " << DEFAULT_PORT << " to test." << std::endl;
+    std::cout << ss.str();
+
     std::cin.get();
 
     // 停止服务器
@@ -93,9 +183,10 @@ int main() {
     }
 
     // 清理资源
+    closesocket(listen_socket);
     CloseHandle(g_iocp_handle);
     WSACleanup();
 
-    std::cout << "[Step1] Cleanup complete. Exiting." << std::endl;
+    std::cout << "[Step2] Cleanup complete." << std::endl;
     return 0;
 }
