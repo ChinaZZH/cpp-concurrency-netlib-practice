@@ -6,6 +6,7 @@
 #include <atomic>
 #include <sstream>
 #include <mswsock.h>   // AcceptEx 需要的扩展函数
+#include <string>
 
 
 #pragma comment(lib, "ws2_32.lib")
@@ -23,14 +24,16 @@ enum CompletionKey {
     COMP_KEY_EXIT   = 999,          // 退出事件
 };
 
+// ---------- 前向声明 ----------
+struct PER_SOCKET_CONTEXT;
+
 // ---------- 每个 I/O 操作的上下文 ---------
 struct PER_IO_CONTEXT {
     OVERLAPPED overlapped;
     WSABUF wsa_buf;
     char buffer[BUFFER_SIZE];
-    DWORD bytes_transferred;
-    DWORD flags;
     SOCKET client_socket; // AcceptEx 专用：存储新连接的 Socket
+    PER_SOCKET_CONTEXT* owner;   // 指向所属的套接字上下文
 
     PER_IO_CONTEXT() {
         ZeroMemory(&overlapped, sizeof(OVERLAPPED));
@@ -38,9 +41,23 @@ struct PER_IO_CONTEXT {
         ZeroMemory(buffer, BUFFER_SIZE);
         wsa_buf.buf = buffer;
         wsa_buf.len = BUFFER_SIZE;
-        bytes_transferred = 0;
-        flags = 0;
         client_socket = INVALID_SOCKET;
+        owner = nullptr;
+    }
+};
+
+// ---------- 每个套接字的上下文 ----------
+struct PER_SOCKET_CONTEXT {
+    SOCKET socket;
+    PER_IO_CONTEXT recv_io;
+    PER_IO_CONTEXT send_io;
+    bool is_closed;
+
+    PER_SOCKET_CONTEXT(SOCKET sock) : socket(sock), is_closed(false) {
+        recv_io.owner = this;
+        recv_io.client_socket = sock;
+        send_io.owner = this;
+        send_io.client_socket = sock;
     }
 };
 
@@ -56,12 +73,26 @@ std::vector<std::thread> g_worker_threads;          // 工作线程列表
 std::atomic<int> g_active_workers{ 0 };
 
 
-// ---------- AcceptEx 函数指针 ----------
-LPFN_ACCEPTEX g_AcceptEx = nullptr;
+LPFN_ACCEPTEX g_AcceptEx = nullptr; // ---------- AcceptEx 函数指针 ----------
 
 // ---------- 前置声明 ----------
 void HandleAcceptCompletion(PER_IO_CONTEXT* io_ctx, DWORD bytes_transfterred);
+void HandleClientIoCompletion(PER_IO_CONTEXT* io_ctx, DWORD bytes_transfterred);
 void PostAccept();
+
+
+// ---------- 辅助：打印接收数据 ----------
+void PrintReceivedData(const char* data, DWORD len) {
+    for (DWORD i = 0; i < len; ++i) {
+        char c = data[i];
+        if (c >= 32 && c <= 126) {
+            std::cout << c;
+        }
+        else {
+            std::cout << "[0x" << std::hex << (int)(unsigned char)c << std::dec << "]";
+        }
+    }
+}
 
 // ---------- 工作线程主循环----------
 void WorkerThread()
@@ -111,9 +142,8 @@ void WorkerThread()
             // AcceptEx 完成事件
             HandleAcceptCompletion(io_ctx, bytes_transferred);
             break;
-        case COMP_KEY_CLIENT_SOCKET:
-            std::cout << "[Worker] Client socket event - bytes: " << bytes_transferred << std::endl;
-            delete io_ctx;
+        case COMP_KEY_CLIENT_SOCKET: 
+            HandleClientIoCompletion(io_ctx, bytes_transferred);
             break;
         case COMP_KEY_EXIT:
             std::cout << "[Worker] Exit event received." << std::endl;
@@ -128,7 +158,7 @@ void WorkerThread()
     }
 
     {
-        ss.str("");
+        ss.str(std::string());
         ss.clear();
         ss << "[Worker] Thread " << std::this_thread::get_id() << " stoped." << std::endl;
         std::cout << ss.str();
@@ -154,23 +184,115 @@ void HandleAcceptCompletion(PER_IO_CONTEXT* io_ctx, DWORD bytes_transferred) {
 
     // 2. 投递第一个 WSARecv（接收客户端数据）
     // 为客户端创建新的 I/O 上下文
-    PER_IO_CONTEXT* client_io_ctx = new PER_IO_CONTEXT();
-    client_io_ctx->client_socket = client_sock;
+    PER_SOCKET_CONTEXT* sock_ctx = new PER_SOCKET_CONTEXT(client_sock);
+    // 3. 投递第一个 WSARecv
+    ZeroMemory(&sock_ctx->recv_io.overlapped, sizeof(OVERLAPPED));
+    sock_ctx->recv_io.wsa_buf.buf = sock_ctx->recv_io.buffer;
+    sock_ctx->recv_io.wsa_buf.len = BUFFER_SIZE;
+    sock_ctx->recv_io.client_socket = client_sock;
 
     DWORD flags = 0;
-    int ret = WSARecv(client_sock, &client_io_ctx->wsa_buf,1, nullptr, &flags, &client_io_ctx->overlapped, nullptr);
+    int ret = WSARecv(client_sock, &(sock_ctx->recv_io.wsa_buf),1, nullptr, &flags, &(sock_ctx->recv_io.overlapped), nullptr);
     if (SOCKET_ERROR == ret) {
         DWORD error = WSAGetLastError();
         if (error != WSA_IO_PENDING) {
             std::cerr << "[Server] WSARecv failed, error: " << error << std::endl;
             closesocket(client_sock);
-            delete client_io_ctx;
+            delete sock_ctx;
+            delete io_ctx;
+            PostAccept();
+            return;
         }
     }
 
     // 3. 投递下一个 AcceptEx（继续接受新连接）
     delete io_ctx;  // 释放 AcceptEx 的上下文
     PostAccept();
+}
+
+// ---------- 处理 Client IO 读写请求 ----------
+void HandleClientIoCompletion(PER_IO_CONTEXT* io_ctx, DWORD bytes_transferred)
+{
+    if (!io_ctx)
+    {
+        std::cerr << "[Worker] io_ctx is null!" << std::endl;
+        return;
+    }
+
+    PER_SOCKET_CONTEXT* sock_ctx = io_ctx->owner;
+    if (!sock_ctx) {
+        std::cerr << "[Worker] sock_ctx is null!" << std::endl;
+        delete io_ctx;
+        return;
+    }
+
+    if(bytes_transferred == 0) {
+        std::cout << "[Server] Client disconnected, socket: " << sock_ctx->socket << std::endl;
+        closesocket(sock_ctx->socket);
+        sock_ctx->is_closed = true;
+        delete sock_ctx;
+        return;
+    }
+
+    // 发送完成
+    if (io_ctx == &sock_ctx->send_io) {
+        std::cout << "[Server] Sent " << bytes_transferred << " bytes, socket: " << sock_ctx->socket << std::endl;
+    }
+    else if (io_ctx == &sock_ctx->recv_io) {
+        // 接收完成
+        std::cout << "[Server] Received " << bytes_transferred << " bytes from socket " << sock_ctx->socket << ": ";
+        PrintReceivedData(sock_ctx->recv_io.buffer, bytes_transferred);
+        std::cout << std::endl;
+
+        
+        std::string receiveData(sock_ctx->recv_io.buffer, bytes_transferred);
+        
+
+        // ===== 2. 投递下一个 WSARecv（先投递，让接收持续进行） =====
+        ZeroMemory(&sock_ctx->recv_io.overlapped, sizeof(OVERLAPPED));
+        sock_ctx->recv_io.wsa_buf.buf = sock_ctx->recv_io.buffer;
+        sock_ctx->recv_io.wsa_buf.len = BUFFER_SIZE;
+        sock_ctx->recv_io.client_socket = sock_ctx->socket;
+
+        DWORD flags = 0;
+        int ret_recv = WSARecv(
+            sock_ctx->socket,
+            &sock_ctx->recv_io.wsa_buf,
+            1,
+            nullptr,
+            &flags,
+            &sock_ctx->recv_io.overlapped,
+            nullptr
+        );
+
+        if (ret_recv == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING) {
+            std::cerr << "[Server] WSARecv (next) failed, error: " << WSAGetLastError() << std::endl;
+            closesocket(sock_ctx->socket);
+            sock_ctx->is_closed = true;
+            delete sock_ctx;
+            return;
+        }
+
+        // ===== 1. Echo 发送（使用 recv_io 中的数据） =====
+        sock_ctx->send_io.wsa_buf.buf = receiveData.data();
+        sock_ctx->send_io.wsa_buf.len = bytes_transferred;
+        int ret_send = WSASend(
+            sock_ctx->socket,
+            &sock_ctx->send_io.wsa_buf,
+            1,
+            nullptr,
+            0,
+            &sock_ctx->send_io.overlapped,
+            nullptr
+        );
+        if (ret_send == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING) {
+            std::cerr << "[Server] WSASend failed, error: " << WSAGetLastError() << std::endl;
+            closesocket(sock_ctx->socket);
+            sock_ctx->is_closed = true;
+            delete sock_ctx;
+            return;
+        }
+    }
 }
 
 // ---------- 投递 AcceptEx ----------
